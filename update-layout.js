@@ -1,37 +1,10 @@
-"use client";
-import { useState } from 'react';
-import { suggestReplacements, ReplacementSuggestion } from '@/lib/clinical-logic';
-import { getDrugProfile, DrugProfile, drugClasses, biologicIndications } from '@/lib/drug-db';
-import { monographs } from '@/lib/drug-monographs';
-import { ArrowRight, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, X, Search, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+const fs = require('fs');
+let content = fs.readFileSync('components/SwitchingProtocols.tsx', 'utf8');
 
-export function SwitchingProtocols() {
-  const [fromDrug, setFromDrug] = useState('');
-  const [currentDose, setCurrentDose] = useState('');
-  const [duration, setDuration] = useState('< 4 weeks');
-  const [reason, setReason] = useState('Lack of Efficacy');
-  const [secondaryEffect, setSecondaryEffect] = useState('none');
-  const [indication, setIndication] = useState('');
-  
-  // Patient Context State
-  const [age, setAge] = useState('');
-  const [weight, setWeight] = useState('');
-  const [renalFunction, setRenalFunction] = useState('Normal');
-  const [hepaticFunction, setHepaticFunction] = useState('Normal');
-  const [comorbidities, setComorbidities] = useState('');
-  const [infectionHistory, setInfectionHistory] = useState('No');
-  const [otherMedications, setOtherMedications] = useState('');
-  const [cyp2d6Status, setCyp2d6Status] = useState('Unknown');
+// I will write a script to completely replace the return statement of SwitchingProtocols
+// with the new animated tab layout.
 
-  const [suggestions, setSuggestions] = useState<ReplacementSuggestion[] | null>(null);
-  const [showMonographFor, setShowMonographFor] = useState<string | null>(null);
-  const [suggestionFilter, setSuggestionFilter] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-
-  const allIndications = Array.from(new Set(Object.values(biologicIndications).flatMap(b => b.indications))).sort();
-
-
+const newReturn = `
   const [mainTab, setMainTab] = useState<'setup' | 'suggestions'>('setup');
   const [subTab, setSubTab] = useState<'therapy' | 'patient'>('therapy');
 
@@ -129,7 +102,7 @@ export function SwitchingProtocols() {
                   <button
                     key={t}
                     onClick={() => setSubTab(t as any)}
-                    className={`relative px-5 py-2 text-[13px] font-medium rounded-full transition-colors ${subTab === t ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={\`relative px-5 py-2 text-[13px] font-medium rounded-full transition-colors \${subTab === t ? 'text-white' : 'text-slate-400 hover:text-slate-200'}\`}
                   >
                     {subTab === t && (
                       <motion.div layoutId="sub-pill" className="absolute inset-0 bg-white/10 rounded-full" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
@@ -144,7 +117,7 @@ export function SwitchingProtocols() {
           <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-full">
             <button
               onClick={() => setMainTab('setup')}
-              className={`relative flex items-center gap-2 px-6 py-3 text-[14px] font-medium rounded-full transition-colors ${mainTab === 'setup' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={\`relative flex items-center gap-2 px-6 py-3 text-[14px] font-medium rounded-full transition-colors \${mainTab === 'setup' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}\`}
             >
               {mainTab === 'setup' && (
                 <motion.div layoutId="main-pill" className="absolute inset-0 bg-[#2a2a2a] rounded-full shadow-lg border border-white/5" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
@@ -156,7 +129,7 @@ export function SwitchingProtocols() {
             </button>
             <button
               onClick={() => setMainTab('suggestions')}
-              className={`relative flex items-center gap-2 px-6 py-3 text-[14px] font-medium rounded-full transition-colors ${mainTab === 'suggestions' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={\`relative flex items-center gap-2 px-6 py-3 text-[14px] font-medium rounded-full transition-colors \${mainTab === 'suggestions' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}\`}
             >
               {mainTab === 'suggestions' && (
                 <motion.div layoutId="main-pill" className="absolute inset-0 bg-[#2a2a2a] rounded-full shadow-lg border border-white/5" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
@@ -207,7 +180,7 @@ export function SwitchingProtocols() {
                               setFromDrug(e.target.value);
                               setCurrentDose('');
                             }}
-                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                            className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                             suppressHydrationWarning
                           >
                             <option className="bg-[#121212] text-white" value="">Select a medication...</option>
@@ -215,16 +188,14 @@ export function SwitchingProtocols() {
                               <optgroup className="bg-[#121212] text-white" key={className} label={className}>
                                 {getSortedDrugs(drugs).map(drug => {
                                   const profile = getDrugProfile(drug);
-                                  const brandStr = profile?.brandNames && profile.brandNames.length > 0 ? ` (${profile.brandNames.join(', ')})` : '';
+                                  const brandStr = profile?.brandNames && profile.brandNames.length > 0 ? \` (\${profile.brandNames.join(', ')})\` : '';
                                   return <option className="bg-[#121212] text-white" key={drug} value={drug}>{profile?.name || drug}{brandStr}</option>;
                                 })}
                               </optgroup>
                             ))}
                           </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                              <ChevronDown size={14} />
-                            </div>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <ChevronDown size={16} />
                           </div>
                         </div>
                       </div>
@@ -237,7 +208,7 @@ export function SwitchingProtocols() {
                               value={currentDose}
                               onChange={(e) => setCurrentDose(e.target.value)}
                               disabled={!fromDrug}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                               suppressHydrationWarning
                             >
                               <option className="bg-[#121212] text-white" value="">{fromDrug ? "Select dose..." : "Select drug first"}</option>
@@ -245,10 +216,8 @@ export function SwitchingProtocols() {
                                 <option className="bg-[#121212] text-white" key={dose} value={dose}>{dose} mg</option>
                               ))}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                                <ChevronDown size={14} />
-                              </div>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                              <ChevronDown size={16} />
                             </div>
                           </div>
                         </div>
@@ -258,15 +227,13 @@ export function SwitchingProtocols() {
                             <select 
                               value={duration}
                               onChange={(e) => setDuration(e.target.value)}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                              className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                               suppressHydrationWarning
                             >
                               {durations.map(d => <option className="bg-[#121212] text-white" key={d} value={d}>{d}</option>)}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                                <ChevronDown size={14} />
-                              </div>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                              <ChevronDown size={16} />
                             </div>
                           </div>
                         </div>
@@ -279,7 +246,7 @@ export function SwitchingProtocols() {
                             <select 
                               value={indication}
                               onChange={(e) => setIndication(e.target.value)}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                              className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                               suppressHydrationWarning
                             >
                               <option className="bg-[#121212] text-white" value="">Select primary indication...</option>
@@ -287,10 +254,8 @@ export function SwitchingProtocols() {
                                 <option className="bg-[#121212] text-white" key={ind} value={ind}>{ind}</option>
                               ))}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                                <ChevronDown size={14} />
-                              </div>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                              <ChevronDown size={16} />
                             </div>
                           </div>
                         </div>
@@ -312,15 +277,13 @@ export function SwitchingProtocols() {
                           <select 
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                            className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                             suppressHydrationWarning
                           >
                             {reasons.map(r => <option className="bg-[#121212] text-white" key={r} value={r}>{r}</option>)}
                           </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                              <ChevronDown size={14} />
-                            </div>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <ChevronDown size={16} />
                           </div>
                         </div>
                       </div>
@@ -364,7 +327,7 @@ export function SwitchingProtocols() {
                         value={age} 
                         onChange={(e) => setAge(e.target.value)} 
                         placeholder="e.g. 45"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-4 py-3 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white placeholder:text-slate-500 transition-all shadow-sm"
                         suppressHydrationWarning
                       />
                     </div>
@@ -375,7 +338,7 @@ export function SwitchingProtocols() {
                         value={weight} 
                         onChange={(e) => setWeight(e.target.value)} 
                         placeholder="e.g. 70"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-4 py-3 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white placeholder:text-slate-500 transition-all shadow-sm"
                         suppressHydrationWarning
                       />
                     </div>
@@ -385,7 +348,7 @@ export function SwitchingProtocols() {
                         <select 
                           value={renalFunction} 
                           onChange={(e) => setRenalFunction(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Normal">Normal</option>
@@ -394,10 +357,8 @@ export function SwitchingProtocols() {
                           <option className="bg-[#121212] text-white" value="Severe Impairment">Severe Impairment</option>
                           <option className="bg-[#121212] text-white" value="ESRD/Dialysis">ESRD / Dialysis</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                          <ChevronDown size={16} />
                         </div>
                       </div>
                     </div>
@@ -407,7 +368,7 @@ export function SwitchingProtocols() {
                         <select 
                           value={hepaticFunction} 
                           onChange={(e) => setHepaticFunction(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Normal">Normal</option>
@@ -415,10 +376,8 @@ export function SwitchingProtocols() {
                           <option className="bg-[#121212] text-white" value="Moderate Impairment">Moderate Impairment (Child-Pugh B)</option>
                           <option className="bg-[#121212] text-white" value="Severe Impairment">Severe Impairment (Child-Pugh C)</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                          <ChevronDown size={16} />
                         </div>
                       </div>
                     </div>
@@ -429,7 +388,7 @@ export function SwitchingProtocols() {
                         value={comorbidities} 
                         onChange={(e) => setComorbidities(e.target.value)} 
                         placeholder="e.g. Diabetes, Hypertension"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-4 py-3 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white placeholder:text-slate-500 transition-all shadow-sm"
                         suppressHydrationWarning
                       />
                     </div>
@@ -439,16 +398,14 @@ export function SwitchingProtocols() {
                         <select 
                           value={infectionHistory} 
                           onChange={(e) => setInfectionHistory(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="No">No</option>
                           <option className="bg-[#121212] text-white" value="Yes">Yes</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                          <ChevronDown size={16} />
                         </div>
                       </div>
                     </div>
@@ -459,7 +416,7 @@ export function SwitchingProtocols() {
                         value={otherMedications} 
                         onChange={(e) => setOtherMedications(e.target.value)} 
                         placeholder="e.g. Lisinopril, Metformin"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-4 py-3 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white placeholder:text-slate-500 transition-all shadow-sm"
                         suppressHydrationWarning
                       />
                     </div>
@@ -469,7 +426,7 @@ export function SwitchingProtocols() {
                         <select 
                           value={cyp2d6Status} 
                           onChange={(e) => setCyp2d6Status(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-4 py-3 pr-10 border border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none bg-white/5 hover:bg-white/10 backdrop-blur-md text-[15px] text-white transition-all shadow-sm cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Unknown">Unknown</option>
@@ -478,10 +435,8 @@ export function SwitchingProtocols() {
                           <option className="bg-[#121212] text-white" value="Normal">Normal Metabolizer</option>
                           <option className="bg-[#121212] text-white" value="Ultrarapid">Ultrarapid Metabolizer</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                          <ChevronDown size={16} />
                         </div>
                       </div>
                     </div>
@@ -572,14 +527,14 @@ export function SwitchingProtocols() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-sm text-slate-400">
-                                <div>{profile?.brandNames?.join(', ')}</div>
+                              <p className="text-sm text-slate-400">
+                                {profile?.brandNames?.join(', ')}
                                 {profile?.biosimilars && profile.biosimilars.length > 0 && (
-                                  <div className="text-xs text-slate-500 mt-1">
+                                  <span className="ml-2 text-slate-500">
                                     (Biosimilars: {profile.biosimilars.join(', ')})
-                                  </div>
+                                  </span>
                                 )}
-                              </div>
+                              </p>
                             </div>
                             <div className="text-right">
                               <div className="text-2xl font-bold text-blue-400">{suggestion.score}</div>
@@ -590,7 +545,7 @@ export function SwitchingProtocols() {
                           {isBio && biologicIndications[suggestion.drug.toLowerCase()] && (
                             <div className="mb-4 flex flex-wrap gap-2">
                               {biologicIndications[suggestion.drug.toLowerCase()].indications.map(ind => (
-                                <span key={ind} className={`text-[11px] px-2 py-1 rounded-full border ${ind === indication || ind === suggestionFilter ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-white/5 border-white/10 text-slate-400'}`}>
+                                <span key={ind} className={\`text-[11px] px-2 py-1 rounded-full border \${ind === indication || ind === suggestionFilter ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-white/5 border-white/10 text-slate-400'}\`}>
                                   {ind}
                                 </span>
                               ))}
@@ -627,11 +582,11 @@ export function SwitchingProtocols() {
                                 }).map(([key, value]) => (
                                   <div key={key} className="bg-black/20 rounded-lg p-2 flex justify-between items-center border border-white/5">
                                     <span className="text-[11px] text-slate-400">{key}</span>
-                                    <span className={`text-[11px] font-medium ${
+                                    <span className={\`text-[11px] font-medium \${
                                       value === 'High' ? 'text-rose-400' : 
                                       value === 'Moderate' ? 'text-amber-400' : 
                                       'text-emerald-400'
-                                    }`}>{value}</span>
+                                    }\`}>{value}</span>
                                   </div>
                                 ))}
                               </div>
@@ -655,22 +610,22 @@ export function SwitchingProtocols() {
                               className="mt-4 bg-black/30 rounded-xl p-5 border border-white/5 text-sm text-slate-300 space-y-4"
                             >
                               <div>
-                                <h6 className="font-medium text-white mb-1">Mechanism of Action</h6>
-                                <p className="leading-relaxed">{monographs[suggestion.drug.toLowerCase()].mechanismOfAction}</p>
+                                <h6 className="font-medium text-white mb-1">Dosing Protocol</h6>
+                                <p className="leading-relaxed">{monographs[suggestion.drug.toLowerCase()].dosing}</p>
                               </div>
                               <div>
-                                <h6 className="font-medium text-white mb-1">Contraindications</h6>
+                                <h6 className="font-medium text-white mb-1">Monitoring Parameters</h6>
                                 <ul className="list-disc pl-4 space-y-1">
-                                  {monographs[suggestion.drug.toLowerCase()].contraindications.map((c, i) => (
-                                    <li key={i}>{c}</li>
+                                  {monographs[suggestion.drug.toLowerCase()].monitoring.map((m, i) => (
+                                    <li key={i}>{m}</li>
                                   ))}
                                 </ul>
                               </div>
                               <div>
-                                <h6 className="font-medium text-white mb-1">Side Effects Management</h6>
+                                <h6 className="font-medium text-white mb-1">Clinical Pearls</h6>
                                 <ul className="list-disc pl-4 space-y-1">
-                                  {monographs[suggestion.drug.toLowerCase()].sideEffectsManagement.map((se, i) => (
-                                    <li key={i}><span className="text-amber-400">{se.effect}:</span> {se.management}</li>
+                                  {monographs[suggestion.drug.toLowerCase()].pearls.map((p, i) => (
+                                    <li key={i}>{p}</li>
                                   ))}
                                 </ul>
                               </div>
@@ -689,3 +644,11 @@ export function SwitchingProtocols() {
     </div>
   );
 }
+`;
+
+const startIndex = content.indexOf('  const handleSearch = async () => {');
+const endIndex = content.lastIndexOf('}');
+
+const finalContent = content.substring(0, startIndex) + newReturn;
+fs.writeFileSync('components/SwitchingProtocols.tsx', finalContent);
+console.log('Done');

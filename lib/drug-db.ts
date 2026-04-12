@@ -27,27 +27,47 @@ export const drugClasses = {
   'Antipsychotics (Typical)': ['haloperidol', 'chlorpromazine', 'fluphenazine', 'perphenazine', 'loxapine', 'thioridazine', 'trifluoperazine', 'thiothixene', 'pimozide', 'flupentixol', 'zuclopenthixol'],
   'Mood Stabilizers / Anticonvulsants': ['lithium', 'valproate', 'lamotrigine', 'carbamazepine', 'oxcarbazepine', 'topiramate'],
   'Statins': ['atorvastatin', 'rosuvastatin', 'simvastatin', 'pravastatin', 'lovastatin', 'fluvastatin', 'pitavastatin'],
+  'Antidiabetics': ['metformin', 'glipizide', 'empagliflozin', 'semaglutide', 'sitagliptin'],
+  'Antihypertensives (ACE inhibitors)': ['lisinopril', 'enalapril', 'ramipril'],
+  'Antihypertensives (ARBs)': ['losartan', 'valsartan', 'irbesartan'],
+  'Antihypertensives (Beta-blockers)': ['metoprolol', 'carvedilol', 'atenolol'],
+  'Anticoagulants': ['warfarin', 'apixaban', 'rivaroxaban', 'dabigatran'],
   'Biologics (TNF inhibitors)': ['adalimumab', 'infliximab', 'etanercept', 'certolizumab', 'golimumab'],
-  'Biologics (IL inhibitors)': ['ustekinumab', 'secukinumab', 'ixekizumab', 'risankizumab', 'guselkumab', 'tildrakizumab'],
-  'Biologics (Integrin/Other)': ['vedolizumab', 'natalizumab', 'abatacept', 'tocilizumab']
+  'Biologics (IL inhibitors)': ['ustekinumab', 'secukinumab', 'ixekizumab', 'risankizumab', 'guselkumab', 'tildrakizumab', 'brodalumab', 'bimekizumab', 'mirikizumab', 'sarilumab', 'anakinra', 'dupilumab', 'omalizumab', 'mepolizumab', 'benralizumab', 'reslizumab'],
+  'Biologics (Integrin/Other)': ['vedolizumab', 'natalizumab', 'abatacept', 'tocilizumab', 'rituximab', 'ocrelizumab', 'ofatumumab', 'belimumab', 'anifrolumab']
 };
 
-export const biologicIndications: Record<string, string[]> = {
-  'adalimumab': ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis', 'Hidradenitis Suppurativa'],
-  'infliximab': ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'],
-  'etanercept': ['Rheumatoid Arthritis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'],
-  'certolizumab': ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'],
-  'golimumab': ['Rheumatoid Arthritis', 'Ulcerative Colitis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'],
-  'ustekinumab': ['Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis'],
-  'secukinumab': ['Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'],
-  'ixekizumab': ['Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'],
-  'risankizumab': ['Crohn\'s Disease', 'Psoriasis', 'Psoriatic Arthritis'],
-  'guselkumab': ['Psoriasis', 'Psoriatic Arthritis'],
-  'tildrakizumab': ['Psoriasis'],
-  'vedolizumab': ['Crohn\'s Disease', 'Ulcerative Colitis'],
-  'natalizumab': ['Crohn\'s Disease', 'Multiple Sclerosis'],
-  'abatacept': ['Rheumatoid Arthritis', 'Psoriatic Arthritis'],
-  'tocilizumab': ['Rheumatoid Arthritis']
+export const biologicIndications: Record<string, { class: string, indications: string[] }> = {
+  'adalimumab': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis', 'Hidradenitis Suppurativa'] },
+  'infliximab': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'etanercept': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'certolizumab': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'golimumab': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Ulcerative Colitis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'ustekinumab': { class: 'Biologics (IL inhibitors)', indications: ['Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis'] },
+  'secukinumab': { class: 'Biologics (IL inhibitors)', indications: ['Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'ixekizumab': { class: 'Biologics (IL inhibitors)', indications: ['Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'risankizumab': { class: 'Biologics (IL inhibitors)', indications: ['Crohn\'s Disease', 'Psoriasis', 'Psoriatic Arthritis'] },
+  'guselkumab': { class: 'Biologics (IL inhibitors)', indications: ['Psoriasis', 'Psoriatic Arthritis'] },
+  'tildrakizumab': { class: 'Biologics (IL inhibitors)', indications: ['Psoriasis'] },
+  'brodalumab': { class: 'Biologics (IL inhibitors)', indications: ['Psoriasis'] },
+  'bimekizumab': { class: 'Biologics (IL inhibitors)', indications: ['Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
+  'mirikizumab': { class: 'Biologics (IL inhibitors)', indications: ['Ulcerative Colitis'] },
+  'sarilumab': { class: 'Biologics (IL inhibitors)', indications: ['Rheumatoid Arthritis'] },
+  'anakinra': { class: 'Biologics (IL inhibitors)', indications: ['Rheumatoid Arthritis'] },
+  'dupilumab': { class: 'Biologics (IL inhibitors)', indications: ['Atopic Dermatitis', 'Asthma', 'Chronic Rhinosinusitis with Nasal Polyposis', 'Eosinophilic Esophagitis', 'Prurigo Nodularis'] },
+  'omalizumab': { class: 'Biologics (IL inhibitors)', indications: ['Asthma', 'Chronic Idiopathic Urticaria'] },
+  'mepolizumab': { class: 'Biologics (IL inhibitors)', indications: ['Asthma'] },
+  'benralizumab': { class: 'Biologics (IL inhibitors)', indications: ['Asthma'] },
+  'reslizumab': { class: 'Biologics (IL inhibitors)', indications: ['Asthma'] },
+  'vedolizumab': { class: 'Biologics (Integrin/Other)', indications: ['Crohn\'s Disease', 'Ulcerative Colitis'] },
+  'natalizumab': { class: 'Biologics (Integrin/Other)', indications: ['Crohn\'s Disease', 'Multiple Sclerosis'] },
+  'abatacept': { class: 'Biologics (Integrin/Other)', indications: ['Rheumatoid Arthritis', 'Psoriatic Arthritis'] },
+  'tocilizumab': { class: 'Biologics (Integrin/Other)', indications: ['Rheumatoid Arthritis'] },
+  'rituximab': { class: 'Biologics (Integrin/Other)', indications: ['Rheumatoid Arthritis', 'Multiple Sclerosis'] },
+  'ocrelizumab': { class: 'Biologics (Integrin/Other)', indications: ['Multiple Sclerosis'] },
+  'ofatumumab': { class: 'Biologics (Integrin/Other)', indications: ['Multiple Sclerosis'] },
+  'belimumab': { class: 'Biologics (Integrin/Other)', indications: ['Systemic Lupus Erythematosus'] },
+  'anifrolumab': { class: 'Biologics (Integrin/Other)', indications: ['Systemic Lupus Erythematosus'] }
 };
 
 const drugDatabase: Record<string, DrugProfile> = {
@@ -145,22 +165,68 @@ const drugDatabase: Record<string, DrugProfile> = {
   'fluvastatin': { name: 'Fluvastatin', weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Moderate', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Low' , availableDoses: [20, 40, 80] },
   'pitavastatin': { name: 'Pitavastatin', weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Moderate', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Low' , availableDoses: [1, 2, 4] },
 
+  // Antidiabetics
+  'metformin': { name: 'Metformin', brandNames: ['Glucophage'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'High', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [500, 850, 1000] },
+  'glipizide': { name: 'Glipizide', brandNames: ['Glucotrol'], weightGain: 'Moderate', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Moderate', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [5, 10] },
+  'empagliflozin': { name: 'Empagliflozin', brandNames: ['Jardiance'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [10, 25] },
+  'semaglutide': { name: 'Semaglutide', brandNames: ['Ozempic', 'Rybelsus', 'Wegovy'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'High', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [0.25, 0.5, 1, 2] },
+  'sitagliptin': { name: 'Sitagliptin', brandNames: ['Januvia'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [25, 50, 100] },
+
+  // Antihypertensives (ACE inhibitors)
+  'lisinopril': { name: 'Lisinopril', brandNames: ['Prinivil', 'Zestril'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [5, 10, 20, 40] },
+  'enalapril': { name: 'Enalapril', brandNames: ['Vasotec'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [2.5, 5, 10, 20] },
+  'ramipril': { name: 'Ramipril', brandNames: ['Altace'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [1.25, 2.5, 5, 10] },
+
+  // Antihypertensives (ARBs)
+  'losartan': { name: 'Losartan', brandNames: ['Cozaar'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [25, 50, 100] },
+  'valsartan': { name: 'Valsartan', brandNames: ['Diovan'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [40, 80, 160, 320] },
+  'irbesartan': { name: 'Irbesartan', brandNames: ['Avapro'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [75, 150, 300] },
+
+  // Antihypertensives (Beta-blockers)
+  'metoprolol': { name: 'Metoprolol', brandNames: ['Lopressor', 'Toprol XL'], weightGain: 'Minimal', sedation: 'Moderate', sexualDysfunction: 'Moderate', qtcProlongation: 'Minimal', insomnia: 'Low', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Low', availableDoses: [25, 50, 100, 200] },
+  'carvedilol': { name: 'Carvedilol', brandNames: ['Coreg'], weightGain: 'Minimal', sedation: 'Moderate', sexualDysfunction: 'Moderate', qtcProlongation: 'Minimal', insomnia: 'Low', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Low', availableDoses: [3.125, 6.25, 12.5, 25] },
+  'atenolol': { name: 'Atenolol', brandNames: ['Tenormin'], weightGain: 'Minimal', sedation: 'Moderate', sexualDysfunction: 'Moderate', qtcProlongation: 'Minimal', insomnia: 'Low', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Low', availableDoses: [25, 50, 100] },
+
+  // Anticoagulants
+  'warfarin': { name: 'Warfarin', brandNames: ['Coumadin', 'Jantoven'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [1, 2, 2.5, 3, 4, 5, 6, 7.5, 10] },
+  'apixaban': { name: 'Apixaban', brandNames: ['Eliquis'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [2.5, 5] },
+  'rivaroxaban': { name: 'Rivaroxaban', brandNames: ['Xarelto'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [2.5, 10, 15, 20] },
+  'dabigatran': { name: 'Dabigatran', brandNames: ['Pradaxa'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Moderate', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal', availableDoses: [75, 110, 150] },
+
+
+
   // Biologics
-  'adalimumab': { name: 'Adalimumab', brandNames: ['Humira'], biosimilars: ['Amjevita', 'Cyltezo', 'Hyrimoz', 'Hadlima', 'Abrilada', 'Hulio', 'Yusimry', 'Idacio', 'Yuflyma'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [40] },
+  'adalimumab': { name: 'Adalimumab', brandNames: ['Humira'], biosimilars: ['Amjevita', 'Cyltezo', 'Hyrimoz', 'Hadlima', 'Abrilada', 'Hulio', 'Yusimry', 'Idacio', 'Yuflyma', 'Simlandi'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [40] },
   'infliximab': { name: 'Infliximab', brandNames: ['Remicade'], biosimilars: ['Inflectra', 'Renflexis', 'Ixifi', 'Avsola'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
   'etanercept': { name: 'Etanercept', brandNames: ['Enbrel'], biosimilars: ['Erelzi', 'Eticovo'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [50] },
-  'certolizumab': { name: 'Certolizumab', brandNames: ['Cimzia'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [200] },
-  'golimumab': { name: 'Golimumab', brandNames: ['Simponi', 'Simponi Aria'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [50, 100] },
-  'ustekinumab': { name: 'Ustekinumab', brandNames: ['Stelara'], biosimilars: ['Wezlana'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [45, 90] },
-  'secukinumab': { name: 'Secukinumab', brandNames: ['Cosentyx'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [150, 300] },
-  'ixekizumab': { name: 'Ixekizumab', brandNames: ['Taltz'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [80] },
-  'risankizumab': { name: 'Risankizumab', brandNames: ['Skyrizi'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [150, 360] },
-  'guselkumab': { name: 'Guselkumab', brandNames: ['Tremfya'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
-  'tildrakizumab': { name: 'Tildrakizumab', brandNames: ['Ilumya'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
-  'vedolizumab': { name: 'Vedolizumab', brandNames: ['Entyvio'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [300] },
+  'certolizumab': { name: 'Certolizumab', brandNames: ['Cimzia'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [200] },
+  'golimumab': { name: 'Golimumab', brandNames: ['Simponi', 'Simponi Aria'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [50, 100] },
+  'ustekinumab': { name: 'Ustekinumab', brandNames: ['Stelara'], biosimilars: ['Wezlana', 'Selarsdi', 'Pyzchiva', 'Otulfi'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [45, 90] },
+  'secukinumab': { name: 'Secukinumab', brandNames: ['Cosentyx'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [150, 300] },
+  'ixekizumab': { name: 'Ixekizumab', brandNames: ['Taltz'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [80] },
+  'risankizumab': { name: 'Risankizumab', brandNames: ['Skyrizi'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [150, 360] },
+  'guselkumab': { name: 'Guselkumab', brandNames: ['Tremfya'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
+  'tildrakizumab': { name: 'Tildrakizumab', brandNames: ['Ilumya'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
+  'vedolizumab': { name: 'Vedolizumab', brandNames: ['Entyvio'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [300] },
   'natalizumab': { name: 'Natalizumab', brandNames: ['Tysabri'], biosimilars: ['Tyruko'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [300] },
-  'abatacept': { name: 'Abatacept', brandNames: ['Orencia'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [125] },
-  'tocilizumab': { name: 'Tocilizumab', brandNames: ['Actemra'], biosimilars: ['Tofidence'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [162] }
+  'abatacept': { name: 'Abatacept', brandNames: ['Orencia'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [125] },
+  'tocilizumab': { name: 'Tocilizumab', brandNames: ['Actemra'], biosimilars: ['Tofidence', 'Tyenne'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [162] },
+
+  'brodalumab': { name: 'Brodalumab', brandNames: ['Siliq'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [210] },
+  'bimekizumab': { name: 'Bimekizumab', brandNames: ['Bimzelx'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [160] },
+  'mirikizumab': { name: 'Mirikizumab', brandNames: ['Omvoh'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [300] },
+  'sarilumab': { name: 'Sarilumab', brandNames: ['Kevzara'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [150, 200] },
+  'anakinra': { name: 'Anakinra', brandNames: ['Kineret'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
+  'dupilumab': { name: 'Dupilumab', brandNames: ['Dupixent'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [200, 300] },
+  'omalizumab': { name: 'Omalizumab', brandNames: ['Xolair'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [75, 150] },
+  'mepolizumab': { name: 'Mepolizumab', brandNames: ['Nucala'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
+  'benralizumab': { name: 'Benralizumab', brandNames: ['Fasenra'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [30] },
+  'reslizumab': { name: 'Reslizumab', brandNames: ['Cinqair'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100] },
+  'rituximab': { name: 'Rituximab', brandNames: ['Rituxan'], biosimilars: ['Truxima', 'Ruxience', 'Riabni'], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [100, 500] },
+  'ocrelizumab': { name: 'Ocrelizumab', brandNames: ['Ocrevus'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [300] },
+  'ofatumumab': { name: 'Ofatumumab', brandNames: ['Kesimpta'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [20] },
+  'belimumab': { name: 'Belimumab', brandNames: ['Benlysta'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [120, 200, 400] },
+  'anifrolumab': { name: 'Anifrolumab', brandNames: ['Saphnelo'], biosimilars: [], weightGain: 'Minimal', sedation: 'Minimal', sexualDysfunction: 'Minimal', qtcProlongation: 'Minimal', insomnia: 'Minimal', giUpset: 'Low', metabolic: 'Low', anticholinergic: 'Minimal', cns: 'Minimal' , availableDoses: [300] }
 };
 
 export function getDrugProfile(drugName: string): DrugProfile | null {

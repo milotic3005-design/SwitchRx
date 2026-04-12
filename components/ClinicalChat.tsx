@@ -56,10 +56,46 @@ async function retrieveClinicalContext(query: string) {
 
   // 2. Broaden search to related terms or drug classes if no exact match
   const matchedClasses = [];
+  
+  // Define broader class associations for nuanced searching
+  const classAssociations: Record<string, string[]> = {
+    'nsaid': ['nsaid', 'ibuprofen', 'naproxen', 'celecoxib', 'meloxicam', 'diclofenac', 'ketorolac'],
+    'anticoagulant': ['anticoagulant', 'doac', 'apixaban', 'rivaroxaban', 'dabigatran', 'warfarin', 'heparin', 'enoxaparin'],
+    'ssri': ['ssri', 'fluoxetine', 'sertraline', 'citalopram', 'escitalopram', 'paroxetine'],
+    'ace inhibitor': ['ace inhibitor', 'lisinopril', 'enalapril', 'ramipril', 'benazepril']
+  };
+
+  // Check if query mentions any specific drugs that belong to a class, or the class itself
+  const mentionedClasses = new Set<string>();
+  
+  for (const [className, drugs] of Object.entries(classAssociations)) {
+    if (drugs.some(drug => lowerQuery.includes(drug))) {
+      mentionedClasses.add(className);
+    }
+  }
+
+  // If we identified classes, check for known interactions between those classes
+  if (mentionedClasses.has('nsaid') && mentionedClasses.has('anticoagulant')) {
+    matchedClasses.push(`Source: Clinical Guidelines (Class Interaction)\nContext: Concurrent use of NSAIDs and anticoagulants significantly increases the risk of major gastrointestinal bleeding. NSAIDs inhibit platelet aggregation and can cause gastric mucosal damage, compounding the bleeding risk from anticoagulation.\nRecommendation: Avoid concurrent use if possible. If necessary, use the lowest effective NSAID dose for the shortest duration, and consider adding a proton pump inhibitor (PPI) for GI protection.`);
+  }
+  
+  if (mentionedClasses.has('nsaid') && mentionedClasses.has('ace inhibitor')) {
+     matchedClasses.push(`Source: Clinical Guidelines (Class Interaction)\nContext: NSAIDs can reduce the antihypertensive effect of ACE inhibitors and increase the risk of acute kidney injury, especially in volume-depleted patients or the elderly.\nRecommendation: Monitor blood pressure and renal function closely. Consider alternative analgesics like acetaminophen if appropriate.`);
+  }
+
+  // Also pull in general class info for any mentioned classes
   for (const info of MOCK_CLINICAL_DB.classInfo) {
-    const hasClassMatch = info.keywords.some(keyword => lowerQuery.includes(keyword));
-    if (hasClassMatch) {
-      matchedClasses.push(info.context);
+    // Check if the info block matches any of the broad classes we identified, or direct keywords
+    const hasMatch = info.keywords.some(keyword => 
+      lowerQuery.includes(keyword) || 
+      Array.from(mentionedClasses).some(cls => classAssociations[cls]?.includes(keyword))
+    );
+    
+    if (hasMatch) {
+      // Avoid duplicating the class interaction text if we already added it
+      if (!matchedClasses.some(m => m.includes(info.context.substring(0, 50)))) {
+        matchedClasses.push(info.context);
+      }
     }
   }
 
@@ -133,10 +169,11 @@ export function ClinicalChat() {
       try {
         const ai = new GoogleGenAI({ apiKey });
         chatSessionRef.current = ai.chats.create({
-          model: 'gemini-3.1-pro-preview',
+          model: 'gemini-3-flash-preview',
           config: {
             systemInstruction: CLINICAL_SYSTEM_PROMPT,
             temperature: 0.1, // Low temperature for deterministic, factual responses
+            tools: [{ googleSearch: {} }],
           }
         });
         cachedChatSession = chatSessionRef.current;
@@ -231,7 +268,7 @@ Please answer the question, incorporating the retrieved context.`;
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 h-[calc(100vh-2rem)] flex flex-col">
+    <div className="max-w-4xl mx-auto h-full flex flex-col">
       <div className="mb-6 flex items-start gap-4 bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
         <ShieldAlert className="text-blue-400 shrink-0 mt-1" size={16} strokeWidth={1.5} />
         <div>

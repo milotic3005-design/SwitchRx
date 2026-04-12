@@ -1,4 +1,4 @@
-import { getDrugProfile, drugClasses } from './drug-db';
+import { getDrugProfile, drugClasses, biologicIndications } from './drug-db';
 import { monographs } from './drug-monographs';
 
 export type SwitchRequest = {
@@ -503,6 +503,7 @@ export function getSwitchingProtocol(req: SwitchRequest): SwitchResponse | null 
 
 export type ReplacementSuggestion = {
   drug: string;
+  score: number;
   rationale: string[];
   protocol: SwitchResponse;
   warnings?: string[];
@@ -521,6 +522,7 @@ export function suggestReplacements(req: {
     renalFunction: string;
     hepaticFunction: string;
     comorbidities: string;
+    infectionHistory?: string;
     otherMedications: string;
     cyp2d6Status?: string;
   };
@@ -552,13 +554,12 @@ export function suggestReplacements(req: {
       const isBio = ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d));
       if (!isBio) return false;
       
-      // If indication is provided, must match
+      // If a specific indication was provided, strictly filter by it
       if (indication) {
-        // We need to import biologicIndications to check this
-        const { biologicIndications } = require('./drug-db');
-        return biologicIndications[d]?.includes(indication);
+        return biologicIndications[d]?.indications.includes(indication);
       }
-      return true; // If no indication selected, just suggest other biologics
+      
+      return true;
     });
   }
 
@@ -617,28 +618,68 @@ export function suggestReplacements(req: {
       const fromClass = Object.keys(drugClasses).find(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
       const toClass = Object.keys(drugClasses).find(c => drugClasses[c as keyof typeof drugClasses]?.includes(drugName.toLowerCase()));
       
+      const isToTNF = toClass === 'Biologics (TNF inhibitors)';
+      const isToIL = toClass === 'Biologics (IL inhibitors)';
+      const isToIntegrin = toClass === 'Biologics (Integrin/Other)';
+
+      // TNF to IL specific logic
+      if (fromClass === 'Biologics (TNF inhibitors)' && isToIL) {
+        score += 2;
+        rationaleParts.push('IL inhibitor class often preferred after TNF inhibitor failure/intolerance');
+      }
+
       if (reason === 'Primary Non-response') {
         if (fromClass !== toClass) {
           score += 5;
-          rationaleParts.push('different mechanism of action preferred for primary non-response');
+          let specificRationale = 'different mechanism of action preferred for primary non-response';
+          if (fromClass === 'Biologics (TNF inhibitors)' && isToIL) {
+             specificRationale = 'Switching to an IL inhibitor is preferred after primary non-response to a TNF inhibitor due to differing inflammatory pathways';
+          } else if (fromClass === 'Biologics (IL inhibitors)' && isToTNF) {
+             specificRationale = 'Switching to a TNF inhibitor provides a distinct mechanism of action after primary non-response to an IL inhibitor';
+          } else if (isToIntegrin) {
+             specificRationale = 'Integrin inhibitors offer a targeted alternative mechanism after primary non-response to systemic biologics';
+          }
+          rationaleParts.push(specificRationale);
         } else {
           score -= 2; // Penalize same class for primary non-response
         }
       } else if (reason === 'Secondary Loss of Response') {
         if (fromClass === toClass) {
           score += 3;
-          rationaleParts.push('alternative agent within the same class for secondary loss of response');
+          rationaleParts.push(`cycling to another ${toClass?.replace('Biologics (', '').replace(')', '')} is effective for secondary loss of response (often due to immunogenicity)`);
         } else {
           score += 2;
-          rationaleParts.push('alternative mechanism of action for secondary loss of response');
+          rationaleParts.push('alternative mechanism of action can recapture response after secondary failure');
         }
       } else if (reason === 'Adverse Effect: Infection Risk') {
         if (drugName.toLowerCase() === 'vedolizumab' && (indication === "Crohn's Disease" || indication === "Ulcerative Colitis")) {
           score += 6;
-          rationaleParts.push('gut-selective mechanism with lower systemic infection risk');
-        } else if (toClass !== 'Biologics (TNF inhibitors)') {
+          rationaleParts.push('gut-selective mechanism (α4β7 integrin inhibitor) significantly lowers systemic immunosuppression and infection risk');
+        } else if (isToIL) {
+          score += 4;
+          rationaleParts.push('IL inhibitors generally demonstrate a more favorable systemic infection risk profile compared to TNF inhibitors');
+        } else if (!isToTNF) {
           score += 3;
-          rationaleParts.push('non-TNF inhibitor option may have different infection risk profile');
+          rationaleParts.push('non-TNF inhibitor option preferred to minimize broad immunosuppression');
+        }
+      }
+
+      // Infection history logic
+      const hasInfectionHistory = patientContext?.infectionHistory === 'Yes' ||
+        patientContext?.comorbidities.toLowerCase().includes('infection') ||
+        patientContext?.comorbidities.toLowerCase().includes('tb') ||
+        patientContext?.comorbidities.toLowerCase().includes('tuberculosis');
+
+      if (hasInfectionHistory) {
+        if (isToTNF) {
+          score -= 6;
+          rationaleParts.push('caution: TNF inhibitors carry higher risk of serious infections/reactivation');
+        } else if (isToIL) {
+          score += 3;
+          rationaleParts.push('favorable: IL inhibitors generally have lower serious infection risk than TNF inhibitors');
+        } else if (isToIntegrin && (indication === "Crohn's Disease" || indication === "Ulcerative Colitis")) {
+          score += 5;
+          rationaleParts.push('favorable: gut-selective mechanism minimizes systemic immunosuppression');
         }
       }
     }
@@ -728,8 +769,8 @@ export function suggestReplacements(req: {
   // Sort by score descending
   scoredCandidates.sort((a, b) => b.score - a.score);
 
-  // Take top 3
-  const topCandidates = scoredCandidates.slice(0, 3);
+  // Return all valid candidates so the client can filter and slice
+  const topCandidates = scoredCandidates;
 
   const suggestions: ReplacementSuggestion[] = [];
   for (const candidate of topCandidates) {
@@ -783,6 +824,7 @@ export function suggestReplacements(req: {
 
     suggestions.push({
       drug: candidate.drug,
+      score: candidate.score,
       rationale: candidate.rationale,
       protocol,
       warnings: warnings.length > 0 ? warnings : undefined
