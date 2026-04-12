@@ -1,7 +1,5 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
-import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -110,7 +108,7 @@ async function retrieveClinicalContext(query: string) {
 let cachedMessages: {role: 'user' | 'model', content: string, fileName?: string}[] = [];
 let cachedInput = '';
 let cachedAttachedFile: { name: string, type: string, base64: string } | null = null;
-let cachedChatSession: any = null;
+let cachedHistory: any[] = [];
 
 export function ClinicalChat() {
   const [messages, setMessages] = useState<{role: 'user' | 'model', content: string, fileName?: string}[]>(cachedMessages);
@@ -118,13 +116,14 @@ export function ClinicalChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, base64: string } | null>(cachedAttachedFile);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatSessionRef = useRef<any>(cachedChatSession);
+  const historyRef = useRef<any[]>(cachedHistory);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update caches whenever state changes
   useEffect(() => { cachedMessages = messages; }, [messages]);
   useEffect(() => { cachedInput = input; }, [input]);
   useEffect(() => { cachedAttachedFile = attachedFile; }, [attachedFile]);
+  useEffect(() => { cachedHistory = historyRef.current; }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -158,34 +157,6 @@ export function ClinicalChat() {
     setAttachedFile(null);
   };
 
-  const initChat = () => {
-    if (!chatSessionRef.current) {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        console.error("Gemini API key is missing.");
-        return false;
-      }
-      
-      try {
-        const ai = new GoogleGenAI({ apiKey });
-        chatSessionRef.current = ai.chats.create({
-          model: 'gemini-3-flash-preview',
-          config: {
-            systemInstruction: CLINICAL_SYSTEM_PROMPT,
-            temperature: 0.1, // Low temperature for deterministic, factual responses
-            tools: [{ googleSearch: {} }],
-          }
-        });
-        cachedChatSession = chatSessionRef.current;
-        return true;
-      } catch (err) {
-        console.error("Failed to initialize chat:", err);
-        return false;
-      }
-    }
-    return true;
-  };
-
   const handleSend = async () => {
     if ((!input.trim() && !attachedFile) || isLoading) return;
 
@@ -201,12 +172,6 @@ export function ClinicalChat() {
     setInput('');
     setAttachedFile(null);
     setIsLoading(true);
-
-    if (!initChat()) {
-      setMessages((prev) => [...prev, { role: 'model', content: 'Error: Unable to initialize AI chat. Please check API configuration.' }]);
-      setIsLoading(false);
-      return;
-    }
 
     try {
       // 1. RAG Retrieval
@@ -238,21 +203,49 @@ Please answer the question, incorporating the retrieved context.`;
       // Add a placeholder for the model's response
       setMessages((prev) => [...prev, { role: 'model', content: '' }]);
       
-      // 3. Call Gemini API using chat session for multi-turn history
-      const streamResponse = await chatSessionRef.current.sendMessageStream({ message: messageParts });
-      
-      let fullResponse = '';
-      for await (const chunk of streamResponse) {
-        if (chunk.text) {
-          fullResponse += chunk.text;
-          // Update the last message with the new chunk
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            newMessages[newMessages.length - 1].content = fullResponse;
-            return newMessages;
-          });
-        }
+      // 3. Call server-side API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messageParts,
+          history: historyRef.current,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response');
       }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullResponse += chunk;
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1].content = fullResponse;
+          return newMessages;
+        });
+      }
+
+      // Update history
+      historyRef.current = [
+        ...historyRef.current,
+        { role: 'user', parts: messageParts },
+        { role: 'model', parts: [{ text: fullResponse }] },
+      ];
+
     } catch (error) {
       console.error("Error calling Gemini:", error);
       setMessages((prev) => {

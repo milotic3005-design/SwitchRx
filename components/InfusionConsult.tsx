@@ -1,23 +1,8 @@
 "use client";
-import { useState, useRef } from 'react';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { useState } from 'react';
 import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
-
-const INFUSION_SYSTEM_PROMPT = `You are an Expert Clinical Pharmacy Specialist in Infusion Therapy (Biologics, Antibiotics, Oncology).
-Your task is to generate a highly structured, evidence-based "Consult Brief" for the provided clinical scenario.
-
-CRITICAL INSTRUCTIONS:
-1. Provide a structured consult brief containing:
-   - Clinical Assessment: Brief summary of the patient's situation.
-   - Recommended Regimen: Drug, dose, route, frequency, and duration.
-   - Monitoring Parameters: Labs, vitals, and clinical signs to monitor before, during, and after infusion.
-   - Preparation & Administration: Diluent, stability, infusion rate, and line requirements (e.g., central vs. peripheral, filter requirements).
-   - Adverse Effects & Management: Key infusion-related reactions and how to manage them (e.g., premedications, extravasation protocols).
-2. Base your recommendations on standard clinical guidelines and package inserts.
-3. Be concise, professional, and highly clinical.
-4. Do not provide direct patient medical advice, only clinical decision support for healthcare professionals.`;
 
 export function InfusionConsult() {
   const [scenario, setScenario] = useState('');
@@ -37,36 +22,46 @@ export function InfusionConsult() {
     setIsThinkingExpanded(false); // keep minimized by default
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("Gemini API key is missing.");
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const response = await ai.models.generateContentStream({
-        model: 'gemini-3.1-pro-preview',
-        contents: scenario,
-        config: {
-          systemInstruction: INFUSION_SYSTEM_PROMPT,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-        }
+      const response = await fetch('/api/infusion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scenario }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate consult brief');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+
+      const decoder = new TextDecoder();
       let fullResponse = '';
       let fullThinking = '';
-      
-      for await (const chunk of response) {
-        const parts = chunk.candidates?.[0]?.content?.parts;
-        if (parts) {
-          for (const part of parts) {
-            if ((part as any).thought && part.text) {
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const part = JSON.parse(line);
+            if (part.thought && part.text) {
               fullThinking += part.text;
               setThinking(fullThinking);
             } else if (part.text) {
               fullResponse += part.text;
               setBrief(fullResponse);
             }
+          } catch (e) {
+            console.error('Error parsing chunk:', e);
           }
         }
       }
