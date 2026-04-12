@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { suggestReplacements, ReplacementSuggestion } from '@/lib/clinical-logic';
 import { getDrugProfile, DrugProfile, drugClasses, biologicIndications } from '@/lib/drug-db';
 import { monographs } from '@/lib/drug-monographs';
-import { ArrowRight, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, X, Search, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
+import { ArrowRight, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, Search, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SwitchingProtocols() {
