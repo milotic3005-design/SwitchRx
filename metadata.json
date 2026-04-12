@@ -1,0 +1,5 @@
+{
+  "name": "ClinicalRx AI Assistant",
+  "description": "Clinical decision support web application tailored for clinical pharmacists with deterministic switching protocols and AI-assisted clinical chat.",
+  "requestFramePermissions": []
+}
