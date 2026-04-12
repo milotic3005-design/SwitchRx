@@ -37,6 +37,14 @@ export const drugClasses = {
   'Biologics (Integrin/Other)': ['vedolizumab', 'natalizumab', 'abatacept', 'tocilizumab', 'rituximab', 'ocrelizumab', 'ofatumumab', 'belimumab', 'anifrolumab']
 };
 
+// Precompute drug to class mapping for O(1) lookups
+const drugToClassMap: Record<string, string> = {};
+Object.entries(drugClasses).forEach(([className, drugs]) => {
+  drugs.forEach(drug => {
+    drugToClassMap[drug.toLowerCase().trim()] = className;
+  });
+});
+
 export const biologicIndications: Record<string, { class: string, indications: string[] }> = {
   'adalimumab': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis', 'Hidradenitis Suppurativa'] },
   'infliximab': { class: 'Biologics (TNF inhibitors)', indications: ['Rheumatoid Arthritis', 'Crohn\'s Disease', 'Ulcerative Colitis', 'Psoriasis', 'Psoriatic Arthritis', 'Ankylosing Spondylitis'] },
@@ -246,11 +254,7 @@ export function getAllDrugs(): string[] {
 }
 
 export function getDrugClass(drugName: string): string | null {
+  if (!drugName) return null;
   const normalized = drugName.toLowerCase().trim();
-  for (const [className, drugs] of Object.entries(drugClasses)) {
-    if (drugs.includes(normalized)) {
-      return className;
-    }
-  }
-  return null;
+  return drugToClassMap[normalized] || null;
 }
