@@ -1,7 +1,5 @@
 "use client";
 import { useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
-import { SUMMARIZATION_PROMPT } from '@/lib/ai-prompts';
 import { FileText, Sparkles, Loader2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 
@@ -15,16 +13,19 @@ export function GuidelineSummarizer() {
     
     setIsLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: text,
-        config: {
-          systemInstruction: SUMMARIZATION_PROMPT,
-          temperature: 0.2,
-        }
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
       });
-      setSummary(response.text || 'No summary generated.');
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      setSummary(data.text || 'No summary generated.');
     } catch (error) {
       console.error("Error summarizing:", error);
       setSummary("Error generating summary. Please check API configuration.");
