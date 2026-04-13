@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { suggestReplacements, ReplacementSuggestion } from '@/lib/clinical-logic';
 import { getDrugProfile, DrugProfile, drugClasses, biologicIndications } from '@/lib/drug-db';
 import { monographs } from '@/lib/drug-monographs';
-import { ArrowRight, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, X, Search, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, X, Search, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function SwitchingProtocols() {
@@ -645,32 +645,62 @@ export function SwitchingProtocols() {
                             </button>
                           </div>
 
-                          {showMonographFor === suggestion.drug && monographs[suggestion.drug.toLowerCase()] && (
+                          {showMonographFor === suggestion.drug && (
                             <motion.div 
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
-                              className="mt-4 bg-black/30 rounded-xl p-5 border border-white/5 text-sm text-slate-300 space-y-4"
+                              className="mt-4 bg-black/30 rounded-xl p-5 border border-white/5 text-sm text-slate-300 space-y-6"
                             >
-                              <div>
-                                <h6 className="font-medium text-white mb-1">Mechanism of Action</h6>
-                                <p className="leading-relaxed">{monographs[suggestion.drug.toLowerCase()].mechanismOfAction}</p>
-                              </div>
-                              <div>
-                                <h6 className="font-medium text-white mb-1">Contraindications</h6>
-                                <ul className="list-disc pl-4 space-y-1">
-                                  {monographs[suggestion.drug.toLowerCase()].contraindications.map((c, i) => (
-                                    <li key={i}>{c}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div>
-                                <h6 className="font-medium text-white mb-1">Side Effects Management</h6>
-                                <ul className="list-disc pl-4 space-y-1">
-                                  {monographs[suggestion.drug.toLowerCase()].sideEffectsManagement.map((se, i) => (
-                                    <li key={i}><span className="text-amber-400">{se.effect}:</span> {se.management}</li>
-                                  ))}
-                                </ul>
-                              </div>
+                              {suggestion.protocol && (
+                                <div>
+                                  <h6 className="font-medium text-white mb-3 flex items-center gap-2">
+                                    <ArrowRightLeft size={16} className="text-blue-400" />
+                                    Step-wise Switching Protocol
+                                  </h6>
+                                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 text-blue-100 whitespace-pre-wrap leading-relaxed">
+                                    {suggestion.protocol.protocol}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {suggestion.protocol && suggestion.protocol.monitoring && suggestion.protocol.monitoring.length > 0 && (
+                                <div>
+                                  <h6 className="font-medium text-white mb-2 flex items-center gap-2">
+                                    <Activity size={16} className="text-emerald-400" />
+                                    Monitoring Parameters
+                                  </h6>
+                                  <ul className="list-disc pl-5 space-y-1">
+                                    {suggestion.protocol.monitoring.map((m, i) => (
+                                      <li key={i}>{m}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {monographs[suggestion.drug.toLowerCase()] && (
+                                <div className="pt-4 border-t border-white/10 space-y-4">
+                                  <div>
+                                    <h6 className="font-medium text-white mb-1">Mechanism of Action</h6>
+                                    <p className="leading-relaxed">{monographs[suggestion.drug.toLowerCase()].mechanismOfAction}</p>
+                                  </div>
+                                  <div>
+                                    <h6 className="font-medium text-white mb-1">Contraindications</h6>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                      {monographs[suggestion.drug.toLowerCase()].contraindications.map((c, i) => (
+                                        <li key={i}>{c}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div>
+                                    <h6 className="font-medium text-white mb-1">Side Effects Management</h6>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                      {monographs[suggestion.drug.toLowerCase()].sideEffectsManagement.map((se, i) => (
+                                        <li key={i}><span className="text-amber-400">{se.effect}:</span> {se.management}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              )}
                             </motion.div>
                           )}
                         </div>

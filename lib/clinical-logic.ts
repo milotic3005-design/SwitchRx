@@ -281,23 +281,21 @@ export function getSwitchingProtocol(req: SwitchRequest): SwitchResponse | null 
     const fromEq = ssriEquivalents[from];
     const isHighDose = !isNaN(dose) && dose >= (fromEq * 2); // e.g., Citalopram >= 40mg, Sertraline >= 100mg
 
-    let protocolText = `Direct switch: Stop ${req.fromDrug} and start ${req.toDrug} the next day at the usual starting dose or equivalent dose.`;
+    let protocolText = `Step-wise Cross-Taper Protocol (Recommended to minimize withdrawal and improve tolerability):\n\nWeek 1:\n- Reduce ${req.fromDrug} dose by 50%.\n- Initiate ${req.toDrug} at its lowest starting dose (e.g., Venlafaxine 37.5mg or Duloxetine 20-30mg).\n\nWeek 2:\n- Discontinue ${req.fromDrug} completely.\n- Maintain ${req.toDrug} at the starting dose.\n\nWeek 3+:\n- Titrate ${req.toDrug} upwards based on clinical response and tolerability to the target therapeutic dose.`;
     
-    if (isHighDose) {
-      protocolText = `Cross-taper recommended due to high current dose of ${req.fromDrug}.\n\n1. Reduce ${req.fromDrug} by 50% for 1-2 weeks.\n2. Initiate ${req.toDrug} at a low starting dose simultaneously.\n3. After 1-2 weeks, discontinue ${req.fromDrug} and titrate ${req.toDrug} to target dose.`;
-    } else if (isNaN(dose)) {
-      protocolText += `\n\nNote: If the patient is on a high dose of ${req.fromDrug}, consider a short cross-taper over 1-2 weeks to minimize withdrawal symptoms.`;
+    if (!isHighDose) {
+      protocolText += `\n\nAlternative (Direct Switch for low doses only):\nStop ${req.fromDrug} and start ${req.toDrug} the next day at the starting dose.`;
     }
 
     return {
       fromDrug: req.fromDrug,
       toDrug: req.toDrug,
-      rationale: `Switching from an SSRI to an SNRI due to ${reason.toLowerCase() || 'lack of efficacy'}. SNRIs provide additional noradrenergic reuptake inhibition.`,
+      rationale: `Switching from an SSRI to an SNRI due to ${reason.toLowerCase() || 'lack of efficacy'}. SNRIs provide additional noradrenergic reuptake inhibition. A step-wise cross-taper reduces the risk of serotonergic withdrawal.`,
       protocol: protocolText,
       monitoring: [
         "Serotonin syndrome",
         "Blood pressure (SNRIs can cause dose-related hypertension)",
-        "SSRI discontinuation syndrome"
+        "SSRI discontinuation syndrome (dizziness, nausea, lethargy)"
       ],
       references: [
         "CANMAT 2023 Update on Clinical Guidelines for Management of Major Depressive Disorder in Adults"
@@ -367,7 +365,7 @@ export function getSwitchingProtocol(req: SwitchRequest): SwitchResponse | null 
       fromDrug: req.fromDrug,
       toDrug: req.toDrug,
       rationale: `Intra-class statin switch. Equivalent dosing is based on standard lipid-lowering efficacy ratios.`,
-      protocol: `Direct switch. Stop ${req.fromDrug} and start ${req.toDrug} the next day. \n\nCalculated equivalent dose: ${req.fromDrug} ${isNaN(dose) ? '[Dose]' : dose}mg = ${req.toDrug} ${targetDose}. \n\nAdjust based on patient's specific LDL-C goals and tolerance.`,
+      protocol: `Standard Direct Switch:\n1. Stop ${req.fromDrug} today.\n2. Start ${req.toDrug} tomorrow at the equivalent dose (${targetDose}).\n\nStep-wise Protocol (If history of Statin Intolerance/SAMS):\n1. Discontinue ${req.fromDrug} and observe a 2-4 week washout until muscle symptoms resolve.\n2. Initiate ${req.toDrug} at the lowest available dose (e.g., Rosuvastatin 5mg or Pravastatin 10mg).\n3. Re-evaluate in 4-6 weeks and gradually titrate dose upwards to achieve LDL-C goals.`,
       monitoring: [
         "Lipid panel (fasting) in 4-12 weeks",
         "Creatine kinase (CK) if muscle symptoms occur",
@@ -418,7 +416,7 @@ export function getSwitchingProtocol(req: SwitchRequest): SwitchResponse | null 
       fromDrug: req.fromDrug,
       toDrug: req.toDrug,
       rationale: `Intra-class SSRI switch due to ${reason.toLowerCase() || 'clinical indications'}.`,
-      protocol: `Direct switch: Stop ${req.fromDrug} and start ${req.toDrug} at an equivalent dose the next day. \n\nCalculated equivalent dose: ${req.fromDrug} ${isNaN(dose) ? '[Dose]' : dose}mg = ${req.toDrug} ${targetDose}. \n\nNote: If switching FROM Paroxetine, a short cross-taper may be preferred due to its short half-life. If switching FROM Fluoxetine, start the new SSRI at a lower dose due to fluoxetine's long half-life.`,
+      protocol: `Step-wise Cross-Taper Protocol (Preferred for sensitive patients or high doses):\n\nWeek 1:\n- Reduce ${req.fromDrug} dose by 50%.\n- Initiate ${req.toDrug} at 50% of the calculated equivalent dose (${targetDose}).\n\nWeek 2:\n- Discontinue ${req.fromDrug} completely.\n- Increase ${req.toDrug} to the full target dose (${targetDose}).\n\nAlternative (Direct Switch):\nStop ${req.fromDrug} and start ${req.toDrug} at the equivalent dose (${targetDose}) the next day. (Caution if switching from paroxetine due to withdrawal risk, or from fluoxetine due to long half-life).`,
       monitoring: [
         "Serotonin syndrome", 
         "Discontinuation syndrome (especially if stopping paroxetine)", 
@@ -440,10 +438,10 @@ export function getSwitchingProtocol(req: SwitchRequest): SwitchResponse | null 
       fromDrug: req.fromDrug,
       toDrug: req.toDrug,
       rationale: `Intra-class SNRI switch due to ${reason.toLowerCase() || 'clinical indications'}.`,
-      protocol: `Direct switch: Stop ${req.fromDrug} and start ${req.toDrug} at an equivalent dose the next day. \n\nCalculated equivalent dose: ${req.fromDrug} ${isNaN(dose) ? '[Dose]' : dose}mg = ${req.toDrug} ${targetDose}. \n\nNote: Venlafaxine has a higher risk of withdrawal; if switching from a high dose of Venlafaxine, a brief cross-taper may be considered.`,
+      protocol: `Step-wise Cross-Taper Protocol (Highly recommended due to severe SNRI withdrawal risks):\n\nWeek 1-2:\n- Reduce ${req.fromDrug} dose by 25-50%.\n- Initiate ${req.toDrug} at its lowest starting dose.\n\nWeek 3-4:\n- Discontinue ${req.fromDrug} completely.\n- Titrate ${req.toDrug} to the calculated equivalent dose (${targetDose}).\n\nAlternative (Direct Switch for low doses only):\nStop ${req.fromDrug} and start ${req.toDrug} at an equivalent dose the next day.`,
       monitoring: [
         "Blood pressure",
-        "SNRI discontinuation syndrome",
+        "SNRI discontinuation syndrome (brain zaps, dizziness, nausea)",
         "Efficacy of new agent"
       ],
       references: [
@@ -532,22 +530,36 @@ export function suggestReplacements(req: {
   if (!fromProfile) return [];
 
   // Determine broad category to keep suggestions within the same general indication
-  const isAntidepressant = ['SSRIs', 'SNRIs', 'Atypicals / Others', 'TCAs', 'MAOIs', 'Novel / Other Antidepressants'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
-  const isAntipsychotic = ['Antipsychotics (Atypical)', 'Antipsychotics (Typical)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
-  const isStatin = drugClasses['Statins']?.includes(fromDrug.toLowerCase());
-  const isBiologic = ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
+  const fromClass = Object.keys(drugClasses).find(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
+  
+  const isAntidepressant = ['SSRIs', 'SNRIs', 'Atypicals / Others', 'TCAs', 'MAOIs', 'Novel / Other Antidepressants'].includes(fromClass || '');
+  const isAntipsychotic = ['Antipsychotics (Atypical)', 'Antipsychotics (Typical)'].includes(fromClass || '');
+  const isStatin = fromClass === 'Statins';
+  const isBiologic = ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].includes(fromClass || '');
+  const isAntidiabetic = fromClass === 'Antidiabetics';
+  const isAntihypertensive = ['Antihypertensives (ACE inhibitors)', 'Antihypertensives (ARBs)', 'Antihypertensives (Beta-blockers)'].includes(fromClass || '');
+  const isAnticoagulant = fromClass === 'Anticoagulants';
+  const isMoodStabilizer = fromClass === 'Mood Stabilizers / Anticonvulsants';
 
   const allDrugs = Object.keys(drugClasses).flatMap(c => drugClasses[c as keyof typeof drugClasses]);
   
   let candidates = allDrugs.filter(d => d !== fromDrug.toLowerCase());
 
-  // Filter by broad category
+  // Filter by broad category to prevent absurd cross-class suggestions
   if (isAntidepressant) {
     candidates = candidates.filter(d => ['SSRIs', 'SNRIs', 'Atypicals / Others', 'TCAs', 'Novel / Other Antidepressants'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d)));
   } else if (isAntipsychotic) {
     candidates = candidates.filter(d => ['Antipsychotics (Atypical)', 'Antipsychotics (Typical)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d)));
   } else if (isStatin) {
     candidates = candidates.filter(d => drugClasses['Statins']?.includes(d));
+  } else if (isAntidiabetic) {
+    candidates = candidates.filter(d => drugClasses['Antidiabetics']?.includes(d));
+  } else if (isAntihypertensive) {
+    candidates = candidates.filter(d => ['Antihypertensives (ACE inhibitors)', 'Antihypertensives (ARBs)', 'Antihypertensives (Beta-blockers)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d)));
+  } else if (isAnticoagulant) {
+    candidates = candidates.filter(d => drugClasses['Anticoagulants']?.includes(d));
+  } else if (isMoodStabilizer) {
+    candidates = candidates.filter(d => drugClasses['Mood Stabilizers / Anticonvulsants']?.includes(d));
   } else if (isBiologic) {
     // For biologics, only suggest other biologics that are approved for the SAME indication
     candidates = candidates.filter(d => {
