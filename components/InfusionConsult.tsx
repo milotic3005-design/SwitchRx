@@ -39,7 +39,7 @@ export function InfusionConsult() {
     try {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (!apiKey) {
-        throw new Error("Gemini API key is missing.");
+        throw new Error("Gemini API key is missing. Please add it to your AI Studio secrets.");
       }
 
       const ai = new GoogleGenAI({ apiKey });

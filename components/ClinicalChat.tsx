@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
-import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText } from 'lucide-react';
+import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles } from 'lucide-react';
 import Markdown from 'react-markdown';
 
 // Mock RAG Retrieval Database
@@ -107,13 +107,14 @@ async function retrieveClinicalContext(query: string) {
 }
 
 // Module-level cache to persist state across component unmounts/remounts
-let cachedMessages: {role: 'user' | 'model', content: string, fileName?: string}[] = [];
+type ChatMessage = { role: 'user' | 'model', content: string, fileName?: string, isReformatting?: boolean };
+let cachedMessages: ChatMessage[] = [];
 let cachedInput = '';
 let cachedAttachedFile: { name: string, type: string, base64: string } | null = null;
 let cachedChatSession: any = null;
 
 export function ClinicalChat() {
-  const [messages, setMessages] = useState<{role: 'user' | 'model', content: string, fileName?: string}[]>(cachedMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
   const [input, setInput] = useState(cachedInput);
   const [isLoading, setIsLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, base64: string } | null>(cachedAttachedFile);
@@ -163,7 +164,7 @@ export function ClinicalChat() {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (!apiKey) {
         console.error("Gemini API key is missing.");
-        return false;
+        return "API_KEY_MISSING";
       }
       
       try {
@@ -177,13 +178,59 @@ export function ClinicalChat() {
           }
         });
         cachedChatSession = chatSessionRef.current;
-        return true;
-      } catch (err) {
+        return "SUCCESS";
+      } catch (err: any) {
         console.error("Failed to initialize chat:", err);
-        return false;
+        return err.message || "UNKNOWN_ERROR";
       }
     }
-    return true;
+    return "SUCCESS";
+  };
+
+  const handleReformat = async (index: number) => {
+    const msgToReformat = messages[index];
+    if (!msgToReformat || msgToReformat.role !== 'model' || msgToReformat.isReformatting) return;
+
+    // Mark as reformatting
+    setMessages(prev => {
+      const newMsgs = [...prev];
+      newMsgs[index] = { ...newMsgs[index], isReformatting: true };
+      return newMsgs;
+    });
+
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) throw new Error("API Key missing");
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const response = await ai.models.generateContentStream({
+        model: 'gemini-3-flash-preview',
+        contents: `Please reformat the following clinical text to provide a much better visual experience. Use structured Markdown: bolding for key terms, bullet points for lists, clear headers (###), and tables if appropriate. Make it highly readable for a clinician. Do not change the clinical meaning, only the formatting.\n\nText to reformat:\n${msgToReformat.content}`,
+        config: {
+          temperature: 0.1
+        }
+      });
+
+      let fullResponse = '';
+      for await (const chunk of response) {
+        if (chunk.text) {
+          fullResponse += chunk.text;
+          setMessages(prev => {
+            const newMsgs = [...prev];
+            newMsgs[index] = { ...newMsgs[index], content: fullResponse };
+            return newMsgs;
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to reformat:", err);
+    } finally {
+      setMessages(prev => {
+        const newMsgs = [...prev];
+        newMsgs[index] = { ...newMsgs[index], isReformatting: false };
+        return newMsgs;
+      });
+    }
   };
 
   const handleSend = async () => {
@@ -202,8 +249,13 @@ export function ClinicalChat() {
     setAttachedFile(null);
     setIsLoading(true);
 
-    if (!initChat()) {
-      setMessages((prev) => [...prev, { role: 'model', content: 'Error: Unable to initialize AI chat. Please check API configuration.' }]);
+    const initStatus = initChat();
+    if (initStatus !== "SUCCESS") {
+      const errorMsg = initStatus === "API_KEY_MISSING" 
+        ? "Error: Gemini API key is missing. Please add it to your environment variables or AI Studio secrets."
+        : `Error: Unable to initialize AI chat. Details: ${initStatus}`;
+        
+      setMessages((prev) => [...prev, { role: 'model', content: errorMsg }]);
       setIsLoading(false);
       return;
     }
@@ -304,8 +356,20 @@ Please answer the question, incorporating the retrieved context.`;
                     {msg.content && <p>{msg.content}</p>}
                   </div>
                 ) : (
-                  <div className="markdown-body prose prose-sm prose-invert max-w-none">
-                    <Markdown>{msg.content}</Markdown>
+                  <div className="flex flex-col">
+                    <div className="markdown-body prose prose-sm prose-invert max-w-none">
+                      <Markdown>{msg.content}</Markdown>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
+                      <button 
+                        onClick={() => handleReformat(i)}
+                        disabled={msg.isReformatting}
+                        className="flex items-center gap-1.5 text-[12px] text-slate-400 hover:text-blue-400 transition-colors disabled:opacity-50"
+                      >
+                        {msg.isReformatting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        {msg.isReformatting ? "Reformatting..." : "Reformat for Readability"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

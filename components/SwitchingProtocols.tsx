@@ -164,9 +164,6 @@ export function SwitchingProtocols() {
               <span className="relative z-10 flex items-center gap-2">
                 <Sparkles size={16} />
                 Suggestions
-                {suggestions && suggestions.length > 0 && (
-                  <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">{suggestions.length}</span>
-                )}
               </span>
             </button>
           </div>
@@ -198,16 +195,16 @@ export function SwitchingProtocols() {
                       
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <label className="block text-[12px] font-medium text-slate-500">Current Medication</label>
+                          <label className="block text-[12px] font-medium text-slate-500" htmlFor="current-medication">Current Medication</label>
                         </div>
                         <div className="relative">
                           <select 
-                            value={fromDrug}
+                            id="current-medication" value={fromDrug}
                             onChange={(e) => {
                               setFromDrug(e.target.value);
                               setCurrentDose('');
                             }}
-                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                             suppressHydrationWarning
                           >
                             <option className="bg-[#121212] text-white" value="">Select a medication...</option>
@@ -231,13 +228,13 @@ export function SwitchingProtocols() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[12px] font-medium text-slate-500 mb-2">Current Dose</label>
+                          <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="current-dose">Current Dose</label>
                           <div className="relative">
                             <select 
-                              value={currentDose}
+                              id="current-dose" value={currentDose}
                               onChange={(e) => setCurrentDose(e.target.value)}
                               disabled={!fromDrug}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                               suppressHydrationWarning
                             >
                               <option className="bg-[#121212] text-white" value="">{fromDrug ? "Select dose..." : "Select drug first"}</option>
@@ -253,12 +250,12 @@ export function SwitchingProtocols() {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-[12px] font-medium text-slate-500 mb-2">Duration</label>
+                          <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="duration">Duration</label>
                           <div className="relative">
                             <select 
-                              value={duration}
+                              id="duration" value={duration}
                               onChange={(e) => setDuration(e.target.value)}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                               suppressHydrationWarning
                             >
                               {durations.map(d => <option className="bg-[#121212] text-white" key={d} value={d}>{d}</option>)}
@@ -274,12 +271,12 @@ export function SwitchingProtocols() {
 
                       {isBiologic && (
                         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                          <label className="block text-[12px] font-medium text-slate-500 mb-2">Disease State / Indication</label>
+                          <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="indication">Disease State / Indication</label>
                           <div className="relative">
                             <select 
-                              value={indication}
+                              id="indication" value={indication}
                               onChange={(e) => setIndication(e.target.value)}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                               suppressHydrationWarning
                             >
                               <option className="bg-[#121212] text-white" value="">Select primary indication...</option>
@@ -307,12 +304,12 @@ export function SwitchingProtocols() {
                       </div>
 
                       <div>
-                        <label className="block text-[12px] font-medium text-slate-500 mb-2">Primary Reason for Switch</label>
+                        <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="reason">Primary Reason for Switch</label>
                         <div className="relative">
                           <select 
-                            value={reason}
+                            id="reason" value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                             suppressHydrationWarning
                           >
                             {reasons.map(r => <option className="bg-[#121212] text-white" key={r} value={r}>{r}</option>)}
@@ -350,7 +347,7 @@ export function SwitchingProtocols() {
               ) : (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 mb-5 border-b border-white/5 pb-3">
-                    <div className="text-indigo-400">
+                    <div className="text-blue-400">
                       <Info size={16} strokeWidth={1.5} />
                     </div>
                     <h3 className="font-medium text-slate-200 text-[14px]">Patient Context (Optional)</h3>
@@ -358,34 +355,34 @@ export function SwitchingProtocols() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">Age (yrs)</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="age">Age (yrs)</label>
                       <input 
                         type="number" 
-                        value={age} 
+                        id="age" value={age} 
                         onChange={(e) => setAge(e.target.value)} 
                         placeholder="e.g. 45"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">Weight (kg)</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="weight">Weight (kg)</label>
                       <input 
                         type="number" 
-                        value={weight} 
+                        id="weight" value={weight} 
                         onChange={(e) => setWeight(e.target.value)} 
                         placeholder="e.g. 70"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">Renal Function</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="renal-function">Renal Function</label>
                       <div className="relative">
                         <select 
-                          value={renalFunction} 
+                          id="renal-function" value={renalFunction} 
                           onChange={(e) => setRenalFunction(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Normal">Normal</option>
@@ -402,12 +399,12 @@ export function SwitchingProtocols() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">Hepatic Function</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="hepatic-function">Hepatic Function</label>
                       <div className="relative">
                         <select 
-                          value={hepaticFunction} 
+                          id="hepatic-function" value={hepaticFunction} 
                           onChange={(e) => setHepaticFunction(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Normal">Normal</option>
@@ -423,23 +420,23 @@ export function SwitchingProtocols() {
                       </div>
                     </div>
                     <div className="lg:col-span-2">
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">Comorbidities</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="comorbidities">Comorbidities</label>
                       <input 
                         type="text" 
-                        value={comorbidities} 
+                        id="comorbidities" value={comorbidities} 
                         onChange={(e) => setComorbidities(e.target.value)} 
                         placeholder="e.g. Diabetes, Hypertension"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">History of Severe Infections</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="infection-history">History of Severe Infections</label>
                       <div className="relative">
                         <select 
-                          value={infectionHistory} 
+                          id="infection-history" value={infectionHistory} 
                           onChange={(e) => setInfectionHistory(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="No">No</option>
@@ -453,23 +450,23 @@ export function SwitchingProtocols() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">Other Current Medications</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="other-medications">Other Current Medications</label>
                       <input 
                         type="text" 
-                        value={otherMedications} 
+                        id="other-medications" value={otherMedications} 
                         onChange={(e) => setOtherMedications(e.target.value)} 
                         placeholder="e.g. Lisinopril, Metformin"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2">CYP2D6 Status</label>
+                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="cyp2d6-status">CYP2D6 Status</label>
                       <div className="relative">
                         <select 
-                          value={cyp2d6Status} 
+                          id="cyp2d6-status" value={cyp2d6Status} 
                           onChange={(e) => setCyp2d6Status(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-indigo-500/50 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Unknown">Unknown</option>
@@ -535,12 +532,12 @@ export function SwitchingProtocols() {
                     
                     {hasBiologicSuggestions && (
                       <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-                        <span className="text-[12px] text-slate-400">Filter by Indication:</span>
+                        <label htmlFor="filter-indication" className="text-[12px] text-slate-400">Filter by Indication:</label>
                         <div className="relative">
                           <select 
-                            value={suggestionFilter}
+                            id="filter-indication" value={suggestionFilter}
                             onChange={(e) => setSuggestionFilter(e.target.value)}
-                            className="appearance-none bg-transparent text-white text-[13px] font-medium outline-none pr-6 cursor-pointer"
+                            className="appearance-none bg-transparent text-white text-[13px] font-medium outline-none pr-6 py-1 pl-2 -ml-2 rounded-md focus:ring-2 focus:ring-blue-500/60 focus:bg-white/5 cursor-pointer transition-all"
                           >
                             <option className="bg-[#121212]" value="">All Indications</option>
                             {allIndications.map(ind => (
@@ -590,7 +587,7 @@ export function SwitchingProtocols() {
                           {isBio && biologicIndications[suggestion.drug.toLowerCase()] && (
                             <div className="mb-4 flex flex-wrap gap-2">
                               {biologicIndications[suggestion.drug.toLowerCase()].indications.map(ind => (
-                                <span key={ind} className={`text-[11px] px-2 py-1 rounded-full border ${ind === indication || ind === suggestionFilter ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300' : 'bg-white/5 border-white/10 text-slate-400'}`}>
+                                <span key={ind} className={`text-[11px] px-2 py-1 rounded-full border ${ind === indication || ind === suggestionFilter ? 'bg-blue-500/20 border-blue-500/30 text-blue-300' : 'bg-white/5 border-white/10 text-slate-400'}`}>
                                   {ind}
                                 </span>
                               ))}
