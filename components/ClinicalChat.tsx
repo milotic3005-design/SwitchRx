@@ -161,27 +161,29 @@ export function ClinicalChat() {
 
   const initChat = () => {
     if (!chatSessionRef.current) {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      // Check for both NEXT_PUBLIC_GEMINI_API_KEY and GEMINI_API_KEY
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+      
       if (!apiKey) {
-        console.error("Gemini API key is missing.");
+        console.error("Gemini API key is missing. Please ensure NEXT_PUBLIC_GEMINI_API_KEY is set in your secrets.");
         return "API_KEY_MISSING";
       }
       
       try {
         const ai = new GoogleGenAI({ apiKey });
+        // Using gemini-flash-latest for better stability across environments
         chatSessionRef.current = ai.chats.create({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-flash-latest',
           config: {
             systemInstruction: CLINICAL_SYSTEM_PROMPT,
-            temperature: 0.1, // Low temperature for deterministic, factual responses
-            tools: [{ googleSearch: {} }],
+            temperature: 0.1,
           }
         });
         cachedChatSession = chatSessionRef.current;
         return "SUCCESS";
       } catch (err: any) {
         console.error("Failed to initialize chat:", err);
-        return err.message || "UNKNOWN_ERROR";
+        return err.message || "INITIALIZATION_ERROR";
       }
     }
     return "SUCCESS";
@@ -199,12 +201,12 @@ export function ClinicalChat() {
     });
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
       if (!apiKey) throw new Error("API Key missing");
       const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContentStream({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-flash-latest',
         contents: `Please reformat the following clinical text to provide a much better visual experience. Use structured Markdown: bolding for key terms, bullet points for lists, clear headers (###), and tables if appropriate. Make it highly readable for a clinician. Do not change the clinical meaning, only the formatting.\n\nText to reformat:\n${msgToReformat.content}`,
         config: {
           temperature: 0.1
