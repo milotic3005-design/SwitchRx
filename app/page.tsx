@@ -4,7 +4,8 @@ import { SwitchingProtocols } from '@/components/SwitchingProtocols';
 import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
 import { ClinicalCalculators } from '@/components/ClinicalCalculators';
-import { Activity, ArrowRight, MessageSquare, Network, Calculator } from 'lucide-react';
+import { DrugReference } from '@/components/DrugReference';
+import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Home() {
@@ -48,6 +49,13 @@ export default function Home() {
           >
             <Calculator size={13} strokeWidth={2.5} />
             Clinical Calculators
+          </button>
+          <button
+            onClick={() => setActiveTab('drugref')}
+            className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full flex items-center gap-1.5 ${activeTab === 'drugref' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <FlaskConical size={13} strokeWidth={2.5} />
+            Drug Reference
           </button>
         </nav>
       </header>
@@ -153,6 +161,8 @@ export default function Home() {
         )}
 
         {activeTab === 'calculators' && <ClinicalCalculators />}
+
+        {activeTab === 'drugref' && <DrugReference />}
       </main>
     </div>
   );
