@@ -388,14 +388,18 @@ function CADDCalculator() {
             <select
               value={selectedDrug}
               onChange={handleDrugChange}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 appearance-none pr-10 cursor-pointer"
+              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
             >
-              <option value="">Custom / None</option>
+              <option className="bg-[#121212] text-white" value="">Custom / None</option>
               {Object.keys(CADD_PRESETS).sort().map(name => (
-                <option key={name} value={name}>{name}</option>
+                <option className="bg-[#121212] text-white" key={name} value={name}>{name}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
+                <ChevronDown size={14} />
+              </div>
+            </div>
           </div>
         </div>
 

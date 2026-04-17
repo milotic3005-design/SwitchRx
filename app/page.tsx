@@ -3,8 +3,7 @@ import { useState } from 'react';
 import { SwitchingProtocols } from '@/components/SwitchingProtocols';
 import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
-import { ClinicalCalculators } from '@/components/ClinicalCalculators';
-import { Activity, ArrowRight, MessageSquare, Network, Calculator } from 'lucide-react';
+import { Activity, ArrowRight, MessageSquare, Network } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Home() {
@@ -36,18 +35,11 @@ export default function Home() {
           >
             Infusion Copilot
           </button>
-          <button
-            onClick={() => setActiveTab('chat')}
+          <button 
+            onClick={() => setActiveTab('chat')} 
             className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full ${activeTab === 'chat' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           >
             Clinical Chat
-          </button>
-          <button
-            onClick={() => setActiveTab('calculators')}
-            className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full flex items-center gap-1.5 ${activeTab === 'calculators' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-          >
-            <Calculator size={13} strokeWidth={2.5} />
-            Clinical Calculators
           </button>
         </nav>
       </header>
@@ -151,8 +143,6 @@ export default function Home() {
             <ClinicalChat />
           </div>
         )}
-
-        {activeTab === 'calculators' && <ClinicalCalculators />}
       </main>
     </div>
   );
