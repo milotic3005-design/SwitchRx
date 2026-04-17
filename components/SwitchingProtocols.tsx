@@ -171,7 +171,7 @@ export function SwitchingProtocols() {
       </div>
 
       {/* Content Area */}
-      <div className="bg-[#121212] p-6 md:p-8 rounded-3xl border border-white/5 relative z-10">
+      <div className="glass-card p-6 md:p-8 relative z-10 w-full max-w-[100%]">
         <AnimatePresence mode="wait">
           {mainTab === 'setup' ? (
             <motion.div
@@ -328,7 +328,7 @@ export function SwitchingProtocols() {
                     <button 
                       onClick={handleSearch}
                       disabled={!fromDrug || isSearching}
-                      className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                      className="btn-premium px-8 py-3 rounded-xl font-medium flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       {isSearching ? (
                         <>
@@ -488,7 +488,7 @@ export function SwitchingProtocols() {
                     <button 
                       onClick={handleSearch}
                       disabled={!fromDrug || isSearching}
-                      className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                      className="btn-premium px-8 py-3 rounded-xl font-medium flex items-center gap-2 cursor-pointer disabled:opacity-50 text-[15px]"
                     >
                       {isSearching ? (
                         <>

@@ -334,7 +334,7 @@ Please answer the question, incorporating the retrieved context.`;
         </div>
       </div>
 
-      <div className="flex-1 bg-[#121212] border border-white/10 rounded-xl shadow-sm overflow-hidden flex flex-col">
+      <div className="flex-1 glass-panel shadow-sm overflow-hidden flex flex-col">
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {messages.length === 0 && (
             <div className="h-full flex items-center justify-center text-[14px] text-slate-500">
@@ -391,7 +391,7 @@ Please answer the question, incorporating the retrieved context.`;
           <div ref={messagesEndRef} />
         </div>
         
-        <div className="p-4 border-t border-white/10 bg-[#121212]">
+        <div className="p-4 border-t border-white/10 bg-transparent">
           {attachedFile && (
             <div className="mb-3 flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-2 rounded-lg w-fit max-w-full">
               <FileText size={14} strokeWidth={1.5} className="shrink-0" />

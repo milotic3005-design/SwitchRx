@@ -577,7 +577,7 @@ export function ClinicalCalculators() {
       </div>
 
       {/* Active calculator panel */}
-      <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm">
+      <div className="glass-panel p-6 md:p-8">
         <div className="flex items-center gap-2 mb-6 pb-4 border-b border-white/10">
           <div className="bg-violet-500/10 p-1.5 rounded-lg border border-violet-500/20">
             <SlidersHorizontal className="text-violet-400 w-4 h-4" />

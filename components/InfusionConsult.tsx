@@ -92,7 +92,7 @@ export function InfusionConsult() {
 
       <div className="flex flex-col gap-6 flex-1">
         {/* Input Section */}
-        <div className="flex flex-col gap-4 bg-[#121212] border border-white/10 rounded-xl p-6 shadow-sm">
+        <div className="flex flex-col gap-4 glass-panel p-6 shadow-sm">
           <h3 className="text-[15px] font-medium text-white flex items-center gap-2">
             <FileText size={16} className="text-slate-400" />
             Clinical Scenario
@@ -123,7 +123,7 @@ export function InfusionConsult() {
         </div>
 
         {/* Output Section */}
-        <div className="flex flex-col bg-[#121212] border border-white/10 rounded-xl overflow-hidden shadow-sm min-h-[400px]">
+        <div className="flex flex-col glass-panel overflow-hidden shadow-sm min-h-[400px]">
           <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
             <h3 className="text-[15px] font-medium text-white">Consult Brief</h3>
             {isLoading && !brief && <span className="text-[12px] text-blue-400 animate-pulse flex items-center gap-1"><Network size={12}/> High Reasoning Active</span>}

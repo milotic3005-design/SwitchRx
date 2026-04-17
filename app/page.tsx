@@ -3,14 +3,15 @@ import { useState } from 'react';
 import { SwitchingProtocols } from '@/components/SwitchingProtocols';
 import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
-import { Activity, ArrowRight, MessageSquare, Network } from 'lucide-react';
+import { ClinicalCalculators } from '@/components/ClinicalCalculators';
+import { Activity, ArrowRight, MessageSquare, Network, Calculator } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans text-slate-200 selection:bg-blue-500/30">
+    <div className="min-h-screen flex flex-col font-sans text-slate-200 selection:bg-blue-500/30">
       {/* Top Navigation */}
       <header className="absolute top-0 w-full h-24 flex items-center justify-between px-6 md:px-12 z-50">
         <div 
@@ -35,11 +36,18 @@ export default function Home() {
           >
             Infusion Copilot
           </button>
-          <button 
-            onClick={() => setActiveTab('chat')} 
+          <button
+            onClick={() => setActiveTab('chat')}
             className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full ${activeTab === 'chat' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           >
             Clinical Chat
+          </button>
+          <button
+            onClick={() => setActiveTab('calculators')}
+            className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full flex items-center gap-1.5 ${activeTab === 'calculators' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <Calculator size={13} strokeWidth={2.5} />
+            Clinical Calculators
           </button>
         </nav>
       </header>
@@ -94,27 +102,27 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
-                className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
+                className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto mt-4"
               >
                 <button 
                   onClick={() => setActiveTab('switching')} 
-                  className="w-full sm:w-auto bg-white text-black px-8 py-4 rounded-full font-medium hover:bg-slate-200 transition-all flex items-center justify-center gap-2 group"
+                  className="btn-premium w-full sm:w-auto px-8 py-4 rounded-full font-medium flex items-center justify-center gap-2 group text-[15px]"
                 >
                   Explore Protocols
                   <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                 </button>
                 <button 
                   onClick={() => setActiveTab('infusion')} 
-                  className="w-full sm:w-auto bg-blue-500/10 text-blue-400 px-8 py-4 rounded-full font-medium border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2"
+                  className="glass-card w-full sm:w-auto px-8 py-4 rounded-full font-medium flex items-center justify-center gap-2 hover:bg-white/5 transition-all text-[15px] border border-white/10 text-white"
                 >
-                  <Network size={18} />
+                  <Network size={18} className="text-blue-400" />
                   Infusion Copilot
                 </button>
                 <button 
                   onClick={() => setActiveTab('chat')} 
-                  className="w-full sm:w-auto bg-white/5 text-white px-8 py-4 rounded-full font-medium border border-white/10 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  className="glass-card w-full sm:w-auto px-8 py-4 rounded-full font-medium flex items-center justify-center gap-2 hover:bg-white/5 transition-all text-[15px] border border-white/10 text-white"
                 >
-                  <MessageSquare size={18} />
+                  <MessageSquare size={18} className="text-emerald-400" />
                   Clinical Chat
                 </button>
               </motion.div>
@@ -143,6 +151,8 @@ export default function Home() {
             <ClinicalChat />
           </div>
         )}
+
+        {activeTab === 'calculators' && <ClinicalCalculators />}
       </main>
     </div>
   );
