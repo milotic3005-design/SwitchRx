@@ -162,7 +162,7 @@ export function ClinicalChat() {
   const initChat = () => {
     if (!chatSessionRef.current) {
       // Check for both NEXT_PUBLIC_GEMINI_API_KEY and GEMINI_API_KEY
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         console.error("Gemini API key is missing. Please ensure NEXT_PUBLIC_GEMINI_API_KEY is set in your secrets.");
@@ -201,7 +201,7 @@ export function ClinicalChat() {
     });
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
       if (!apiKey) throw new Error("API Key missing");
       const ai = new GoogleGenAI({ apiKey });
       
