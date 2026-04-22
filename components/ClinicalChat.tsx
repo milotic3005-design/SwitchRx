@@ -131,7 +131,11 @@ async function retrieveClinicalContext(query: string) {
   return `No specific clinical context found in the verified database for this query.`;
 }
 
-// Module-level cache to persist state across component unmounts/remounts
+// Module-level cache to persist state across component unmounts/remounts.
+// Bump SESSION_VERSION whenever the chat config (model, system prompt, tools)
+// changes so stale sessions are not reused.
+const SESSION_VERSION = 2; // bumped: removed tools from chat config
+
 type GroundingSource = { uri: string; title: string };
 type ChatMessage = {
   role: 'user' | 'model',
@@ -144,6 +148,7 @@ let cachedMessages: ChatMessage[] = [];
 let cachedInput = '';
 let cachedAttachedFile: { name: string, type: string, base64: string } | null = null;
 let cachedChatSession: any = null;
+let cachedSessionVersion = 0;
 
 export function ClinicalChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
@@ -192,6 +197,12 @@ export function ClinicalChat() {
   };
 
   const initChat = () => {
+    // Invalidate the cached session if the config version changed.
+    if (cachedSessionVersion !== SESSION_VERSION) {
+      cachedChatSession = null;
+      chatSessionRef.current = null;
+      cachedSessionVersion = SESSION_VERSION;
+    }
     if (!chatSessionRef.current) {
       // Check for both NEXT_PUBLIC_GEMINI_API_KEY and GEMINI_API_KEY
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
@@ -203,15 +214,14 @@ export function ClinicalChat() {
       
       try {
         const ai = new GoogleGenAI({ apiKey });
-        // Using gemini-flash-latest for better stability across environments
-        // Google Search grounding tool enables retrieval of authoritative URLs
-        // (FDA labels, PubMed, guidelines) that we surface as clickable citations.
+        // Multi-turn chat sessions do NOT support the googleSearch grounding tool —
+        // grounding is only available on single-turn generateContent calls.
+        // Sources are fetched separately via a grounding sidecar call (see handleSend).
         chatSessionRef.current = ai.chats.create({
           model: 'gemini-flash-latest',
           config: {
             systemInstruction: CLINICAL_SYSTEM_PROMPT,
             temperature: 0.1,
-            tools: [{ googleSearch: {} }],
           }
         });
         cachedChatSession = chatSessionRef.current;
@@ -298,10 +308,29 @@ export function ClinicalChat() {
     }
 
     try {
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+
       // 1. RAG Retrieval
       const context = await retrieveClinicalContext(sanitizedInput);
-      
-      // 2. Construct Prompt with Context
+
+      // 2. Grounding sidecar — runs a single-turn generateContent call with the
+      //    Google Search tool enabled (the only supported surface for grounding).
+      //    This is done in parallel with the chat response so latency is minimal.
+      //    The grounded chunks give us real, verifiable URLs without breaking
+      //    the multi-turn chat session (which doesn't support grounding tools).
+      const groundingQuery = sanitizedInput || "clinical pharmacy infusion therapy";
+      const groundingSidecar = apiKey
+        ? new GoogleGenAI({ apiKey }).models.generateContent({
+            model: 'gemini-flash-latest',
+            contents: `Find the most authoritative clinical sources for this question: ${groundingQuery}`,
+            config: {
+              tools: [{ googleSearch: {} }],
+              temperature: 0.0,
+            },
+          }).catch(() => null) // never block the main response
+        : Promise.resolve(null);
+
+      // 3. Construct main chat prompt with RAG context
       let promptWithContext = sanitizedInput || "Please analyze the attached document.";
       if (context !== 'No specific clinical context found in the verified database for this query.') {
         promptWithContext = `
@@ -326,45 +355,41 @@ Please answer the question, incorporating the retrieved context.`;
 
       // Add a placeholder for the model's response
       setMessages((prev) => [...prev, { role: 'model', content: '' }]);
-      
-      // 3. Call Gemini API using chat session for multi-turn history
+
+      // 4. Stream the multi-turn chat response
       const streamResponse = await chatSessionRef.current.sendMessageStream({ message: messageParts });
 
       let fullResponse = '';
-      const sourceMap = new Map<string, GroundingSource>();
       for await (const chunk of streamResponse) {
         if (chunk.text) {
           fullResponse += chunk.text;
-          // Update the last message with the new chunk
           setMessages((prev) => {
             const newMessages = [...prev];
             newMessages[newMessages.length - 1].content = fullResponse;
             return newMessages;
           });
         }
-        // Collect grounding chunks for verifiable, clickable sources.
-        const grounding = chunk.candidates?.[0]?.groundingMetadata;
-        const groundingChunks = grounding?.groundingChunks ?? [];
-        for (const gc of groundingChunks) {
-          const web = (gc as any).web ?? (gc as any).retrievedContext;
-          if (web?.uri && !sourceMap.has(web.uri)) {
-            sourceMap.set(web.uri, {
-              uri: web.uri,
-              title: web.title || web.uri,
-            });
-          }
-        }
       }
 
-      // Attach the deduplicated grounding sources to the final message so the
-      // user can verify every claim against the original document.
-      if (sourceMap.size > 0) {
-        const sources = Array.from(sourceMap.values());
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1].sources = sources;
-          return newMessages;
-        });
+      // 5. Await grounding sidecar and attach deduplicated sources to the message
+      const groundingResult = await groundingSidecar;
+      if (groundingResult) {
+        const sourceMap = new Map<string, GroundingSource>();
+        const chunks = groundingResult.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+        for (const gc of chunks as any[]) {
+          const web = gc.web ?? gc.retrievedContext;
+          if (web?.uri && !sourceMap.has(web.uri)) {
+            sourceMap.set(web.uri, { uri: web.uri, title: web.title || web.uri });
+          }
+        }
+        if (sourceMap.size > 0) {
+          const sources = Array.from(sourceMap.values());
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1].sources = sources;
+            return newMessages;
+          });
+        }
       }
     } catch (error) {
       console.error("Error calling Gemini:", error);
