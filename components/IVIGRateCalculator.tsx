@@ -63,12 +63,28 @@ export function IVIGRateCalculator() {
   const [inputWeight, setInputWeight] = useState<number | ''>('');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [doseGrams, setDoseGrams] = useState<number | ''>('');
+  const [skipPhase4, setSkipPhase4] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const weightKg = useMemo<number | ''>(() => {
     if (inputWeight === '') return '';
     return weightUnit === 'kg' ? inputWeight : inputWeight / 2.20462;
   }, [inputWeight, weightUnit]);
+
+  // Build active step list (optionally skipping Phase 4) with recomputed time-window labels.
+  const activeSteps = useMemo<ProtocolStep[]>(() => {
+    const base = Protocols[condition].steps;
+    const filtered = skipPhase4 ? base.filter(s => s.step !== 4) : base;
+    let cumulative = 0;
+    return filtered.map(s => {
+      if (s.durationMins) {
+        const label = `${cumulative} - ${cumulative + s.durationMins} min`;
+        cumulative += s.durationMins;
+        return { ...s, label };
+      }
+      return { ...s, label: `> ${cumulative} min (Max Rate)` };
+    });
+  }, [condition, skipPhase4]);
 
   const dosageData = useMemo(() => {
     if (weightKg === '' || isNaN(weightKg) || weightKg <= 0) return null;
@@ -79,7 +95,8 @@ export function IVIGRateCalculator() {
     let remainingVolume = totalVolume;
     let totalDurationMins = 0;
 
-    const stepsData = Protocols[condition].steps;
+    const stepsData = activeSteps;
+    const maxRateStepNum = stepsData[stepsData.length - 1].step;
 
     const steps = stepsData.map(stepDef => {
       const rateMlHr = Math.round(weightKg * stepDef.rateMultiplier * 10) / 10;
@@ -120,7 +137,7 @@ export function IVIGRateCalculator() {
     });
 
     const titrationDurationMins = steps
-      .filter(s => !s.skipped && s.step < stepsData.length)
+      .filter(s => !s.skipped && s.step !== maxRateStepNum)
       .reduce((sum, s) => sum + (s.actualDuration as number), 0);
 
     return {
@@ -130,7 +147,7 @@ export function IVIGRateCalculator() {
       titrationDurationMins,
       hasTotalDose: totalVolume > 0,
     };
-  }, [weightKg, doseGrams, condition]);
+  }, [weightKg, doseGrams, activeSteps]);
 
   const chartData = useMemo(() => {
     if (!dosageData || dosageData.steps.length === 0) return [];
@@ -398,6 +415,42 @@ export function IVIGRateCalculator() {
               />
               <span className="text-xl text-slate-500 ml-2 font-light uppercase">g</span>
             </div>
+          </div>
+
+          {/* Skip Phase 4 toggle */}
+          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <label htmlFor="skip-phase-4" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 cursor-pointer">
+                  Skip Phase 4
+                </label>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Omit the 3.0 mL/kg/hr titration step (Phase 3 → Phase 5).
+                </p>
+              </div>
+              <button
+                id="skip-phase-4"
+                role="switch"
+                aria-checked={skipPhase4}
+                onClick={() => setSkipPhase4(v => !v)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border transition-colors duration-200 ${
+                  skipPhase4
+                    ? 'bg-violet-500/80 border-violet-400/40 shadow-[0_2px_10px_-2px_rgba(139,92,246,0.5)]'
+                    : 'bg-black/40 border-white/10'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                    skipPhase4 ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            {skipPhase4 && (
+              <div className="mt-3 pt-3 border-t border-white/5 text-[11px] text-violet-300/80">
+                Phase 4 omitted — patient ramps from 2.0 → 4.0 mL/kg/hr.
+              </div>
+            )}
           </div>
 
           {/* Admin summary */}

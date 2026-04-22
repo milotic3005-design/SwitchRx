@@ -1,7 +1,20 @@
 "use client";
 import { useState } from 'react';
 import { suggestReplacements, ReplacementSuggestion } from '@/lib/clinical-logic';
-import { getDrugProfile, DrugProfile, drugClasses, biologicIndications } from '@/lib/drug-db';
+import { getDrugProfile, DrugProfile, drugClasses } from '@/lib/drug-db';
+
+// Biologic drug classes are intentionally excluded from the switching protocols UI.
+const BIOLOGIC_CLASSES = [
+  'Biologics (TNF inhibitors)',
+  'Biologics (IL inhibitors)',
+  'Biologics (Integrin/Other)',
+] as const;
+const BIOLOGIC_DRUGS = new Set(
+  BIOLOGIC_CLASSES.flatMap(c => drugClasses[c as keyof typeof drugClasses] ?? [])
+);
+const visibleDrugClasses = Object.fromEntries(
+  Object.entries(drugClasses).filter(([cls]) => !BIOLOGIC_CLASSES.includes(cls as typeof BIOLOGIC_CLASSES[number]))
+) as typeof drugClasses;
 import { monographs } from '@/lib/drug-monographs';
 import { ArrowRight, ArrowRightLeft, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, X, Search, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,7 +25,6 @@ export function SwitchingProtocols() {
   const [duration, setDuration] = useState('< 4 weeks');
   const [reason, setReason] = useState('Lack of Efficacy');
   const [secondaryEffect, setSecondaryEffect] = useState('none');
-  const [indication, setIndication] = useState('');
   
   // Patient Context State
   const [age, setAge] = useState('');
@@ -26,11 +38,7 @@ export function SwitchingProtocols() {
 
   const [suggestions, setSuggestions] = useState<ReplacementSuggestion[] | null>(null);
   const [showMonographFor, setShowMonographFor] = useState<string | null>(null);
-  const [suggestionFilter, setSuggestionFilter] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-
-  const allIndications = Array.from(new Set(Object.values(biologicIndications).flatMap(b => b.indications))).sort();
-
 
   const [mainTab, setMainTab] = useState<'setup' | 'suggestions'>('setup');
   const [subTab, setSubTab] = useState<'therapy' | 'patient'>('therapy');
@@ -40,17 +48,16 @@ export function SwitchingProtocols() {
     
     setSuggestions(null);
     setIsSearching(true);
-    setSuggestionFilter(indication);
-    
+
     await new Promise(resolve => setTimeout(resolve, 600));
-    
+
     const results = suggestReplacements({
       fromDrug,
       currentDose,
       duration,
       reason,
       secondaryEffect,
-      indication,
+      indication: '',
       patientContext: {
         age,
         weight,
@@ -66,8 +73,6 @@ export function SwitchingProtocols() {
     setIsSearching(false);
     setMainTab('suggestions');
   };
-
-  const isBiologic = fromDrug && ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
 
   const reasons = [
     "Lack of Efficacy",
@@ -101,15 +106,9 @@ export function SwitchingProtocols() {
     });
   };
 
-  const hasBiologicSuggestions = suggestions?.some(s => 
-    ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].some(c => 
-      drugClasses[c as keyof typeof drugClasses]?.includes(s.drug.toLowerCase())
-    )
-  );
-
-  const filteredSuggestions = suggestions?.filter(s => 
-    !suggestionFilter || biologicIndications[s.drug.toLowerCase()]?.indications.includes(suggestionFilter)
-  ).slice(0, 3);
+  const filteredSuggestions = suggestions
+    ?.filter(s => !BIOLOGIC_DRUGS.has(s.drug.toLowerCase()))
+    .slice(0, 3);
 
   return (
     <div className="w-full max-w-5xl mx-auto">
@@ -208,7 +207,7 @@ export function SwitchingProtocols() {
                             suppressHydrationWarning
                           >
                             <option className="bg-[#121212] text-white" value="">Select a medication...</option>
-                            {Object.entries(drugClasses).map(([className, drugs]) => (
+                            {Object.entries(visibleDrugClasses).map(([className, drugs]) => (
                               <optgroup className="bg-[#121212] text-white" key={className} label={className}>
                                 {getSortedDrugs(drugs).map(drug => {
                                   const profile = getDrugProfile(drug);
@@ -269,29 +268,6 @@ export function SwitchingProtocols() {
                         </div>
                       </div>
 
-                      {isBiologic && (
-                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                          <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="indication">Disease State / Indication</label>
-                          <div className="relative">
-                            <select 
-                              id="indication" value={indication}
-                              onChange={(e) => setIndication(e.target.value)}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
-                              suppressHydrationWarning
-                            >
-                              <option className="bg-[#121212] text-white" value="">Select primary indication...</option>
-                              {biologicIndications[fromDrug.toLowerCase()]?.indications.map(ind => (
-                                <option className="bg-[#121212] text-white" key={ind} value={ind}>{ind}</option>
-                              ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                                <ChevronDown size={14} />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
 
                     {/* Right Side: Switch To */}
@@ -529,34 +505,12 @@ export function SwitchingProtocols() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-semibold text-white">Suggested Replacements</h3>
-                    
-                    {hasBiologicSuggestions && (
-                      <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-                        <label htmlFor="filter-indication" className="text-[12px] text-slate-400">Filter by Indication:</label>
-                        <div className="relative">
-                          <select 
-                            id="filter-indication" value={suggestionFilter}
-                            onChange={(e) => setSuggestionFilter(e.target.value)}
-                            className="appearance-none bg-transparent text-white text-[13px] font-medium outline-none pr-6 py-1 pl-2 -ml-2 rounded-md focus:ring-2 focus:ring-blue-500/60 focus:bg-white/5 cursor-pointer transition-all"
-                          >
-                            <option className="bg-[#121212]" value="">All Indications</option>
-                            {allIndications.map(ind => (
-                              <option className="bg-[#121212]" key={ind} value={ind}>{ind}</option>
-                            ))}
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-slate-400">
-                            <ChevronDown size={14} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="grid gap-4">
                     {filteredSuggestions?.map((suggestion, index) => {
                       const profile = getDrugProfile(suggestion.drug);
-                      const isBio = ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(suggestion.drug.toLowerCase()));
-                      
+
                       return (
                         <div key={suggestion.drug} className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors">
                           <div className="flex justify-between items-start mb-4">
@@ -583,16 +537,6 @@ export function SwitchingProtocols() {
                               <div className="text-[10px] text-slate-500 uppercase tracking-wider">Match Score</div>
                             </div>
                           </div>
-
-                          {isBio && biologicIndications[suggestion.drug.toLowerCase()] && (
-                            <div className="mb-4 flex flex-wrap gap-2">
-                              {biologicIndications[suggestion.drug.toLowerCase()].indications.map(ind => (
-                                <span key={ind} className={`text-[11px] px-2 py-1 rounded-full border ${ind === indication || ind === suggestionFilter ? 'bg-blue-500/20 border-blue-500/30 text-blue-300' : 'bg-white/5 border-white/10 text-slate-400'}`}>
-                                  {ind}
-                                </span>
-                              ))}
-                            </div>
-                          )}
 
                           <div className="grid md:grid-cols-2 gap-6 mt-6">
                             <div>
