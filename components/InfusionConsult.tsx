@@ -1,28 +1,43 @@
 "use client";
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
+import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 
-const INFUSION_SYSTEM_PROMPT = `You are an Expert Clinical Pharmacy Specialist in Infusion Therapy (Biologics, Antibiotics, Oncology).
-Your task is to generate a highly structured, evidence-based "Consult Brief" for the provided clinical scenario.
+type GroundingSource = { uri: string; title: string };
 
-CRITICAL INSTRUCTIONS:
-1. Provide a structured consult brief containing:
-   - Clinical Assessment: Brief summary of the patient's situation.
-   - Recommended Regimen: Drug, dose, route, frequency, and duration.
-   - Monitoring Parameters: Labs, vitals, and clinical signs to monitor before, during, and after infusion.
-   - Preparation & Administration: Diluent, stability, infusion rate, and line requirements (e.g., central vs. peripheral, filter requirements).
-   - Adverse Effects & Management: Key infusion-related reactions and how to manage them (e.g., premedications, extravasation protocols).
-2. Base your recommendations on standard clinical guidelines and package inserts.
-3. Be concise, professional, and highly clinical.
-4. Do not provide direct patient medical advice, only clinical decision support for healthcare professionals.`;
+// Render markdown links as new-tab anchors with safe rel attributes so users
+// can verify clinical citations without losing their consult brief.
+const markdownComponents = {
+  a: ({ href, children, ...props }: any) => (
+    <a
+      {...props}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-words inline-flex items-center gap-0.5"
+    >
+      {children}
+      <ExternalLink size={11} strokeWidth={1.5} className="inline shrink-0 opacity-70" />
+    </a>
+  ),
+};
+
+function shortDomain(uri: string): string {
+  try {
+    return new URL(uri).hostname.replace(/^www\./, '');
+  } catch {
+    return uri;
+  }
+}
 
 export function InfusionConsult() {
   const [scenario, setScenario] = useState('');
   const [brief, setBrief] = useState('');
   const [thinking, setThinking] = useState('');
+  const [sources, setSources] = useState<GroundingSource[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
@@ -34,6 +49,7 @@ export function InfusionConsult() {
     setError('');
     setBrief('');
     setThinking('');
+    setSources([]);
     setIsThinkingExpanded(false); // keep minimized by default
 
     try {
@@ -43,19 +59,23 @@ export function InfusionConsult() {
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      
+
       const response = await ai.models.generateContentStream({
         model: 'gemini-3.1-pro-preview',
         contents: scenario,
         config: {
           systemInstruction: INFUSION_SYSTEM_PROMPT,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          // Google Search grounding so the brief cites real FDA labels,
+          // PubMed articles, and society guidelines with verifiable URLs.
+          tools: [{ googleSearch: {} }],
         }
       });
 
       let fullResponse = '';
       let fullThinking = '';
-      
+      const sourceMap = new Map<string, GroundingSource>();
+
       for await (const chunk of response) {
         const parts = chunk.candidates?.[0]?.content?.parts;
         if (parts) {
@@ -69,6 +89,22 @@ export function InfusionConsult() {
             }
           }
         }
+        // Collect grounding chunks for verifiable, clickable sources.
+        const grounding = chunk.candidates?.[0]?.groundingMetadata;
+        const groundingChunks = grounding?.groundingChunks ?? [];
+        for (const gc of groundingChunks) {
+          const web = (gc as any).web ?? (gc as any).retrievedContext;
+          if (web?.uri && !sourceMap.has(web.uri)) {
+            sourceMap.set(web.uri, {
+              uri: web.uri,
+              title: web.title || web.uri,
+            });
+          }
+        }
+      }
+
+      if (sourceMap.size > 0) {
+        setSources(Array.from(sourceMap.values()));
       }
     } catch (err: any) {
       console.error("Error generating consult brief:", err);
@@ -85,7 +121,7 @@ export function InfusionConsult() {
         <div>
           <h2 className="text-[16px] font-medium text-blue-400">Rapid Infusion Consult Copilot</h2>
           <p className="text-[14px] text-blue-200/80 mt-1">
-            Expert-level IV pharmacy AI for outpatient and home infusion. Generate structured consult briefs for biologics, antibiotics, and oncology agents instantly. Powered by high-level reasoning.
+            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief is grounded in <strong>FDA package inserts, primary literature, and professional guidelines</strong> retrieved live via Google Search, with clickable source links for verification.
           </p>
         </div>
       </div>
@@ -164,8 +200,38 @@ export function InfusionConsult() {
             {error ? (
               <div className="text-red-400 text-[14px]">{error}</div>
             ) : brief ? (
-              <div className="markdown-body prose prose-sm prose-invert max-w-none">
-                <Markdown>{brief}</Markdown>
+              <div className="flex flex-col">
+                <div className="markdown-body prose prose-sm prose-invert max-w-none">
+                  <Markdown components={markdownComponents}>{brief}</Markdown>
+                </div>
+                {sources.length > 0 && (
+                  <div className="mt-6 pt-4 border-t border-white/10">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-3">
+                      <LinkIcon size={11} strokeWidth={1.5} />
+                      <span className="font-medium">Retrieved Sources ({sources.length})</span>
+                    </div>
+                    <ol className="space-y-2">
+                      {sources.map((src, idx) => (
+                        <li key={src.uri + idx} className="text-[12px] flex gap-2">
+                          <span className="text-slate-500 shrink-0 tabular-nums">[{idx + 1}]</span>
+                          <a
+                            href={src.uri}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-all inline-flex items-start gap-1 leading-snug"
+                            title={src.uri}
+                          >
+                            <span>{src.title}</span>
+                            <span className="text-slate-500 text-[11px] whitespace-nowrap">
+                              ({shortDomain(src.uri)})
+                            </span>
+                            <ExternalLink size={10} strokeWidth={1.5} className="inline shrink-0 mt-0.5 opacity-70" />
+                          </a>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="h-full flex items-center justify-center text-[14px] text-slate-500 text-center px-8">

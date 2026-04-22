@@ -3,8 +3,33 @@ import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
-import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles } from 'lucide-react';
+import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
+
+// Render markdown links as new-tab anchors with safe rel attributes so users
+// can verify clinical citations without losing chat context.
+const markdownComponents = {
+  a: ({ href, children, ...props }: any) => (
+    <a
+      {...props}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-words inline-flex items-center gap-0.5"
+    >
+      {children}
+      <ExternalLink size={11} strokeWidth={1.5} className="inline shrink-0 opacity-70" />
+    </a>
+  ),
+};
+
+function shortDomain(uri: string): string {
+  try {
+    return new URL(uri).hostname.replace(/^www\./, '');
+  } catch {
+    return uri;
+  }
+}
 
 // Mock RAG Retrieval Database
 const MOCK_CLINICAL_DB = {
@@ -107,7 +132,14 @@ async function retrieveClinicalContext(query: string) {
 }
 
 // Module-level cache to persist state across component unmounts/remounts
-type ChatMessage = { role: 'user' | 'model', content: string, fileName?: string, isReformatting?: boolean };
+type GroundingSource = { uri: string; title: string };
+type ChatMessage = {
+  role: 'user' | 'model',
+  content: string,
+  fileName?: string,
+  isReformatting?: boolean,
+  sources?: GroundingSource[],
+};
 let cachedMessages: ChatMessage[] = [];
 let cachedInput = '';
 let cachedAttachedFile: { name: string, type: string, base64: string } | null = null;
@@ -172,11 +204,14 @@ export function ClinicalChat() {
       try {
         const ai = new GoogleGenAI({ apiKey });
         // Using gemini-flash-latest for better stability across environments
+        // Google Search grounding tool enables retrieval of authoritative URLs
+        // (FDA labels, PubMed, guidelines) that we surface as clickable citations.
         chatSessionRef.current = ai.chats.create({
           model: 'gemini-flash-latest',
           config: {
             systemInstruction: CLINICAL_SYSTEM_PROMPT,
             temperature: 0.1,
+            tools: [{ googleSearch: {} }],
           }
         });
         cachedChatSession = chatSessionRef.current;
@@ -294,8 +329,9 @@ Please answer the question, incorporating the retrieved context.`;
       
       // 3. Call Gemini API using chat session for multi-turn history
       const streamResponse = await chatSessionRef.current.sendMessageStream({ message: messageParts });
-      
+
       let fullResponse = '';
+      const sourceMap = new Map<string, GroundingSource>();
       for await (const chunk of streamResponse) {
         if (chunk.text) {
           fullResponse += chunk.text;
@@ -306,6 +342,29 @@ Please answer the question, incorporating the retrieved context.`;
             return newMessages;
           });
         }
+        // Collect grounding chunks for verifiable, clickable sources.
+        const grounding = chunk.candidates?.[0]?.groundingMetadata;
+        const groundingChunks = grounding?.groundingChunks ?? [];
+        for (const gc of groundingChunks) {
+          const web = (gc as any).web ?? (gc as any).retrievedContext;
+          if (web?.uri && !sourceMap.has(web.uri)) {
+            sourceMap.set(web.uri, {
+              uri: web.uri,
+              title: web.title || web.uri,
+            });
+          }
+        }
+      }
+
+      // Attach the deduplicated grounding sources to the final message so the
+      // user can verify every claim against the original document.
+      if (sourceMap.size > 0) {
+        const sources = Array.from(sourceMap.values());
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1].sources = sources;
+          return newMessages;
+        });
       }
     } catch (error) {
       console.error("Error calling Gemini:", error);
@@ -326,10 +385,9 @@ Please answer the question, incorporating the retrieved context.`;
       <div className="mb-6 flex items-start gap-4 bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
         <ShieldAlert className="text-blue-400 shrink-0 mt-1" size={16} strokeWidth={1.5} />
         <div>
-          <h2 className="text-[16px] font-medium text-blue-400">Clinical Chat (RAG-Enabled)</h2>
+          <h2 className="text-[16px] font-medium text-blue-400">Clinical Chat (RAG + Live Source Verification)</h2>
           <p className="text-[14px] text-blue-200/80 mt-1">
-            This AI assistant uses retrieved clinical context when available, and general clinical knowledge otherwise. 
-            <strong> PHI is automatically sanitized before processing.</strong> Try asking about &quot;Apixaban and Amiodarone interaction&quot; to see RAG in action.
+            Every response is grounded in <strong>FDA package inserts, primary literature, and professional guidelines</strong> retrieved live via Google Search. Clickable source links appear under each answer for verification. <strong>PHI is automatically sanitized before processing.</strong>
           </p>
         </div>
       </div>
@@ -360,10 +418,38 @@ Please answer the question, incorporating the retrieved context.`;
                 ) : (
                   <div className="flex flex-col">
                     <div className="markdown-body prose prose-sm prose-invert max-w-none">
-                      <Markdown>{msg.content}</Markdown>
+                      <Markdown components={markdownComponents}>{msg.content}</Markdown>
                     </div>
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-white/10">
+                        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-2">
+                          <LinkIcon size={11} strokeWidth={1.5} />
+                          <span className="font-medium">Retrieved Sources ({msg.sources.length})</span>
+                        </div>
+                        <ol className="space-y-1.5">
+                          {msg.sources.map((src, idx) => (
+                            <li key={src.uri + idx} className="text-[12px] flex gap-2">
+                              <span className="text-slate-500 shrink-0 tabular-nums">[{idx + 1}]</span>
+                              <a
+                                href={src.uri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-all inline-flex items-start gap-1 leading-snug"
+                                title={src.uri}
+                              >
+                                <span>{src.title}</span>
+                                <span className="text-slate-500 text-[11px] whitespace-nowrap">
+                                  ({shortDomain(src.uri)})
+                                </span>
+                                <ExternalLink size={10} strokeWidth={1.5} className="inline shrink-0 mt-0.5 opacity-70" />
+                              </a>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                     <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
-                      <button 
+                      <button
                         onClick={() => handleReformat(i)}
                         disabled={msg.isReformatting}
                         className="flex items-center gap-1.5 text-[12px] text-slate-400 hover:text-blue-400 transition-colors disabled:opacity-50"
