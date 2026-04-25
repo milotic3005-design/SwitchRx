@@ -16,6 +16,7 @@ const CADD_PRESETS: Record<string, { dose: number; freq: number; conc: number; k
   'Fluconazole':              { dose: 400,   freq: 24, conc: 2,     kvo: 2 },
   'Meropenem':                { dose: 3000,  freq: 8,  conc: 40,    kvo: 2 },
   'Nafcillin':                { dose: 6000,  freq: 4,  conc: 40,    kvo: 2 },
+  'Ampicillin/Sulbactam':      { dose: 3000,  freq: 6,  conc: 45,    kvo: 2 },
   'Piperacillin/Tazobactam':  { dose: 13500, freq: 8,  conc: 67.5,  kvo: 2 },
   'Vancomycin':               { dose: 1500,  freq: 12, conc: 5,     kvo: 2 },
 };
