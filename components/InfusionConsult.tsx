@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon } from 'lucide-react';
+import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
@@ -207,7 +207,7 @@ export function InfusionConsult() {
                 {sources.length > 0 && (
                   <div className="mt-6 pt-4 border-t border-white/10">
                     <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-3">
-                      <LinkIcon size={11} strokeWidth={1.5} />
+                      <ExternalLink size={11} strokeWidth={1.5} />
                       <span className="font-medium">Retrieved Sources ({sources.length})</span>
                     </div>
                     <ol className="space-y-2">
