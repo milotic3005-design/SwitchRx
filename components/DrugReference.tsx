@@ -341,7 +341,10 @@ export function DrugReference() {
 
   // Unique categories
   const categories = useMemo(() => {
-    const set = new Set(DRUG_DB.map(d => d.category));
+    const set = new Set<string>();
+    for (const d of DRUG_DB) {
+      set.add(d.category);
+    }
     return ['All', ...Array.from(set).sort()];
   }, []);
 
