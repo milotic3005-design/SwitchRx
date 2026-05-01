@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Calculator, SlidersHorizontal, ListChecks, ChevronDown } from 'lucide-react';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
+import { InfusionRateCalculator } from './InfusionRateCalculator';
 
 // ── CADD drug presets ──────────────────────────────────────────────────────────
 const CADD_PRESETS: Record<string, { dose: number; freq: number; conc: number; kvo: number }> = {
@@ -27,6 +28,7 @@ const DAYS = [1, 2, 3, 4, 5];
 const CALCULATORS = [
   { id: 'cadd',    label: 'CADD Bag Calculator' },
   { id: 'ivig',   label: 'IVIG Infusion Rate' },
+  { id: 'biolrate', label: 'Biologic Rate Titration' },
   { id: 'crcl',   label: 'CrCl (Cockcroft-Gault)' },
   { id: 'adjbw',  label: 'Adjusted Body Weight' },
   { id: 'iron',   label: 'Iron Deficit (Ganzoni)' },
@@ -590,6 +592,7 @@ export function ClinicalCalculators() {
 
         {activeCalc === 'cadd'    && <CADDCalculator />}
         {activeCalc === 'ivig'   && <IVIGRateCalculator />}
+        {activeCalc === 'biolrate' && <InfusionRateCalculator />}
         {activeCalc === 'crcl'   && <CrClCalculator />}
         {activeCalc === 'adjbw'  && <AdjBWCalculator />}
         {activeCalc === 'iron'   && <IronDeficitCalculator />}
