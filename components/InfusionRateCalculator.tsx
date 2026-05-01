@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Calculator, Copy, Check, Info, ChevronDown, FlaskConical, Clock, ExternalLink } from 'lucide-react';
+import { Calculator, Copy, Check, Info, ChevronDown, FlaskConical, Clock, ExternalLink, Search, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -400,6 +400,55 @@ const PRESETS_BY_CATEGORY = PRESET_CATEGORIES.map(cat => ({
   items: PRESETS.filter(p => p.category === cat),
 }));
 
+// Brand-name lookup keyed by preset id prefix (generic-name slug)
+const BRAND_BY_GENERIC: Record<string, string> = {
+  rituximab: 'Rituxan',
+  daratumumab: 'Darzalex',
+  obinutuzumab: 'Gazyva',
+  isatuximab: 'Sarclisa',
+  ocrelizumab: 'Ocrevus',
+  inebilizumab: 'Uplizna',
+  trastuzumab: 'Herceptin',
+  pertuzumab: 'Perjeta',
+  bevacizumab: 'Avastin',
+  cetuximab: 'Erbitux',
+  pembrolizumab: 'Keytruda',
+  nivolumab: 'Opdivo',
+  atezolizumab: 'Tecentriq',
+  durvalumab: 'Imfinzi',
+  avelumab: 'Bavencio',
+  sacituzumab: 'Trodelvy',
+  brentuximab: 'Adcetris',
+  polatuzumab: 'Polivy',
+  enfortumab: 'Padcev',
+  tdm1: 'Kadcyla',
+  vedolizumab: 'Entyvio',
+  natalizumab: 'Tysabri',
+  belimumab: 'Benlysta',
+  eculizumab: 'Soliris',
+  ravulizumab: 'Ultomiris',
+  tocilizumab: 'Actemra',
+  infliximab: 'Remicade',
+};
+
+const getBrandForPreset = (presetId: string): string => {
+  const slug = presetId.split('-')[0];
+  return BRAND_BY_GENERIC[slug] ?? '';
+};
+
+// Insert brand name into label for display: "Generic — variant" → "Generic (Brand) — variant"
+const formatPresetLabel = (p: Preset): string => {
+  const brand = getBrandForPreset(p.id);
+  if (!brand) return p.label;
+  // Already contains the brand (e.g. "Inebilizumab (Uplizna)") — leave unchanged
+  if (p.label.toLowerCase().includes(brand.toLowerCase())) return p.label;
+  // Inject brand right before the em-dash separator
+  if (p.label.includes(' — ')) {
+    return p.label.replace(' — ', ` (${brand}) — `);
+  }
+  return `${p.label} (${brand})`;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -429,6 +478,24 @@ export function InfusionRateCalculator() {
   const [intervalMin, setIntervalMin] = useState<number | ''>(30);
   const [maxRate, setMaxRate] = useState<number | ''>(400);
   const [copied, setCopied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // ── Filter presets by search query (matches generic name, brand, variant) ──
+  const filteredPresetsByCategory = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return PRESETS_BY_CATEGORY;
+    return PRESETS_BY_CATEGORY
+      .map(group => ({
+        category: group.category,
+        items: group.items.filter(p => {
+          const brand = getBrandForPreset(p.id).toLowerCase();
+          return p.label.toLowerCase().includes(q) || brand.includes(q);
+        }),
+      }))
+      .filter(group => group.items.length > 0);
+  }, [searchQuery]);
+
+  const totalFilteredCount = filteredPresetsByCategory.reduce((sum, g) => sum + g.items.length, 0);
 
   // ── Apply preset ───────────────────────────────────────────────────────────
   const handlePresetChange = (id: string) => {
@@ -632,6 +699,35 @@ export function InfusionRateCalculator() {
         <div className="md:col-span-4 space-y-4">
           {/* Preset selector */}
           <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+            {/* Search bar — filters dropdown by generic name, brand, or variant */}
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Search Preset
+            </label>
+            <div className="relative mb-4">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="e.g. rituxan, keytruda, opdivo…"
+                className="w-full pl-9 pr-9 py-2.5 bg-black/30 border border-white/10 rounded-xl text-[13px] text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-white/10 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X size={12} className="text-slate-400" />
+                </button>
+              )}
+            </div>
+            {searchQuery && (
+              <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider">
+                {totalFilteredCount} match{totalFilteredCount === 1 ? '' : 'es'}
+              </div>
+            )}
+
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
               Drug Preset
             </label>
@@ -642,13 +738,19 @@ export function InfusionRateCalculator() {
                 className="appearance-none w-full px-4 py-3 pr-10 border border-white/5 rounded-xl focus:ring-2 focus:ring-violet-500/60 focus:border-violet-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[13px] font-medium text-white transition-all cursor-pointer"
               >
                 <option className="bg-[#121212]" value="custom">Custom / Manual entry</option>
-                {PRESETS_BY_CATEGORY.map(group => (
-                  <optgroup key={group.category} label={group.category} className="bg-[#0a0a0a]">
-                    {group.items.map(p => (
-                      <option className="bg-[#121212]" key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
+                {filteredPresetsByCategory.length === 0 ? (
+                  <option className="bg-[#121212]" disabled value="">No matches — try clearing search</option>
+                ) : (
+                  filteredPresetsByCategory.map(group => (
+                    <optgroup key={group.category} label={group.category} className="bg-[#0a0a0a]">
+                      {group.items.map(p => (
+                        <option className="bg-[#121212]" key={p.id} value={p.id}>
+                          {formatPresetLabel(p)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
+                )}
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
             </div>
