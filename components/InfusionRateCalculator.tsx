@@ -8,10 +8,16 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // Presets — biologic / titrated infusion regimens (mg/hr step-ups)
 // Modeled on FDA package-insert titration schedules so nursing has a
 // validated starting point and can override any parameter for custom orders.
+// All rates expressed in mg/hr (the calculator converts to mL/hr using
+// concentration). Fixed-rate schedules use stepIncrement=0 with start=max
+// computed from PI duration: rate(mg/hr) = dose(mg) × 60 / duration(min).
 // ─────────────────────────────────────────────────────────────────────────────
+type PresetCategory = 'Step-up Titration' | 'Fixed Rate';
+
 type Preset = {
   id: string;
   label: string;
+  category: PresetCategory;
   startRate: number;          // mg/hr
   stepIncrement: number;      // mg/hr added per step (0 = no titration)
   intervalMin: number;        // minutes between rate increases
@@ -22,9 +28,11 @@ type Preset = {
 };
 
 const PRESETS: Preset[] = [
+  // ═══════════════ STEP-UP TITRATION (per FDA PI) ═══════════════
   {
     id: 'rituximab-1',
     label: 'Rituximab — 1st infusion',
+    category: 'Step-up Titration',
     startRate: 50, stepIncrement: 50, intervalMin: 30, maxRate: 400,
     defaultDose: 700, defaultVolume: 700,
     notes: 'Start 50 mg/hr; ↑50 mg/hr every 30 min as tolerated to max 400 mg/hr (Rituxan PI).',
@@ -32,6 +40,7 @@ const PRESETS: Preset[] = [
   {
     id: 'rituximab-sub',
     label: 'Rituximab — subsequent infusion',
+    category: 'Step-up Titration',
     startRate: 100, stepIncrement: 100, intervalMin: 30, maxRate: 400,
     defaultDose: 700, defaultVolume: 500,
     notes: 'After tolerated 1st infusion: start 100 mg/hr; ↑100 mg/hr every 30 min to max 400 mg/hr.',
@@ -39,6 +48,7 @@ const PRESETS: Preset[] = [
   {
     id: 'daratumumab-1',
     label: 'Daratumumab IV — 1st infusion',
+    category: 'Step-up Titration',
     startRate: 50, stepIncrement: 50, intervalMin: 60, maxRate: 200,
     defaultDose: 1280, defaultVolume: 1000,
     notes: 'Start 50 mg/hr; ↑50 mg/hr every 1 hr to max 200 mg/hr (Darzalex IV PI).',
@@ -46,6 +56,7 @@ const PRESETS: Preset[] = [
   {
     id: 'daratumumab-2',
     label: 'Daratumumab IV — 2nd infusion',
+    category: 'Step-up Titration',
     startRate: 50, stepIncrement: 50, intervalMin: 60, maxRate: 200,
     defaultDose: 1280, defaultVolume: 500,
     notes: '2nd infusion: only escalate after 1st tolerated without grade ≥1 reaction.',
@@ -53,13 +64,15 @@ const PRESETS: Preset[] = [
   {
     id: 'daratumumab-sub',
     label: 'Daratumumab IV — subsequent (3+)',
+    category: 'Step-up Titration',
     startRate: 100, stepIncrement: 50, intervalMin: 60, maxRate: 200,
     defaultDose: 1280, defaultVolume: 500,
     notes: 'Subsequent: start 100 mg/hr; ↑50 mg/hr every 1 hr to max 200 mg/hr.',
   },
   {
     id: 'obinutuzumab-c1d1',
-    label: 'Obinutuzumab — Cycle 1 Day 1 (100 mg)',
+    label: 'Obinutuzumab — C1D1 (100 mg, fixed)',
+    category: 'Step-up Titration',
     startRate: 25, stepIncrement: 0, intervalMin: 0, maxRate: 25,
     defaultDose: 100, defaultVolume: 250,
     notes: 'C1D1: 100 mg over 4 hr at 25 mg/hr. Do not titrate. (Gazyva PI)',
@@ -67,25 +80,325 @@ const PRESETS: Preset[] = [
   {
     id: 'obinutuzumab-c1d2',
     label: 'Obinutuzumab — C1D2 (900 mg)',
+    category: 'Step-up Titration',
     startRate: 50, stepIncrement: 50, intervalMin: 30, maxRate: 400,
     defaultDose: 900, defaultVolume: 250,
     notes: 'C1D2: start 50 mg/hr; ↑50 mg/hr every 30 min to max 400 mg/hr.',
   },
   {
-    id: 'infliximab-1',
-    label: 'Infliximab — 1st infusion',
-    startRate: 10, stepIncrement: 0, intervalMin: 0, maxRate: 10,
-    defaultDose: 400, defaultVolume: 250,
-    notes: 'Standard infusion over ≥2 hr. Use this calc for graded titration after IRR history.',
+    id: 'isatuximab-1',
+    label: 'Isatuximab — 1st infusion',
+    category: 'Step-up Titration',
+    startRate: 25, stepIncrement: 25, intervalMin: 30, maxRate: 150,
+    defaultDose: 700, defaultVolume: 250,
+    notes: 'First infusion ramp: 25 mg/hr × 60 min, ↑25 mg/hr q30min to 150 mg/hr; then ↑50 mg/hr q30min to max 400 mg/hr per Sarclisa PI. Verify with full schedule.',
+  },
+  {
+    id: 'isatuximab-2',
+    label: 'Isatuximab — 2nd infusion',
+    category: 'Step-up Titration',
+    startRate: 50, stepIncrement: 50, intervalMin: 30, maxRate: 400,
+    defaultDose: 700, defaultVolume: 250,
+    notes: '2nd infusion: 50 mg/hr × 30 min, then ↑50 mg/hr q30min to max 400 mg/hr.',
+  },
+  {
+    id: 'isatuximab-sub',
+    label: 'Isatuximab — subsequent (3+)',
+    category: 'Step-up Titration',
+    startRate: 200, stepIncrement: 200, intervalMin: 30, maxRate: 400,
+    defaultDose: 700, defaultVolume: 250,
+    notes: 'Subsequent (rapid): 200 mg/hr × 30 min, then 400 mg/hr until complete.',
+  },
+  {
+    id: 'ocrelizumab-12',
+    label: 'Ocrelizumab — 1st/2nd dose (300 mg)',
+    category: 'Step-up Titration',
+    startRate: 36, stepIncrement: 36, intervalMin: 30, maxRate: 216,
+    defaultDose: 300, defaultVolume: 250,
+    notes: 'Initial 300 mg dose × 2 (Day 1 + Day 15). 30 → 60 → 90 → 120 → 150 → 180 mL/hr q30min (Ocrevus PI).',
+  },
+  {
+    id: 'ocrelizumab-sub',
+    label: 'Ocrelizumab — subsequent (600 mg)',
+    category: 'Step-up Titration',
+    startRate: 48, stepIncrement: 48, intervalMin: 30, maxRate: 240,
+    defaultDose: 600, defaultVolume: 500,
+    notes: '600 mg q6mo: 40 → 80 → 120 → 160 → 200 mL/hr q30min (≥3.5 hr total).',
+  },
+  {
+    id: 'inebilizumab',
+    label: 'Inebilizumab (Uplizna)',
+    category: 'Step-up Titration',
+    startRate: 36, stepIncrement: 36, intervalMin: 30, maxRate: 144,
+    defaultDose: 300, defaultVolume: 250,
+    notes: '300 mg in 250 mL: 30 → 60 → 90 → 120 mL/hr q30min until complete (Uplizna PI).',
+  },
+
+  // ═══════════════ FIXED-RATE INFUSIONS (no titration) ═══════════════
+  {
+    id: 'trastuzumab-load',
+    label: 'Trastuzumab — loading (90 min)',
+    category: 'Fixed Rate',
+    startRate: 373, stepIncrement: 0, intervalMin: 0, maxRate: 373,
+    defaultDose: 560, defaultVolume: 250,
+    notes: 'Loading 8 mg/kg over 90 min (Herceptin PI). Adjust dose to actual weight.',
+  },
+  {
+    id: 'trastuzumab-maint',
+    label: 'Trastuzumab — maintenance (30 min)',
+    category: 'Fixed Rate',
+    startRate: 840, stepIncrement: 0, intervalMin: 0, maxRate: 840,
+    defaultDose: 420, defaultVolume: 250,
+    notes: 'Maintenance 6 mg/kg over 30 min if loading tolerated.',
+  },
+  {
+    id: 'pertuzumab-load',
+    label: 'Pertuzumab — loading (60 min)',
+    category: 'Fixed Rate',
+    startRate: 840, stepIncrement: 0, intervalMin: 0, maxRate: 840,
+    defaultDose: 840, defaultVolume: 250,
+    notes: '840 mg loading dose over 60 min (Perjeta PI).',
+  },
+  {
+    id: 'pertuzumab-maint',
+    label: 'Pertuzumab — maintenance (30 min)',
+    category: 'Fixed Rate',
+    startRate: 840, stepIncrement: 0, intervalMin: 0, maxRate: 840,
+    defaultDose: 420, defaultVolume: 250,
+    notes: '420 mg q3w over 30–60 min if loading tolerated.',
+  },
+  {
+    id: 'bevacizumab-1',
+    label: 'Bevacizumab — 1st (90 min)',
+    category: 'Fixed Rate',
+    startRate: 350, stepIncrement: 0, intervalMin: 0, maxRate: 350,
+    defaultDose: 525, defaultVolume: 100,
+    notes: '5–15 mg/kg over 90 min for first infusion (Avastin PI).',
+  },
+  {
+    id: 'bevacizumab-2',
+    label: 'Bevacizumab — 2nd (60 min)',
+    category: 'Fixed Rate',
+    startRate: 525, stepIncrement: 0, intervalMin: 0, maxRate: 525,
+    defaultDose: 525, defaultVolume: 100,
+    notes: '2nd infusion over 60 min if 1st tolerated.',
+  },
+  {
+    id: 'bevacizumab-sub',
+    label: 'Bevacizumab — subsequent (30 min)',
+    category: 'Fixed Rate',
+    startRate: 1050, stepIncrement: 0, intervalMin: 0, maxRate: 1050,
+    defaultDose: 525, defaultVolume: 100,
+    notes: 'Subsequent: 30 min if 2nd tolerated.',
   },
   {
     id: 'cetuximab-load',
-    label: 'Cetuximab — loading dose',
-    startRate: 300, stepIncrement: 0, intervalMin: 0, maxRate: 300,
+    label: 'Cetuximab — loading (120 min)',
+    category: 'Fixed Rate',
+    startRate: 400, stepIncrement: 0, intervalMin: 0, maxRate: 400,
     defaultDose: 800, defaultVolume: 500,
-    notes: 'Loading dose 400 mg/m² over 120 min; max 10 mg/min (600 mg/hr).',
+    notes: 'Loading 400 mg/m² over 120 min; max 10 mg/min (600 mg/hr) (Erbitux PI).',
+  },
+  {
+    id: 'cetuximab-sub',
+    label: 'Cetuximab — subsequent (60 min)',
+    category: 'Fixed Rate',
+    startRate: 425, stepIncrement: 0, intervalMin: 0, maxRate: 425,
+    defaultDose: 425, defaultVolume: 250,
+    notes: '250 mg/m² weekly over 60 min; max 10 mg/min.',
+  },
+  {
+    id: 'pembrolizumab-q3w',
+    label: 'Pembrolizumab — 200 mg q3w (30 min)',
+    category: 'Fixed Rate',
+    startRate: 400, stepIncrement: 0, intervalMin: 0, maxRate: 400,
+    defaultDose: 200, defaultVolume: 100,
+    notes: '200 mg IV q3w over 30 min (Keytruda PI).',
+  },
+  {
+    id: 'pembrolizumab-q6w',
+    label: 'Pembrolizumab — 400 mg q6w (30 min)',
+    category: 'Fixed Rate',
+    startRate: 800, stepIncrement: 0, intervalMin: 0, maxRate: 800,
+    defaultDose: 400, defaultVolume: 100,
+    notes: '400 mg q6w alternative dosing over 30 min.',
+  },
+  {
+    id: 'nivolumab-q2w',
+    label: 'Nivolumab — 240 mg q2w (30 min)',
+    category: 'Fixed Rate',
+    startRate: 480, stepIncrement: 0, intervalMin: 0, maxRate: 480,
+    defaultDose: 240, defaultVolume: 100,
+    notes: '240 mg q2w over 30 min (Opdivo PI).',
+  },
+  {
+    id: 'nivolumab-q4w',
+    label: 'Nivolumab — 480 mg q4w (30 min)',
+    category: 'Fixed Rate',
+    startRate: 960, stepIncrement: 0, intervalMin: 0, maxRate: 960,
+    defaultDose: 480, defaultVolume: 100,
+    notes: '480 mg q4w alternative dosing over 30 min.',
+  },
+  {
+    id: 'atezolizumab-1',
+    label: 'Atezolizumab — 1st (60 min)',
+    category: 'Fixed Rate',
+    startRate: 1200, stepIncrement: 0, intervalMin: 0, maxRate: 1200,
+    defaultDose: 1200, defaultVolume: 250,
+    notes: '1st infusion 1200 mg over 60 min (Tecentriq PI).',
+  },
+  {
+    id: 'atezolizumab-sub',
+    label: 'Atezolizumab — subsequent (30 min)',
+    category: 'Fixed Rate',
+    startRate: 2400, stepIncrement: 0, intervalMin: 0, maxRate: 2400,
+    defaultDose: 1200, defaultVolume: 250,
+    notes: 'Subsequent 30 min if 1st tolerated.',
+  },
+  {
+    id: 'durvalumab',
+    label: 'Durvalumab — 10 mg/kg q2w (60 min)',
+    category: 'Fixed Rate',
+    startRate: 700, stepIncrement: 0, intervalMin: 0, maxRate: 700,
+    defaultDose: 700, defaultVolume: 100,
+    notes: '10 mg/kg q2w over 60 min (Imfinzi PI). Fixed 1500 mg q4w for ≥30 kg.',
+  },
+  {
+    id: 'avelumab',
+    label: 'Avelumab — 800 mg q2w (60 min)',
+    category: 'Fixed Rate',
+    startRate: 800, stepIncrement: 0, intervalMin: 0, maxRate: 800,
+    defaultDose: 800, defaultVolume: 250,
+    notes: '800 mg q2w over 60 min (Bavencio PI). Premedicate with H1+APAP for first 4 doses.',
+  },
+  {
+    id: 'sacituzumab-1',
+    label: 'Sacituzumab Govitecan — 1st (180 min)',
+    category: 'Fixed Rate',
+    startRate: 233, stepIncrement: 0, intervalMin: 0, maxRate: 233,
+    defaultDose: 700, defaultVolume: 250,
+    notes: '10 mg/kg over 3 hr (Trodelvy PI).',
+  },
+  {
+    id: 'sacituzumab-sub',
+    label: 'Sacituzumab Govitecan — subsequent (60 min)',
+    category: 'Fixed Rate',
+    startRate: 700, stepIncrement: 0, intervalMin: 0, maxRate: 700,
+    defaultDose: 700, defaultVolume: 250,
+    notes: 'Subsequent 60 min if 1st tolerated.',
+  },
+  {
+    id: 'brentuximab',
+    label: 'Brentuximab Vedotin (30 min)',
+    category: 'Fixed Rate',
+    startRate: 252, stepIncrement: 0, intervalMin: 0, maxRate: 252,
+    defaultDose: 126, defaultVolume: 150,
+    notes: '1.8 mg/kg q3w over 30 min (Adcetris PI). Max 180 mg per dose.',
+  },
+  {
+    id: 'polatuzumab-1',
+    label: 'Polatuzumab Vedotin — 1st (90 min)',
+    category: 'Fixed Rate',
+    startRate: 84, stepIncrement: 0, intervalMin: 0, maxRate: 84,
+    defaultDose: 126, defaultVolume: 100,
+    notes: '1.8 mg/kg q3w over 90 min initial (Polivy PI).',
+  },
+  {
+    id: 'polatuzumab-sub',
+    label: 'Polatuzumab Vedotin — subsequent (30 min)',
+    category: 'Fixed Rate',
+    startRate: 252, stepIncrement: 0, intervalMin: 0, maxRate: 252,
+    defaultDose: 126, defaultVolume: 100,
+    notes: 'Subsequent 30 min if 1st tolerated.',
+  },
+  {
+    id: 'enfortumab',
+    label: 'Enfortumab Vedotin (30 min)',
+    category: 'Fixed Rate',
+    startRate: 175, stepIncrement: 0, intervalMin: 0, maxRate: 175,
+    defaultDose: 87.5, defaultVolume: 50,
+    notes: '1.25 mg/kg D1, D8, D15 of 28-day cycle over 30 min (Padcev PI).',
+  },
+  {
+    id: 'tdm1',
+    label: 'Ado-trastuzumab Emtansine — 1st (90 min)',
+    category: 'Fixed Rate',
+    startRate: 173, stepIncrement: 0, intervalMin: 0, maxRate: 173,
+    defaultDose: 260, defaultVolume: 250,
+    notes: '3.6 mg/kg q3w over 90 min for 1st infusion (Kadcyla PI).',
+  },
+  {
+    id: 'tdm1-sub',
+    label: 'Ado-trastuzumab Emtansine — subsequent (30 min)',
+    category: 'Fixed Rate',
+    startRate: 520, stepIncrement: 0, intervalMin: 0, maxRate: 520,
+    defaultDose: 260, defaultVolume: 250,
+    notes: 'Subsequent over 30 min if 1st tolerated.',
+  },
+  {
+    id: 'vedolizumab',
+    label: 'Vedolizumab — 300 mg (30 min)',
+    category: 'Fixed Rate',
+    startRate: 600, stepIncrement: 0, intervalMin: 0, maxRate: 600,
+    defaultDose: 300, defaultVolume: 250,
+    notes: '300 mg over 30 min (Entyvio PI).',
+  },
+  {
+    id: 'natalizumab',
+    label: 'Natalizumab — 300 mg (60 min)',
+    category: 'Fixed Rate',
+    startRate: 300, stepIncrement: 0, intervalMin: 0, maxRate: 300,
+    defaultDose: 300, defaultVolume: 100,
+    notes: '300 mg q4w over 60 min, observe ≥1 hr (Tysabri TOUCH REMS).',
+  },
+  {
+    id: 'belimumab',
+    label: 'Belimumab — 10 mg/kg (60 min)',
+    category: 'Fixed Rate',
+    startRate: 700, stepIncrement: 0, intervalMin: 0, maxRate: 700,
+    defaultDose: 700, defaultVolume: 250,
+    notes: '10 mg/kg q4w over 60 min (Benlysta PI).',
+  },
+  {
+    id: 'eculizumab',
+    label: 'Eculizumab — 900 mg (35 min)',
+    category: 'Fixed Rate',
+    startRate: 1543, stepIncrement: 0, intervalMin: 0, maxRate: 1543,
+    defaultDose: 900, defaultVolume: 180,
+    notes: 'PNH/aHUS: 900 mg q2w over 35 min (Soliris PI).',
+  },
+  {
+    id: 'ravulizumab',
+    label: 'Ravulizumab — wt-based (~45 min)',
+    category: 'Fixed Rate',
+    startRate: 4400, stepIncrement: 0, intervalMin: 0, maxRate: 4400,
+    defaultDose: 3300, defaultVolume: 240,
+    notes: 'Weight-based; approx 45 min for 60–100 kg patient (Ultomiris PI). Verify duration table.',
+  },
+  {
+    id: 'tocilizumab',
+    label: 'Tocilizumab — 8 mg/kg (60 min)',
+    category: 'Fixed Rate',
+    startRate: 560, stepIncrement: 0, intervalMin: 0, maxRate: 560,
+    defaultDose: 560, defaultVolume: 100,
+    notes: 'RA: 4–8 mg/kg q4w over 60 min (Actemra PI). Same rate for CRS.',
+  },
+  {
+    id: 'infliximab',
+    label: 'Infliximab — 5 mg/kg (≥120 min)',
+    category: 'Fixed Rate',
+    startRate: 175, stepIncrement: 0, intervalMin: 0, maxRate: 175,
+    defaultDose: 350, defaultVolume: 250,
+    notes: 'Standard 5 mg/kg over ≥2 hr (Remicade PI). Use Step ↑ for IRR-history titration.',
   },
 ];
+
+// Build category groupings for the <select> dropdown
+const PRESET_CATEGORIES: PresetCategory[] = ['Step-up Titration', 'Fixed Rate'];
+const PRESETS_BY_CATEGORY = PRESET_CATEGORIES.map(cat => ({
+  category: cat,
+  items: PRESETS.filter(p => p.category === cat),
+}));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
@@ -329,8 +642,12 @@ export function InfusionRateCalculator() {
                 className="appearance-none w-full px-4 py-3 pr-10 border border-white/5 rounded-xl focus:ring-2 focus:ring-violet-500/60 focus:border-violet-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[13px] font-medium text-white transition-all cursor-pointer"
               >
                 <option className="bg-[#121212]" value="custom">Custom / Manual entry</option>
-                {PRESETS.map(p => (
-                  <option className="bg-[#121212]" key={p.id} value={p.id}>{p.label}</option>
+                {PRESETS_BY_CATEGORY.map(group => (
+                  <optgroup key={group.category} label={group.category} className="bg-[#0a0a0a]">
+                    {group.items.map(p => (
+                      <option className="bg-[#121212]" key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
