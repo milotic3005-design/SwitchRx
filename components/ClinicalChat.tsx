@@ -31,6 +31,38 @@ function shortDomain(uri: string): string {
   }
 }
 
+// Gemini grounding URIs are vertexaisearch.cloud.google.com redirects that
+// resolve to the actual cited source. The `web.title` is the destination
+// page's title, so the link does point to the right document — but the
+// redirect host isn't useful as a label. When the title hints at a well-
+// known publisher (DailyMed, PubMed, FDA, etc.), prefer that label instead.
+function inferPublisherFromTitle(title: string): string | null {
+  const t = title.toLowerCase();
+  if (t.includes('dailymed')) return 'dailymed.nlm.nih.gov';
+  if (t.includes('pubmed')) return 'pubmed.ncbi.nlm.nih.gov';
+  if (t.includes('pmc') && t.includes('ncbi')) return 'ncbi.nlm.nih.gov/pmc';
+  if (t.includes('accessdata.fda.gov') || t.includes('fda.gov')) return 'fda.gov';
+  if (t.includes('nejm') || t.includes('new england journal')) return 'nejm.org';
+  if (t.includes('jama')) return 'jamanetwork.com';
+  if (t.includes('lancet')) return 'thelancet.com';
+  if (t.includes('idsociety') || t.includes('idsa')) return 'idsociety.org';
+  if (t.includes('ashp')) return 'ashp.org';
+  if (t.includes('nccn')) return 'nccn.org';
+  if (t.includes('uptodate')) return 'uptodate.com';
+  if (t.includes('lexicomp')) return 'wolterskluwer.com';
+  return null;
+}
+
+function displayDomain(src: { uri: string; title: string }): string {
+  const fromTitle = inferPublisherFromTitle(src.title);
+  if (fromTitle) return fromTitle;
+  const host = shortDomain(src.uri);
+  if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
+    return 'via Google Search';
+  }
+  return host;
+}
+
 // Mock RAG Retrieval Database
 const MOCK_CLINICAL_DB = {
   exactInteractions: [
@@ -371,15 +403,22 @@ Please answer the question, incorporating the retrieved context.`;
         }
       }
 
-      // 5. Await grounding sidecar and attach deduplicated sources to the message
+      // 5. Await grounding sidecar and attach deduplicated sources to the
+      //    message. Dedup by URI + normalized title so multiple grounding
+      //    chunks pointing at the same source collapse into one entry. The
+      //    URI resolves through Google's redirect to the real document the
+      //    title describes — verified, not memorized.
       const groundingResult = await groundingSidecar;
       if (groundingResult) {
         const sourceMap = new Map<string, GroundingSource>();
         const chunks = groundingResult.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
         for (const gc of chunks as any[]) {
           const web = gc.web ?? gc.retrievedContext;
-          if (web?.uri && !sourceMap.has(web.uri)) {
-            sourceMap.set(web.uri, { uri: web.uri, title: web.title || web.uri });
+          if (!web?.uri) continue;
+          const title = (web.title || '').trim() || shortDomain(web.uri);
+          const key = `${web.uri}::${title.toLowerCase()}`;
+          if (!sourceMap.has(key)) {
+            sourceMap.set(key, { uri: web.uri, title });
           }
         }
         if (sourceMap.size > 0) {
@@ -447,10 +486,13 @@ Please answer the question, incorporating the retrieved context.`;
                     </div>
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-4 pt-3 border-t border-white/10">
-                        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-2">
+                        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-1">
                           <LinkIcon size={11} strokeWidth={1.5} />
-                          <span className="font-medium">Retrieved Sources ({msg.sources.length})</span>
+                          <span className="font-medium">Verified Sources ({msg.sources.length})</span>
                         </div>
+                        <p className="text-[10px] text-slate-500 italic mb-2">
+                          Live Google Search grounding — each link resolves to the exact source named. Match the [N] markers above to the entries below.
+                        </p>
                         <ol className="space-y-1.5">
                           {msg.sources.map((src, idx) => (
                             <li key={src.uri + idx} className="text-[12px] flex gap-2">
@@ -464,7 +506,7 @@ Please answer the question, incorporating the retrieved context.`;
                               >
                                 <span>{src.title}</span>
                                 <span className="text-slate-500 text-[11px] whitespace-nowrap">
-                                  ({shortDomain(src.uri)})
+                                  ({displayDomain(src)})
                                 </span>
                                 <ExternalLink size={10} strokeWidth={1.5} className="inline shrink-0 mt-0.5 opacity-70" />
                               </a>

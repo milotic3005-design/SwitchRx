@@ -33,6 +33,39 @@ function shortDomain(uri: string): string {
   }
 }
 
+// Gemini grounding URIs are typically vertexaisearch.cloud.google.com redirect
+// URLs that resolve to the actual source. The `web.title` from the API is the
+// title of the *destination* page, so the link DOES point to that source —
+// but the redirect domain is unhelpful to display. When we can infer the real
+// publisher from the title (DailyMed, PubMed, FDA, etc.), prefer that label.
+function inferPublisherFromTitle(title: string): string | null {
+  const t = title.toLowerCase();
+  if (t.includes('dailymed')) return 'dailymed.nlm.nih.gov';
+  if (t.includes('pubmed')) return 'pubmed.ncbi.nlm.nih.gov';
+  if (t.includes('pmc') && t.includes('ncbi')) return 'ncbi.nlm.nih.gov/pmc';
+  if (t.includes('accessdata.fda.gov') || t.includes('fda.gov')) return 'fda.gov';
+  if (t.includes('nejm') || t.includes('new england journal')) return 'nejm.org';
+  if (t.includes('jama')) return 'jamanetwork.com';
+  if (t.includes('lancet')) return 'thelancet.com';
+  if (t.includes('idsociety') || t.includes('idsa')) return 'idsociety.org';
+  if (t.includes('ashp')) return 'ashp.org';
+  if (t.includes('nccn')) return 'nccn.org';
+  if (t.includes('uptodate')) return 'uptodate.com';
+  if (t.includes('lexicomp')) return 'wolterskluwer.com';
+  return null;
+}
+
+function displayDomain(src: { uri: string; title: string }): string {
+  const fromTitle = inferPublisherFromTitle(src.title);
+  if (fromTitle) return fromTitle;
+  const host = shortDomain(src.uri);
+  // Hide the noisy vertex AI redirect host — the title still carries the source
+  if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
+    return 'via Google Search';
+  }
+  return host;
+}
+
 export function InfusionConsult() {
   const [scenario, setScenario] = useState('');
   const [brief, setBrief] = useState('');
@@ -89,16 +122,23 @@ export function InfusionConsult() {
             }
           }
         }
-        // Collect grounding chunks for verifiable, clickable sources.
+        // Collect grounding chunks for verifiable, clickable sources. Dedupe
+        // by both URI and title so multiple grounding chunks pointing at the
+        // same source (common when the model cites one document several times)
+        // collapse into a single entry. The URI is the source of truth — it
+        // resolves through Google's redirect to the actual destination page,
+        // matching whatever the title says.
         const grounding = chunk.candidates?.[0]?.groundingMetadata;
         const groundingChunks = grounding?.groundingChunks ?? [];
         for (const gc of groundingChunks) {
           const web = (gc as any).web ?? (gc as any).retrievedContext;
-          if (web?.uri && !sourceMap.has(web.uri)) {
-            sourceMap.set(web.uri, {
-              uri: web.uri,
-              title: web.title || web.uri,
-            });
+          if (!web?.uri) continue;
+          const title = (web.title || '').trim() || shortDomain(web.uri);
+          // Dedup key combines normalized URI and title to avoid both URL-only
+          // and title-only collisions losing distinct citations.
+          const key = `${web.uri}::${title.toLowerCase()}`;
+          if (!sourceMap.has(key)) {
+            sourceMap.set(key, { uri: web.uri, title });
           }
         }
       }
@@ -206,10 +246,13 @@ export function InfusionConsult() {
                 </div>
                 {sources.length > 0 && (
                   <div className="mt-6 pt-4 border-t border-white/10">
-                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-3">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-1">
                       <LinkIcon size={11} strokeWidth={1.5} />
-                      <span className="font-medium">Retrieved Sources ({sources.length})</span>
+                      <span className="font-medium">Verified Sources ({sources.length})</span>
                     </div>
+                    <p className="text-[10px] text-slate-500 italic mb-3">
+                      Live URLs from Google Search grounding metadata — the link below each title resolves to that exact source. Match the bracketed marker (e.g. [1]) in the brief above to its source here.
+                    </p>
                     <ol className="space-y-2">
                       {sources.map((src, idx) => (
                         <li key={src.uri + idx} className="text-[12px] flex gap-2">
@@ -223,7 +266,7 @@ export function InfusionConsult() {
                           >
                             <span>{src.title}</span>
                             <span className="text-slate-500 text-[11px] whitespace-nowrap">
-                              ({shortDomain(src.uri)})
+                              ({displayDomain(src)})
                             </span>
                             <ExternalLink size={10} strokeWidth={1.5} className="inline shrink-0 mt-0.5 opacity-70" />
                           </a>
