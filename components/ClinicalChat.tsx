@@ -6,22 +6,79 @@ import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
 
-// Render markdown links as new-tab anchors with safe rel attributes so users
-// can verify clinical citations without losing chat context.
+// Render markdown links. Citation links (text matches "[N]" pattern) get
+// rendered as small superscript badges so they don't disrupt prose flow;
+// regular links keep the underline + external-icon treatment.
 const markdownComponents = {
-  a: ({ href, children, ...props }: any) => (
-    <a
-      {...props}
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-words inline-flex items-center gap-0.5"
-    >
-      {children}
-      <ExternalLink size={11} strokeWidth={1.5} className="inline shrink-0 opacity-70" />
-    </a>
-  ),
+  a: ({ href, children, ...props }: any) => {
+    const flat = (Array.isArray(children) ? children.join('') : String(children ?? '')).trim();
+    const isCitation = /^\[\d+\]$/.test(flat);
+    if (isCitation) {
+      const num = flat.replace(/[\[\]]/g, '');
+      return (
+        <a
+          {...props}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open verified source [${num}] in a new tab`}
+          className="inline-flex items-center justify-center text-[10px] font-bold tabular-nums text-blue-300 bg-blue-500/15 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-400/60 rounded px-1.5 py-0.5 mx-0.5 align-super no-underline transition-colors leading-none"
+        >
+          {num}
+        </a>
+      );
+    }
+    return (
+      <a
+        {...props}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-words inline-flex items-center gap-0.5"
+      >
+        {children}
+        <ExternalLink size={11} strokeWidth={1.5} className="inline shrink-0 opacity-70" />
+      </a>
+    );
+  },
 };
+
+// Parse citation marker contents like "1", "1, 3", "1-3", "1–3" into number list.
+function parseCitationNumbers(content: string): number[] {
+  const out: number[] = [];
+  for (const part of content.split(',')) {
+    const trimmed = part.trim();
+    const range = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (range) {
+      const start = parseInt(range[1], 10);
+      const end = parseInt(range[2], 10);
+      for (let i = start; i <= Math.min(end, start + 20); i++) out.push(i);
+    } else {
+      const n = parseInt(trimmed, 10);
+      if (!isNaN(n)) out.push(n);
+    }
+  }
+  return out;
+}
+
+// Convert plain "[N]" markers in the model's response into markdown links
+// pointing at the corresponding grounded source URL. Multi-citation markers
+// (e.g. "[1, 3]") expand into adjacent badges.
+type GroundingSourceLite = { uri: string; title: string };
+function injectCitationLinks(text: string, sources: GroundingSourceLite[]): string {
+  if (!sources.length) return text;
+  return text.replace(/\[(\d+(?:\s*[,\-–]\s*\d+)*)\](?!\()/g, (match, group) => {
+    const nums = parseCitationNumbers(group);
+    if (!nums.length) return match;
+    return nums
+      .map(n => {
+        const src = sources[n - 1];
+        if (!src) return `[${n}]`;
+        return `[\\[${n}\\]](${src.uri})`;
+      })
+      .join('');
+  });
+}
 
 function shortDomain(uri: string): string {
   try {
@@ -481,8 +538,20 @@ Please answer the question, incorporating the retrieved context.`;
                   </div>
                 ) : (
                   <div className="flex flex-col">
-                    <div className="markdown-body prose prose-sm prose-invert max-w-none">
-                      <Markdown components={markdownComponents}>{msg.content}</Markdown>
+                    {/* Citation badges + improved spacing for chat answers */}
+                    <div className="prose prose-sm prose-invert max-w-none
+                                    prose-headings:font-semibold prose-headings:text-white
+                                    prose-h2:text-[17px] prose-h2:mt-6 prose-h2:mb-3 prose-h2:pb-2 prose-h2:border-b prose-h2:border-white/10 first:prose-h2:mt-0
+                                    prose-h3:text-[14px] prose-h3:mt-5 prose-h3:mb-2.5 prose-h3:text-blue-300 first:prose-h3:mt-0
+                                    prose-h4:text-[12px] prose-h4:mt-4 prose-h4:mb-2 prose-h4:text-slate-200 prose-h4:uppercase prose-h4:tracking-wider
+                                    prose-p:my-2.5 prose-p:leading-7 prose-p:text-slate-300
+                                    prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-1.5 prose-li:leading-relaxed
+                                    prose-strong:text-white
+                                    prose-table:my-4 prose-table:text-[12px]
+                                    prose-hr:my-5 prose-hr:border-white/10">
+                      <Markdown components={markdownComponents}>
+                        {injectCitationLinks(msg.content, msg.sources ?? [])}
+                      </Markdown>
                     </div>
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-4 pt-3 border-t border-white/10">

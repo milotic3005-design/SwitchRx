@@ -11,21 +11,83 @@ import { PharmacyLookupPanel } from './PharmacyLookupPanel';
 
 type GroundingSource = { uri: string; title: string };
 
-// Render markdown links as new-tab anchors with safe rel attributes so users
-// can verify clinical citations without losing their consult brief.
+// Parse "1", "1, 2", "1-3", "1–3" inside a citation marker into a list of
+// numbers so we can map each to its grounding source URL.
+function parseCitationNumbers(content: string): number[] {
+  const out: number[] = [];
+  for (const part of content.split(',')) {
+    const trimmed = part.trim();
+    const range = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (range) {
+      const start = parseInt(range[1], 10);
+      const end = parseInt(range[2], 10);
+      for (let i = start; i <= Math.min(end, start + 20); i++) out.push(i);
+    } else {
+      const n = parseInt(trimmed, 10);
+      if (!isNaN(n)) out.push(n);
+    }
+  }
+  return out;
+}
+
+// The model writes plain bracketed markers like [1], [2], [1, 3] inline.
+// Convert each marker into a markdown link pointing at the corresponding
+// grounded source URL (via the verified-sources list). Multi-citation markers
+// like [1, 3] become two adjacent badges. Markers with no matching source
+// (because grounding hasn't returned it yet) are left as-is.
+function injectCitationLinks(text: string, sources: GroundingSource[]): string {
+  if (!sources.length) return text;
+  // Match [N], [N, M], [N-M], [N–M] but NOT already followed by ( (already a link)
+  return text.replace(/\[(\d+(?:\s*[,\-–]\s*\d+)*)\](?!\()/g, (match, group) => {
+    const nums = parseCitationNumbers(group);
+    if (!nums.length) return match;
+    const links = nums.map(n => {
+      const src = sources[n - 1];
+      if (!src) return `[${n}]`;
+      // Markdown link with bracketed text: [\[N\]](url) so the rendered
+      // text shows as "[N]" but is detected by our link component as a citation.
+      return `[\\[${n}\\]](${src.uri})`;
+    });
+    return links.join('');
+  });
+}
+
+// Render markdown links. Special-case detection: if the link's visible text
+// matches the citation pattern "[N]", render as a small inline badge instead
+// of a regular underlined link with external-icon — keeps the brief readable
+// when there are many inline citations.
 const markdownComponents = {
-  a: ({ href, children, ...props }: any) => (
-    <a
-      {...props}
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-words inline-flex items-center gap-0.5"
-    >
-      {children}
-      <ExternalLink size={11} strokeWidth={1.5} className="inline shrink-0 opacity-70" />
-    </a>
-  ),
+  a: ({ href, children, ...props }: any) => {
+    const flat = (Array.isArray(children) ? children.join('') : String(children ?? '')).trim();
+    const isCitation = /^\[\d+\]$/.test(flat);
+    if (isCitation) {
+      const num = flat.replace(/[\[\]]/g, '');
+      return (
+        <a
+          {...props}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open verified source [${num}] in a new tab`}
+          className="inline-flex items-center justify-center text-[10px] font-bold tabular-nums text-blue-300 bg-blue-500/15 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-400/60 rounded px-1.5 py-0.5 mx-0.5 align-super no-underline transition-colors leading-none"
+        >
+          {num}
+        </a>
+      );
+    }
+    return (
+      <a
+        {...props}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-words inline-flex items-center gap-0.5"
+      >
+        {children}
+        <ExternalLink size={11} strokeWidth={1.5} className="inline shrink-0 opacity-70" />
+      </a>
+    );
+  },
 };
 
 function shortDomain(uri: string): string {
@@ -142,6 +204,7 @@ export function InfusionConsult() {
       let fullResponse = '';
       let fullThinking = '';
       const sourceMap = new Map<string, GroundingSource>();
+      let lastEmittedSourceCount = 0;
 
       for await (const chunk of response) {
         const parts = chunk.candidates?.[0]?.content?.parts;
@@ -175,9 +238,17 @@ export function InfusionConsult() {
             sourceMap.set(key, { uri: web.uri, title });
           }
         }
+        // Stream sources to React state as soon as new ones arrive so the
+        // [N] citation badges in the brief become clickable mid-stream rather
+        // than only after the entire response finishes.
+        if (sourceMap.size > lastEmittedSourceCount) {
+          setSources(Array.from(sourceMap.values()));
+          lastEmittedSourceCount = sourceMap.size;
+        }
       }
 
-      if (sourceMap.size > 0) {
+      // Final flush in case the very last chunk added new sources.
+      if (sourceMap.size > lastEmittedSourceCount) {
         setSources(Array.from(sourceMap.values()));
       }
     } catch (err: any) {
@@ -280,17 +351,36 @@ export function InfusionConsult() {
               <div className="text-red-400 text-[14px]">{error}</div>
             ) : brief ? (
               <div className="flex flex-col">
-                <div className="markdown-body prose prose-sm prose-invert max-w-none">
-                  <Markdown components={markdownComponents}>{brief}</Markdown>
+                {/* Enhanced typography: bigger gaps between H2/H3 sections, looser
+                    line-height, more breathing room between list items. Citation
+                    badges are injected before render so [N] markers map to real
+                    grounded URLs. */}
+                <div className="consult-brief prose prose-sm prose-invert max-w-none
+                                prose-headings:font-semibold prose-headings:text-white
+                                prose-h2:text-[18px] prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2 prose-h2:border-b prose-h2:border-white/10 first:prose-h2:mt-0
+                                prose-h3:text-[15px] prose-h3:mt-7 prose-h3:mb-3 prose-h3:text-blue-300 prose-h3:tracking-wide first:prose-h3:mt-0
+                                prose-h4:text-[13px] prose-h4:mt-5 prose-h4:mb-2 prose-h4:text-slate-200 prose-h4:uppercase prose-h4:tracking-wider
+                                prose-p:my-3 prose-p:leading-7 prose-p:text-slate-300
+                                prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5 prose-li:leading-relaxed prose-li:text-slate-300
+                                prose-strong:text-white prose-strong:font-semibold
+                                prose-em:text-slate-200
+                                prose-table:my-5 prose-table:text-[12px]
+                                prose-th:bg-white/5 prose-th:text-slate-200 prose-th:font-semibold prose-th:px-3 prose-th:py-2
+                                prose-td:px-3 prose-td:py-2 prose-td:border-white/10
+                                prose-hr:my-6 prose-hr:border-white/10
+                                prose-blockquote:border-l-blue-500/40 prose-blockquote:bg-blue-500/5 prose-blockquote:py-1 prose-blockquote:not-italic">
+                  <Markdown components={markdownComponents}>
+                    {injectCitationLinks(brief, sources)}
+                  </Markdown>
                 </div>
                 {sources.length > 0 && (
-                  <div className="mt-6 pt-4 border-t border-white/10">
+                  <div className="mt-8 pt-5 border-t border-white/10">
                     <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-1">
                       <LinkIcon size={11} strokeWidth={1.5} />
                       <span className="font-medium">Verified Sources ({sources.length})</span>
                     </div>
                     <p className="text-[10px] text-slate-500 italic mb-3">
-                      Live URLs from Google Search grounding metadata — the link below each title resolves to that exact source. Match the bracketed marker (e.g. [1]) in the brief above to its source here.
+                      Click any <span className="inline-flex items-center justify-center text-[9px] font-bold tabular-nums text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1.5 py-0.5 mx-0.5 align-middle leading-none">N</span> badge in the brief above to open its grounded source — same URLs listed below, sourced live from Google Search grounding metadata.
                     </p>
                     <ol className="space-y-2">
                       {sources.map((src, idx) => (
