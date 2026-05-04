@@ -1,4 +1,4 @@
-import type { Drug, ClinicalSummary, Hazardous, Extravasation, Sequencing, Emetogenic, Toxicities, CADDDefault } from '@/lib/iv-reference-types';
+import type { Drug, ClinicalSummary, Hazardous, Extravasation, Sequencing, Emetogenic, Toxicities } from '@/lib/iv-reference-types';
 
 // ==========================================
 // CLINICAL SUMMARIES
@@ -40,25 +40,6 @@ const CLINICAL_CDS: Record<string, CDSEntry> = {
   "Vancomycin": { hazardous: { niosh: "Not NIOSH", cstd: "Not required", disposal: "Standard Waste" }, extravasation: { risk: "Vesicant (at high conc > 5 mg/mL)", compress: "Warm or Cold pack", antidote: "Hyaluronidase (Off-label)", management: "Stop infusion, aspirate. If severe, consider hyaluronidase." }, sequencing: { order: "Infuse slowly (max 10-15 mg/min) to prevent Vancomycin Infusion Reaction (Red Man Syndrome).", ySite: "Incompatible with Piperacillin/Tazobactam, Cefepime." }, emetogenic: { risk: "Minimal", premeds: "None. Slow infusion rate is primary prevention for reactions." }, toxicities: { limits: "Nephrotoxicity, Ototoxicity.", adjustments: "Renal dose adjustments mandatory (AUC/MIC targeting)." } },
   "Immune Globulin Intravenous (IVIG)": { hazardous: { niosh: "Not NIOSH", cstd: "Not required", disposal: "Standard Waste" }, extravasation: { risk: "Non-vesicant", compress: "Standard", antidote: "None", management: "Stop infusion, elevate." }, sequencing: { order: "Start at slow rate (e.g., 0.01 mL/kg/min) and double every 15-30 mins per brand specific maximums.", ySite: "Incompatible with most other drugs (NS or D5W only depending on brand)." }, emetogenic: { risk: "Minimal", premeds: "Acetaminophen + Diphenhydramine (+/- Corticosteroid) often used to reduce headache/chills." }, toxicities: { limits: "Acute Renal Failure (sucrose-stabilized products), Aseptic Meningitis, Hemolysis.", adjustments: "Dose based on ideal/adjusted body weight often recommended. Reduce rate for patients at risk of fluid overload." } },
   "Ampicillin-Sulbactam": { hazardous: { niosh: "Not NIOSH", cstd: "Not required", disposal: "Standard Waste" }, extravasation: { risk: "Non-vesicant (irritant potential at high concentrations)", compress: "Warm Compress", antidote: "None", management: "Stop infusion, elevate limb. Dilute further if restarting." }, sequencing: { order: "No specific sequencing requirements. Can be administered peripherally. Avoid simultaneous infusion with aminoglycosides in same line (physicochemical incompatibility).", ySite: "Incompatible with aminoglycosides (Gentamicin, Tobramycin, Amikacin) — inactivation occurs. Compatible with most standard IV fluids (NS preferred over D5W for stability)." }, emetogenic: { risk: "Minimal (<10%)", premeds: "None required for emetogenesis. Pre-screening for penicillin allergy mandatory." }, toxicities: { limits: "Cholestatic hepatitis with prolonged use; diarrhea/C. diff risk.", adjustments: "Renal dose adjustment required: CrCl 15–29 mL/min → q12h; CrCl <15 mL/min → q24h." } }
-};
-
-// ==========================================
-// CADD DEFAULTS
-// ==========================================
-export const CADD_DEFAULTS: Record<string, CADDDefault> = {
-  "Vancomycin": { dose: 1500, freq: 12, conc: 5, kvo: 2 },
-  "Cefazolin": { dose: 6000, freq: 8, conc: 50, kvo: 2 },
-  "Cefepime": { dose: 6000, freq: 8, conc: 50, kvo: 2 },
-  "Piperacillin/Tazobactam": { dose: 13500, freq: 8, conc: 67.5, kvo: 2 },
-  "Meropenem": { dose: 3000, freq: 8, conc: 40, kvo: 2 },
-  "Ceftriaxone": { dose: 2000, freq: 24, conc: 40, kvo: 2 },
-  "Ceftazidime": { dose: 6000, freq: 8, conc: 50, kvo: 2 },
-  "Nafcillin": { dose: 6000, freq: 4, conc: 40, kvo: 2 },
-  "Ampicillin": { dose: 6000, freq: 4, conc: 40, kvo: 2 },
-  "Daptomycin": { dose: 500, freq: 24, conc: 50, kvo: 2 },
-  "Ertapenem": { dose: 1000, freq: 24, conc: 20, kvo: 2 },
-  "Fluconazole": { dose: 400, freq: 24, conc: 2, kvo: 2 },
-  "Ampicillin-Sulbactam": { dose: 3000, freq: 6, conc: 45, kvo: 2 },
 };
 
 // ==========================================

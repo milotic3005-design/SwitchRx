@@ -82,10 +82,3 @@ export interface Drug {
   emetogenic: Emetogenic;
   toxicities: Toxicities;
 }
-
-export interface CADDDefault {
-  dose: number;
-  freq: number;
-  conc: number;
-  kvo: number;
-}
