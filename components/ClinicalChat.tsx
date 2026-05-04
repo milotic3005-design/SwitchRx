@@ -5,6 +5,7 @@ import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { formatDomain } from '@/lib/utils';
 
 // Render markdown links. Citation links (text matches "[N]" pattern) get
 // rendered as small superscript badges so they don't disrupt prose flow;
@@ -80,14 +81,6 @@ function injectCitationLinks(text: string, sources: GroundingSourceLite[]): stri
   });
 }
 
-function shortDomain(uri: string): string {
-  try {
-    return new URL(uri).hostname.replace(/^www\./, '');
-  } catch {
-    return uri;
-  }
-}
-
 // Gemini grounding URIs are vertexaisearch.cloud.google.com redirects that
 // resolve to the actual cited source. The `web.title` is the destination
 // page's title, so the link does point to the right document — but the
@@ -113,7 +106,7 @@ function inferPublisherFromTitle(title: string): string | null {
 function displayDomain(src: { uri: string; title: string }): string {
   const fromTitle = inferPublisherFromTitle(src.title);
   if (fromTitle) return fromTitle;
-  const host = shortDomain(src.uri);
+  const host = formatDomain(src.uri);
   if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
     return 'via Google Search';
   }
@@ -472,7 +465,7 @@ Please answer the question, incorporating the retrieved context.`;
         for (const gc of chunks as any[]) {
           const web = gc.web ?? gc.retrievedContext;
           if (!web?.uri) continue;
-          const title = (web.title || '').trim() || shortDomain(web.uri);
+          const title = (web.title || '').trim() || formatDomain(web.uri);
           const key = `${web.uri}::${title.toLowerCase()}`;
           if (!sourceMap.has(key)) {
             sourceMap.set(key, { uri: web.uri, title });
