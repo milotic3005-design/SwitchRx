@@ -627,7 +627,6 @@ export function suggestReplacements(req: {
 
     // Biologic-specific logic
     if (isBiologic) {
-      const fromClass = Object.keys(drugClasses).find(c => drugClasses[c as keyof typeof drugClasses]?.includes(fromDrug.toLowerCase()));
       const toClass = Object.keys(drugClasses).find(c => drugClasses[c as keyof typeof drugClasses]?.includes(drugName.toLowerCase()));
       
       const isToTNF = toClass === 'Biologics (TNF inhibitors)';
