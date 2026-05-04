@@ -8,6 +8,7 @@ import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { runPharmacyLookup, formatLookupForPrompt } from '@/lib/pharmacy-lookup';
 import type { LookupResult } from '@/lib/pharmacy-lookup/types';
 import { PharmacyLookupPanel } from './PharmacyLookupPanel';
+import { formatDomain } from '@/lib/utils';
 
 type GroundingSource = { uri: string; title: string };
 
@@ -90,14 +91,6 @@ const markdownComponents = {
   },
 };
 
-function shortDomain(uri: string): string {
-  try {
-    return new URL(uri).hostname.replace(/^www\./, '');
-  } catch {
-    return uri;
-  }
-}
-
 // Gemini grounding URIs are typically vertexaisearch.cloud.google.com redirect
 // URLs that resolve to the actual source. The `web.title` from the API is the
 // title of the *destination* page, so the link DOES point to that source —
@@ -123,7 +116,7 @@ function inferPublisherFromTitle(title: string): string | null {
 function displayDomain(src: { uri: string; title: string }): string {
   const fromTitle = inferPublisherFromTitle(src.title);
   if (fromTitle) return fromTitle;
-  const host = shortDomain(src.uri);
+  const host = formatDomain(src.uri);
   // Hide the noisy vertex AI redirect host — the title still carries the source
   if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
     return 'via Google Search';
@@ -230,7 +223,7 @@ export function InfusionConsult() {
         for (const gc of groundingChunks) {
           const web = (gc as any).web ?? (gc as any).retrievedContext;
           if (!web?.uri) continue;
-          const title = (web.title || '').trim() || shortDomain(web.uri);
+          const title = (web.title || '').trim() || formatDomain(web.uri);
           // Dedup key combines normalized URI and title to avoid both URL-only
           // and title-only collisions losing distinct citations.
           const key = `${web.uri}::${title.toLowerCase()}`;
