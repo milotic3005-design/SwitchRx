@@ -5,6 +5,9 @@ import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink,
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
+import { runPharmacyLookup, formatLookupForPrompt } from '@/lib/pharmacy-lookup';
+import type { LookupResult } from '@/lib/pharmacy-lookup/types';
+import { PharmacyLookupPanel } from './PharmacyLookupPanel';
 
 type GroundingSource = { uri: string; title: string };
 
@@ -71,6 +74,8 @@ export function InfusionConsult() {
   const [brief, setBrief] = useState('');
   const [thinking, setThinking] = useState('');
   const [sources, setSources] = useState<GroundingSource[]>([]);
+  const [lookup, setLookup] = useState<LookupResult | null>(null);
+  const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
@@ -79,10 +84,12 @@ export function InfusionConsult() {
     if (!scenario.trim() || isLoading) return;
 
     setIsLoading(true);
+    setIsLookupLoading(true);
     setError('');
     setBrief('');
     setThinking('');
     setSources([]);
+    setLookup(null);
     setIsThinkingExpanded(false); // keep minimized by default
 
     try {
@@ -91,13 +98,40 @@ export function InfusionConsult() {
         throw new Error("Gemini API key is missing. Please ensure NEXT_PUBLIC_GEMINI_API_KEY is set in your AI Studio secrets.");
       }
 
+      // Phase 1: Run the pharmacy lookup pipeline first (drug extraction +
+      // openFDA label + shortage check + safety flags). This blocks the brief
+      // by ~1–2s but gives the AI verified ground-truth context, surfaces
+      // safety flags to the user immediately, and dramatically reduces
+      // hallucinated dosing/stability claims.
+      const lookupPromise = runPharmacyLookup(scenario, apiKey)
+        .then(result => {
+          setLookup(result);
+          return result;
+        })
+        .catch(err => {
+          // Lookup failure shouldn't kill the brief — log and continue with
+          // the AI alone (degraded mode).
+          console.error('Pharmacy lookup failed:', err);
+          return null;
+        })
+        .finally(() => setIsLookupLoading(false));
+
+      const lookupResult = await lookupPromise;
+      const lookupContext = lookupResult ? formatLookupForPrompt(lookupResult) : '';
+
       const ai = new GoogleGenAI({ apiKey });
+
+      // Inject the lookup data into the system instruction so the brief
+      // synthesizes against real FDA-label content rather than memory.
+      const systemInstruction = lookupContext
+        ? `${INFUSION_SYSTEM_PROMPT}\n\n---\n\n${lookupContext}`
+        : INFUSION_SYSTEM_PROMPT;
 
       const response = await ai.models.generateContentStream({
         model: 'gemini-3.1-pro-preview',
         contents: scenario,
         config: {
-          systemInstruction: INFUSION_SYSTEM_PROMPT,
+          systemInstruction,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           // Google Search grounding so the brief cites real FDA labels,
           // PubMed articles, and society guidelines with verifiable URLs.
@@ -161,7 +195,7 @@ export function InfusionConsult() {
         <div>
           <h2 className="text-[16px] font-medium text-blue-400">Rapid Infusion Consult Copilot</h2>
           <p className="text-[14px] text-blue-200/80 mt-1">
-            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief is grounded in <strong>FDA package inserts, primary literature, and professional guidelines</strong> retrieved live via Google Search, with clickable source links for verification.
+            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief now runs the <strong>PharmOracle lookup pipeline</strong> first — extracting drug names, querying <strong>openFDA labels &amp; shortages</strong>, and checking <strong>NIOSH / ISMP / vesicant</strong> registries — then anchors the AI synthesis to that verified data with clickable Google Search citations.
           </p>
         </div>
       </div>
@@ -197,6 +231,11 @@ export function InfusionConsult() {
             )}
           </button>
         </div>
+
+        {/* Pharmacy Lookup panel — appears as soon as classification + lookup
+            return, before the AI brief streams in. Renders nothing until a
+            generation has been triggered. */}
+        <PharmacyLookupPanel lookup={lookup} isLoading={isLookupLoading} />
 
         {/* Output Section */}
         <div className="flex flex-col glass-panel overflow-hidden shadow-sm min-h-[400px]">
