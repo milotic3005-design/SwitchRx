@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { DRUG_DB } from '@/data/drug-database';
 import type { Drug } from '@/lib/iv-reference-types';
+import { getAntimicrobialDetails, type AntimicrobialDetails, type SpectrumCoverage } from '@/data/antimicrobial-details';
 
 /* ── Badge ────────────────────────────────────────────────────── */
 function IVBadge({ type, children }: { type: string; children: React.ReactNode }) {
@@ -71,6 +72,100 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
+/* ── Spectrum coverage chip (yes / variable / no / na) ────────── */
+function CoverageChip({ value }: { value: SpectrumCoverage }) {
+  const v = String(value).toLowerCase();
+  // Treat values starting with "yes" (incl. "yes (PO)", "yes (sulbactam)") as covered.
+  const tone =
+    v.startsWith('yes') ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+    : v.startsWith('variable') ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    : v.startsWith('no') ? 'bg-red-500/10 text-red-300 border-red-500/25'
+    : 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+  const symbol =
+    v.startsWith('yes') ? '✓'
+    : v.startsWith('variable') ? '~'
+    : v.startsWith('no') ? '✗'
+    : '–';
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider leading-none ${tone}`}>
+      <span aria-hidden>{symbol}</span>
+      <span>{String(value)}</span>
+    </span>
+  );
+}
+
+/* ── Antimicrobial spectrum block (group → organisms) ─────────── */
+function SpectrumBlock({ spectrum, notes }: { spectrum: AntimicrobialDetails['spectrum']; notes?: string }) {
+  return (
+    <div className="space-y-3">
+      {Object.entries(spectrum).map(([group, organisms]) => (
+        <div key={group} className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">{group}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(organisms).map(([organism, coverage]) => (
+              <div
+                key={organism}
+                className="inline-flex items-center gap-1.5 bg-black/30 border border-white/5 rounded-lg pl-2 pr-1.5 py-1"
+              >
+                <span className="text-[12px] text-slate-200">{organism}</span>
+                <CoverageChip value={coverage} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {notes && (
+        <p className="text-xs text-slate-400 leading-relaxed bg-blue-500/5 border border-blue-500/15 rounded-lg p-2.5">
+          <span className="font-bold text-blue-300">Note:</span> {notes}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ── Renal dosing tier table ──────────────────────────────────── */
+function RenalDosingTable({ tiers, hepatic }: { tiers: AntimicrobialDetails['renalDosing']; hepatic: string }) {
+  return (
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-xl border border-white/10">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-white/5 text-left">
+              <th className="px-2.5 py-2 font-semibold text-slate-200">CrCl</th>
+              <th className="px-2.5 py-2 font-semibold text-slate-200">Dose</th>
+              <th className="px-2.5 py-2 font-semibold text-slate-200">Interval</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.map((tier, i) => (
+              <tr key={i} className={`border-t border-white/5 ${i % 2 ? 'bg-white/[0.02]' : ''} align-top`}>
+                <td className="px-2.5 py-2 text-slate-200 whitespace-nowrap font-medium">{tier.crclRange}</td>
+                <td className="px-2.5 py-2 text-slate-300">{tier.dose}</td>
+                <td className="px-2.5 py-2 text-slate-300 whitespace-nowrap">{tier.interval}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Tier notes (only render rows that have a note) */}
+      {tiers.some(t => t.notes) && (
+        <ul className="space-y-1 text-[12px] text-slate-400">
+          {tiers.filter(t => t.notes).map((t, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="text-slate-500 font-mono shrink-0">{t.crclRange}:</span>
+              <span>{t.notes}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="bg-purple-500/[0.06] border border-purple-500/20 rounded-lg p-2.5">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-purple-300 mb-1">Hepatic</p>
+        <p className="text-[12px] text-slate-300 leading-relaxed">{hepatic}</p>
+      </div>
+    </div>
+  );
+}
+
 /* ── Drug detail modal ────────────────────────────────────────── */
 function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void }) {
   const [modalSearch, setModalSearch] = useState('');
@@ -107,6 +202,44 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
     drug.extravasation?.risk, drug.extravasation?.compress,
     drug.extravasation?.antidote, drug.extravasation?.management,
   ].some(v => matches(v)), [q, drug]);
+
+  // Antimicrobial detail (spectrum, CrCl tiers, admin) merged from the
+  // iv-pharm-app point-of-care reference. Only present for ID antibiotics
+  // currently in the registry — other drugs simply skip these sections.
+  const amDetails = useMemo(() => getAntimicrobialDetails(drug.genericName), [drug.genericName]);
+
+  const showSpectrum = useMemo(() => {
+    if (!amDetails) return false;
+    if (!q) return true;
+    if (matches(amDetails.spectrumNotes)) return true;
+    return Object.entries(amDetails.spectrum).some(
+      ([group, organisms]) =>
+        matches(group) ||
+        Object.entries(organisms).some(([org, cov]) => matches(org) || matches(String(cov)))
+    );
+  }, [q, amDetails]);
+
+  const showRenal = useMemo(() => {
+    if (!amDetails) return false;
+    if (!q) return true;
+    if (matches(amDetails.hepaticDosing)) return true;
+    return amDetails.renalDosing.some(
+      t => matches(t.crclRange) || matches(t.dose) || matches(t.interval) || matches(t.notes)
+    );
+  }, [q, amDetails]);
+
+  const showAdminDetail = useMemo(() => {
+    if (!amDetails) return false;
+    if (!q) return true;
+    const a = amDetails.administration;
+    return [a.route, a.standardRate, a.extendedRate, a.filter, a.notes].some(v => matches(v));
+  }, [q, amDetails]);
+
+  const showSourceList = useMemo(() => {
+    if (!amDetails) return false;
+    if (!q) return true;
+    return amDetails.sources.some(s => matches(s));
+  }, [q, amDetails]);
 
   const hasFilter = drug.infusion?.filterRequired && drug.infusion.filterRequired !== 'No' && drug.infusion.filterRequired !== 'N/A';
   const hasLight = drug.infusion?.lightProtection && drug.infusion.lightProtection !== 'No' && drug.infusion.lightProtection !== 'N/A';
@@ -256,7 +389,64 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
             </Section>
           )}
 
-          {modalSearch && !showPrep && !showInfusion && !showBUD && !showClinical && !showSafety && (
+          {/* ─── iv-pharm-app sections (only render when antimicrobial details exist) ─── */}
+          {amDetails && showSpectrum && (
+            <Section title="Antimicrobial Spectrum" icon="🦠" accent="border-emerald-500/15 bg-emerald-500/[0.03]">
+              <SpectrumBlock spectrum={amDetails.spectrum} notes={amDetails.spectrumNotes} />
+            </Section>
+          )}
+
+          {amDetails && showRenal && (
+            <Section title="Renal & Hepatic Dosing" icon="💊" accent="border-purple-500/15 bg-purple-500/[0.03]">
+              <RenalDosingTable tiers={amDetails.renalDosing} hepatic={amDetails.hepaticDosing} />
+            </Section>
+          )}
+
+          {amDetails && showAdminDetail && (
+            <Section title="Administration Detail" icon="🩹" defaultOpen={false}>
+              <ul className="space-y-1.5">
+                <Bullet label="Route" value={amDetails.administration.route} />
+                <Bullet label="Standard rate" value={amDetails.administration.standardRate} />
+                <Bullet label="Extended rate" value={amDetails.administration.extendedRate} />
+                <Bullet label="Filter" value={amDetails.administration.filter} />
+                <Bullet
+                  label="Vesicant"
+                  value={amDetails.administration.vesicant ? 'Yes' : 'No'}
+                  warn={amDetails.administration.vesicant}
+                />
+                <Bullet
+                  label="Irritant"
+                  value={amDetails.administration.irritant ? 'Yes' : 'No'}
+                  warn={amDetails.administration.irritant}
+                />
+                <Bullet
+                  label="Central line required"
+                  value={amDetails.administration.centralLineRequired ? 'Yes' : 'No'}
+                  warn={amDetails.administration.centralLineRequired}
+                />
+              </ul>
+              {amDetails.administration.notes && (
+                <p className="mt-2 text-xs text-slate-300 leading-relaxed bg-amber-500/[0.06] border border-amber-500/15 rounded-lg p-2.5">
+                  <span className="font-bold text-amber-300">Pearl:</span> {hl(amDetails.administration.notes)}
+                </p>
+              )}
+            </Section>
+          )}
+
+          {amDetails && showSourceList && (
+            <Section title="Clinical Sources" icon="📚" defaultOpen={false}>
+              <ul className="space-y-1.5">
+                {amDetails.sources.map((src, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[12px] text-slate-300 leading-relaxed">
+                    <span className="text-slate-500 tabular-nums shrink-0">[{i + 1}]</span>
+                    <span>{hl(src)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {modalSearch && !showPrep && !showInfusion && !showBUD && !showClinical && !showSafety && !showSpectrum && !showRenal && !showAdminDetail && !showSourceList && (
             <div className="text-center py-8 text-slate-500">
               <Search className="w-8 h-8 mx-auto mb-2 text-slate-600" />
               <p className="text-sm">No matching content for &ldquo;{modalSearch}&rdquo;</p>
@@ -313,6 +503,14 @@ function DrugCard({ drug, onClick }: { drug: Drug; onClick: () => void }) {
         {drug.vesicant && <IVBadge type="vesicant"><AlertTriangle className="w-3 h-3" /> Vesicant</IVBadge>}
         {drug.highAlert && <IVBadge type="highAlert"><ShieldAlert className="w-3 h-3" /> High-Alert</IVBadge>}
         {drug.hazardous?.niosh?.includes('Group 1') && <IVBadge type="niosh">NIOSH G1</IVBadge>}
+        {getAntimicrobialDetails(drug.genericName) && (
+          <span
+            className="px-2 py-1 rounded-md text-[10px] uppercase tracking-wider font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 flex items-center gap-1 w-fit leading-none"
+            title="Includes spectrum + CrCl tier dosing data"
+          >
+            <FlaskConical className="w-3 h-3" /> ID Detail
+          </span>
+        )}
       </div>
 
       <div className="space-y-2">
