@@ -94,13 +94,13 @@ export const ANTIMICROBIAL_DETAILS: Record<string, AntimicrobialDetails> = {
     hepaticDosing: 'No adjustment required. Hepatic metabolism is minimal.',
     administration: {
       route: 'IV intermittent infusion',
-      standardRate: 'Infuse over at least 60 min; max rate 10 mg/min for any dose',
-      extendedRate: 'For doses >1 g, extend infusion to 1.5-2 hours to reduce vancomycin infusion reaction (red-person syndrome)',
+      standardRate: 'Infuse over the LONGER of: ≥60 min OR ≤10 mg/min — whichever yields a longer infusion. (e.g., 1.5 g over 90 min, 2 g over 100 min.)',
+      extendedRate: 'Extend doses >1 g to 1.5-2 hours to reduce vancomycin infusion reaction (red-person syndrome). Slow rate further if reaction occurs and pretreat with diphenhydramine on subsequent doses.',
       filter: 'not required',
       vesicant: false,
       irritant: true,
       centralLineRequired: false,
-      notes: 'Concentrations >5 mg/mL increase risk of phlebitis — central line preferred for prolonged courses or high concentrations. Vancomycin infusion reaction (formerly "red man syndrome") is rate-related, not allergy.',
+      notes: 'Concentrations >5 mg/mL increase phlebitis risk — central line preferred for prolonged courses or high concentrations. Vancomycin infusion reaction (formerly "red man syndrome") is rate-related, not allergy. Monitor SCr q48-72h; AUC24/MIC 400-600 mg·h/L is preferred over trough monitoring per ASHP/IDSA/SIDP 2020.',
     },
     sources: ['Vancomycin Package Insert (Hospira) 2020', 'ASHP Therapeutic Guidelines 2020', "Trissel's IV Handbook"],
   },
@@ -120,7 +120,7 @@ export const ANTIMICROBIAL_DETAILS: Record<string, AntimicrobialDetails> = {
       'Broad gram-negative + anti-pseudomonal + anaerobe coverage. Avoid empiric monotherapy for ESBL bacteremia (per MERINO trial). No MRSA, no atypicals.',
     stability: [
       { diluent: 'NS or D5W', concentration: 'Standard reconstitution (e.g., 4.5 g in 100 mL)', roomTempHours: 24, refrigeratedHours: 168, source: 'Zosyn PI 2017', notes: '7 days refrigerated; do NOT freeze admixed bag.' },
-      { diluent: "Lactated Ringer's", concentration: 'Standard', roomTempHours: null, refrigeratedHours: null, source: 'Zosyn PI 2017', notes: 'INCOMPATIBLE with LR per PI.' },
+      { diluent: "Lactated Ringer's", concentration: 'Standard', roomTempHours: 24, refrigeratedHours: 168, source: 'Zosyn (with EDTA) PI 2017', notes: 'COMPATIBLE since the EDTA-stabilized reformulation (~2007). Older non-EDTA Zosyn was LR-incompatible — historical references may still flag this.' },
     ],
     renalDosing: [
       { crclRange: '>40 mL/min', dose: '3.375 g (or 4.5 g for severe/Pseudomonas)', interval: 'q6-8h', notes: 'Extended infusion 4 hr q8h is preferred for severe gram-negative infections (PK/PD T>MIC).' },
@@ -159,7 +159,7 @@ export const ANTIMICROBIAL_DETAILS: Record<string, AntimicrobialDetails> = {
       { diluent: "SWFI / Lactated Ringer's", concentration: '1-40 mg/mL', roomTempHours: 24, refrigeratedHours: 168, source: 'Maxipime PI 2020' },
     ],
     renalDosing: [
-      { crclRange: '>60 mL/min', dose: '2 g', interval: 'q8h', notes: 'Febrile neutropenia or Pseudomonas: 2 g q8h.' },
+      { crclRange: '>60 mL/min', dose: '1-2 g (standard); 2 g for severe', interval: 'q12h (q8h for FN/Pseudomonas/meningitis)', notes: 'Standard adult non-empiric dose is 1-2 g q12h per Maxipime PI. Reserve q8h dosing for febrile neutropenia, Pseudomonas, or CNS infection.' },
       { crclRange: '30-60 mL/min', dose: '2 g', interval: 'q12h' },
       { crclRange: '11-29 mL/min', dose: '2 g', interval: 'q24h' },
       { crclRange: '<11 mL/min', dose: '1 g', interval: 'q24h' },
@@ -174,7 +174,7 @@ export const ANTIMICROBIAL_DETAILS: Record<string, AntimicrobialDetails> = {
       vesicant: false,
       irritant: false,
       centralLineRequired: false,
-      notes: 'Cefepime-induced neurotoxicity (encephalopathy, non-convulsive status epilepticus) is dose-related and disproportionate in renal impairment — verify renal dosing carefully.',
+      notes: 'Cefepime-induced neurotoxicity (encephalopathy, myoclonus, non-convulsive status epilepticus) is dose-related and disproportionate in renal impairment — verify renal dosing carefully and monitor mental status. Consider EEG if altered MS develops on therapy.',
     },
     sources: ['Maxipime Package Insert (Hospira) 2020', 'IDSA Febrile Neutropenia Guidelines 2010'],
   },
