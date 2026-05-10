@@ -5,6 +5,7 @@ import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { shortDomain, displayDomain } from '@/lib/domain-utils';
 
 // Render markdown links. Citation links (text matches "[N]" pattern) get
 // rendered as small superscript badges so they don't disrupt prose flow;
@@ -78,46 +79,6 @@ function injectCitationLinks(text: string, sources: GroundingSourceLite[]): stri
       })
       .join('');
   });
-}
-
-function shortDomain(uri: string): string {
-  try {
-    return new URL(uri).hostname.replace(/^www\./, '');
-  } catch {
-    return uri;
-  }
-}
-
-// Gemini grounding URIs are vertexaisearch.cloud.google.com redirects that
-// resolve to the actual cited source. The `web.title` is the destination
-// page's title, so the link does point to the right document — but the
-// redirect host isn't useful as a label. When the title hints at a well-
-// known publisher (DailyMed, PubMed, FDA, etc.), prefer that label instead.
-function inferPublisherFromTitle(title: string): string | null {
-  const t = title.toLowerCase();
-  if (t.includes('dailymed')) return 'dailymed.nlm.nih.gov';
-  if (t.includes('pubmed')) return 'pubmed.ncbi.nlm.nih.gov';
-  if (t.includes('pmc') && t.includes('ncbi')) return 'ncbi.nlm.nih.gov/pmc';
-  if (t.includes('accessdata.fda.gov') || t.includes('fda.gov')) return 'fda.gov';
-  if (t.includes('nejm') || t.includes('new england journal')) return 'nejm.org';
-  if (t.includes('jama')) return 'jamanetwork.com';
-  if (t.includes('lancet')) return 'thelancet.com';
-  if (t.includes('idsociety') || t.includes('idsa')) return 'idsociety.org';
-  if (t.includes('ashp')) return 'ashp.org';
-  if (t.includes('nccn')) return 'nccn.org';
-  if (t.includes('uptodate')) return 'uptodate.com';
-  if (t.includes('lexicomp')) return 'wolterskluwer.com';
-  return null;
-}
-
-function displayDomain(src: { uri: string; title: string }): string {
-  const fromTitle = inferPublisherFromTitle(src.title);
-  if (fromTitle) return fromTitle;
-  const host = shortDomain(src.uri);
-  if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
-    return 'via Google Search';
-  }
-  return host;
 }
 
 // Mock RAG Retrieval Database

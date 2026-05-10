@@ -10,6 +10,7 @@ import type { LookupResult } from '@/lib/pharmacy-lookup/types';
 import { PharmacyLookupPanel } from './PharmacyLookupPanel';
 import { DRUG_DB } from '@/data/drug-database';
 import { emitOpenDrug } from '@/lib/cross-tab-events';
+import { shortDomain, displayDomain } from '@/lib/domain-utils';
 
 type GroundingSource = { uri: string; title: string };
 
@@ -172,47 +173,6 @@ function injectDrugLinks(text: string, matcher: DrugMatcher): string {
       });
     })
     .join('');
-}
-
-function shortDomain(uri: string): string {
-  try {
-    return new URL(uri).hostname.replace(/^www\./, '');
-  } catch {
-    return uri;
-  }
-}
-
-// Gemini grounding URIs are typically vertexaisearch.cloud.google.com redirect
-// URLs that resolve to the actual source. The `web.title` from the API is the
-// title of the *destination* page, so the link DOES point to that source —
-// but the redirect domain is unhelpful to display. When we can infer the real
-// publisher from the title (DailyMed, PubMed, FDA, etc.), prefer that label.
-function inferPublisherFromTitle(title: string): string | null {
-  const t = title.toLowerCase();
-  if (t.includes('dailymed')) return 'dailymed.nlm.nih.gov';
-  if (t.includes('pubmed')) return 'pubmed.ncbi.nlm.nih.gov';
-  if (t.includes('pmc') && t.includes('ncbi')) return 'ncbi.nlm.nih.gov/pmc';
-  if (t.includes('accessdata.fda.gov') || t.includes('fda.gov')) return 'fda.gov';
-  if (t.includes('nejm') || t.includes('new england journal')) return 'nejm.org';
-  if (t.includes('jama')) return 'jamanetwork.com';
-  if (t.includes('lancet')) return 'thelancet.com';
-  if (t.includes('idsociety') || t.includes('idsa')) return 'idsociety.org';
-  if (t.includes('ashp')) return 'ashp.org';
-  if (t.includes('nccn')) return 'nccn.org';
-  if (t.includes('uptodate')) return 'uptodate.com';
-  if (t.includes('lexicomp')) return 'wolterskluwer.com';
-  return null;
-}
-
-function displayDomain(src: { uri: string; title: string }): string {
-  const fromTitle = inferPublisherFromTitle(src.title);
-  if (fromTitle) return fromTitle;
-  const host = shortDomain(src.uri);
-  // Hide the noisy vertex AI redirect host — the title still carries the source
-  if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
-    return 'via Google Search';
-  }
-  return host;
 }
 
 export function InfusionConsult({
