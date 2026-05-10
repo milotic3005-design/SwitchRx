@@ -24,14 +24,25 @@ export const IRRITANTS: ReadonlySet<string> = new Set([
   'magnesium sulfate', 'dextrose 50%', 'parenteral nutrition',
 ]);
 
+const DNA_BINDING_ARR = Array.from(DNA_BINDING_VESICANTS);
+const NON_DNA_BINDING_ARR = Array.from(NON_DNA_BINDING_VESICANTS);
+const IRRITANTS_ARR = Array.from(IRRITANTS);
+
 export const classifyVesicant = (genericName: string): VesicantClass | null => {
   const n = genericName.trim().toLowerCase();
   if (DNA_BINDING_VESICANTS.has(n)) return 'dna_binding';
   if (NON_DNA_BINDING_VESICANTS.has(n)) return 'non_dna_binding';
   if (IRRITANTS.has(n)) return 'irritant';
+
   // Partial match fallback (e.g. "doxorubicin hydrochloride")
-  for (const v of DNA_BINDING_VESICANTS) if (n.includes(v)) return 'dna_binding';
-  for (const v of NON_DNA_BINDING_VESICANTS) if (n.includes(v)) return 'non_dna_binding';
-  for (const v of IRRITANTS) if (n.includes(v)) return 'irritant';
+  for (let i = 0; i < DNA_BINDING_ARR.length; i++) {
+    if (n.includes(DNA_BINDING_ARR[i])) return 'dna_binding';
+  }
+  for (let i = 0; i < NON_DNA_BINDING_ARR.length; i++) {
+    if (n.includes(NON_DNA_BINDING_ARR[i])) return 'non_dna_binding';
+  }
+  for (let i = 0; i < IRRITANTS_ARR.length; i++) {
+    if (n.includes(IRRITANTS_ARR[i])) return 'irritant';
+  }
   return null;
 };

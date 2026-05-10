@@ -4,20 +4,24 @@ import { isISMPHighAlert } from '@/lib/pharmacy-lookup/constants/ismp-high-alert
 import { classifyVesicant } from '@/lib/pharmacy-lookup/constants/vesicant-list';
 import { isNioshHazardous } from '@/lib/pharmacy-lookup/constants/niosh-hd-list';
 
-const QT_DRUGS = new Set([
+const QT_DRUGS = [
   'amiodarone', 'sotalol', 'quinidine', 'azithromycin', 'clarithromycin',
   'moxifloxacin', 'levofloxacin', 'fluconazole', 'voriconazole',
   'ondansetron', 'haloperidol', 'droperidol', 'methadone',
-]);
+];
 
-const SEROTONERGIC = new Set([
+const SEROTONERGIC = [
   'sertraline', 'fluoxetine', 'paroxetine', 'citalopram', 'escitalopram',
   'venlafaxine', 'duloxetine', 'tramadol', 'fentanyl', 'methadone',
   'ondansetron', 'sumatriptan',
-]);
+];
 
-const has = (drugs: string[], name: string): boolean =>
-  drugs.some(d => d.toLowerCase().includes(name));
+const has = (drugs: string[], name: string): boolean => {
+  for (let i = 0; i < drugs.length; i++) {
+    if (drugs[i].toLowerCase().includes(name.toLowerCase())) return true;
+  }
+  return false;
+};
 
 export const generateSafetyFlags = (cls: QueryClassification): SafetyFlag[] => {
   const flags: SafetyFlag[] = [];
@@ -53,7 +57,7 @@ export const generateSafetyFlags = (cls: QueryClassification): SafetyFlag[] => {
       });
     }
 
-    if (cls.query_domain === 'usp797_compounding' && isNioshHazardous(drug)) {
+    if (cls.query_domain === 'usp797_compounding' && isNioshHazardous(drug).isHazardous) {
       flags.push({
         level: 'critical',
         category: 'hazardous_drug',
@@ -86,7 +90,15 @@ export const generateSafetyFlags = (cls: QueryClassification): SafetyFlag[] => {
     });
   }
 
-  const qtCount = drugs.filter(d => [...QT_DRUGS].some(q => d.includes(q))).length;
+  let qtCount = 0;
+  for (let i = 0; i < drugs.length; i++) {
+    for (let j = 0; j < QT_DRUGS.length; j++) {
+      if (drugs[i].includes(QT_DRUGS[j])) {
+        qtCount++;
+        break;
+      }
+    }
+  }
   if (qtCount >= 2) {
     flags.push({
       level: 'warning',
@@ -95,12 +107,25 @@ export const generateSafetyFlags = (cls: QueryClassification): SafetyFlag[] => {
     });
   }
 
-  if (has(drugs, 'linezolid') && drugs.some(d => [...SEROTONERGIC].some(s => d.includes(s)))) {
-    flags.push({
-      level: 'critical',
-      category: 'interaction',
-      message: 'CRITICAL: Serotonin syndrome risk. Linezolid has irreversible MAOI activity. Concurrent use with serotonergic drugs is generally contraindicated.',
-    });
+  if (has(drugs, 'linezolid')) {
+    let hasSerotonergic = false;
+    for (let i = 0; i < drugs.length; i++) {
+      for (let j = 0; j < SEROTONERGIC.length; j++) {
+        if (drugs[i].includes(SEROTONERGIC[j])) {
+          hasSerotonergic = true;
+          break;
+        }
+      }
+      if (hasSerotonergic) break;
+    }
+
+    if (hasSerotonergic) {
+      flags.push({
+        level: 'critical',
+        category: 'interaction',
+        message: 'CRITICAL: Serotonin syndrome risk. Linezolid has irreversible MAOI activity. Concurrent use with serotonergic drugs is generally contraindicated.',
+      });
+    }
   }
 
   return flags;
