@@ -32,11 +32,13 @@ export const ISMP_HIGH_ALERT_DRUGS: ReadonlySet<string> = new Set([
   'amiodarone', 'lidocaine', 'procainamide',
 ]);
 
+const ISMP_ARR = Array.from(ISMP_HIGH_ALERT_DRUGS);
+
 export const isISMPHighAlert = (genericName: string): boolean => {
   const n = genericName.trim().toLowerCase();
   if (ISMP_HIGH_ALERT_DRUGS.has(n)) return true;
-  for (const drug of ISMP_HIGH_ALERT_DRUGS) {
-    if (n.includes(drug)) return true;
+  for (let i = 0; i < ISMP_ARR.length; i++) {
+    if (n.includes(ISMP_ARR[i])) return true;
   }
   return false;
 };

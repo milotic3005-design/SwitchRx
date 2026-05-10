@@ -8,23 +8,27 @@ import { isISMPHighAlert } from './constants/ismp-high-alert';
 import { classifyVesicant } from './constants/vesicant-list';
 import { isNioshHazardous } from './constants/niosh-hd-list';
 
-const QT_PROLONGING = new Set([
+const QT_PROLONGING = [
   'amiodarone', 'sotalol', 'quinidine', 'azithromycin', 'clarithromycin',
   'moxifloxacin', 'levofloxacin', 'fluconazole', 'voriconazole',
   'ondansetron', 'haloperidol', 'droperidol', 'methadone',
-]);
+];
 
-const SEROTONERGIC = new Set([
+const SEROTONERGIC = [
   'sertraline', 'fluoxetine', 'paroxetine', 'citalopram', 'escitalopram',
   'venlafaxine', 'duloxetine', 'tramadol', 'fentanyl', 'methadone',
   'ondansetron', 'sumatriptan',
-]);
+];
 
 const titleCase = (s: string) =>
   s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-const drugContains = (drugs: string[], needle: string): boolean =>
-  drugs.some(d => d.toLowerCase().includes(needle));
+const drugContains = (drugs: string[], needle: string): boolean => {
+  for (let i = 0; i < drugs.length; i++) {
+    if (drugs[i].toLowerCase().includes(needle.toLowerCase())) return true;
+  }
+  return false;
+};
 
 export const generateSafetyFlags = (
   cls: QueryClassification
@@ -110,7 +114,15 @@ export const generateSafetyFlags = (
     });
   }
 
-  const qtCount = drugs.filter(d => [...QT_PROLONGING].some(q => d.includes(q))).length;
+  let qtCount = 0;
+  for (let i = 0; i < drugs.length; i++) {
+    for (let j = 0; j < QT_PROLONGING.length; j++) {
+      if (drugs[i].includes(QT_PROLONGING[j])) {
+        qtCount++;
+        break;
+      }
+    }
+  }
   if (qtCount >= 2) {
     flags.push({
       level: 'warning',
@@ -119,15 +131,25 @@ export const generateSafetyFlags = (
     });
   }
 
-  if (
-    drugContains(drugs, 'linezolid') &&
-    drugs.some(d => [...SEROTONERGIC].some(s => d.includes(s)))
-  ) {
-    flags.push({
-      level: 'critical',
-      category: 'interaction',
-      message: 'CRITICAL: Serotonin syndrome risk. Linezolid has reversible non-selective MAOI activity. Concurrent serotonergic agents are generally contraindicated; monitor for clonus, hyperreflexia, agitation, hyperthermia.',
-    });
+  if (drugContains(drugs, 'linezolid')) {
+    let hasSerotonergic = false;
+    for (let i = 0; i < drugs.length; i++) {
+      for (let j = 0; j < SEROTONERGIC.length; j++) {
+        if (drugs[i].includes(SEROTONERGIC[j])) {
+          hasSerotonergic = true;
+          break;
+        }
+      }
+      if (hasSerotonergic) break;
+    }
+
+    if (hasSerotonergic) {
+      flags.push({
+        level: 'critical',
+        category: 'interaction',
+        message: 'CRITICAL: Serotonin syndrome risk. Linezolid has reversible non-selective MAOI activity. Concurrent serotonergic agents are generally contraindicated; monitor for clonus, hyperreflexia, agitation, hyperthermia.',
+      });
+    }
   }
 
   return flags;

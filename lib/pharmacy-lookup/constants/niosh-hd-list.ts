@@ -47,13 +47,21 @@ export const NIOSH_TABLE_2_NON_ANTINEOPLASTIC: ReadonlySet<string> = new Set([
   'spironolactone',
 ]);
 
+const TABLE_1_ARR = Array.from(NIOSH_TABLE_1_ANTINEOPLASTIC);
+const TABLE_2_ARR = Array.from(NIOSH_TABLE_2_NON_ANTINEOPLASTIC);
+
 export const isNioshHazardous = (
   genericName: string
 ): { isHazardous: boolean; table?: 1 | 2 } => {
   const n = genericName.trim().toLowerCase();
   if (NIOSH_TABLE_1_ANTINEOPLASTIC.has(n)) return { isHazardous: true, table: 1 };
   if (NIOSH_TABLE_2_NON_ANTINEOPLASTIC.has(n)) return { isHazardous: true, table: 2 };
-  for (const d of NIOSH_TABLE_1_ANTINEOPLASTIC) if (n.includes(d)) return { isHazardous: true, table: 1 };
-  for (const d of NIOSH_TABLE_2_NON_ANTINEOPLASTIC) if (n.includes(d)) return { isHazardous: true, table: 2 };
+
+  for (let i = 0; i < TABLE_1_ARR.length; i++) {
+    if (n.includes(TABLE_1_ARR[i])) return { isHazardous: true, table: 1 };
+  }
+  for (let i = 0; i < TABLE_2_ARR.length; i++) {
+    if (n.includes(TABLE_2_ARR[i])) return { isHazardous: true, table: 2 };
+  }
   return { isHazardous: false };
 };
