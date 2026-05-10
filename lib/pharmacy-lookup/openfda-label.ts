@@ -41,11 +41,22 @@ const truncate = (s: string, max = 800): string => {
   return s.slice(0, max).replace(/\s+\S*$/, '') + '…';
 };
 
+const cache = new Map<string, { data: OpenFdaResponse | null; expires: number }>();
+const TTL_MS = 24 * 60 * 60 * 1000;
+
 const fetchJson = async (url: string): Promise<OpenFdaResponse | null> => {
+  const hit = cache.get(url);
+  if (hit && hit.expires > Date.now()) return hit.data;
+
   try {
     const resp = await fetch(url);
-    if (!resp.ok) return null;
-    return (await resp.json()) as OpenFdaResponse;
+    if (!resp.ok) {
+      cache.set(url, { data: null, expires: Date.now() + TTL_MS });
+      return null;
+    }
+    const data = (await resp.json()) as OpenFdaResponse;
+    cache.set(url, { data, expires: Date.now() + TTL_MS });
+    return data;
   } catch {
     return null;
   }
