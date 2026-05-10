@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
+import { shortDomain } from '@/lib/utils';
 import Markdown from 'react-markdown';
 
 // Render markdown links. Citation links (text matches "[N]" pattern) get
@@ -78,14 +79,6 @@ function injectCitationLinks(text: string, sources: GroundingSourceLite[]): stri
       })
       .join('');
   });
-}
-
-function shortDomain(uri: string): string {
-  try {
-    return new URL(uri).hostname.replace(/^www\./, '');
-  } catch {
-    return uri;
-  }
 }
 
 // Gemini grounding URIs are vertexaisearch.cloud.google.com redirects that
