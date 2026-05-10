@@ -5,6 +5,7 @@ import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink,
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
+import { shortDomain } from '@/lib/utils';
 import { runPharmacyLookup, formatLookupForPrompt } from '@/lib/pharmacy-lookup';
 import type { LookupResult } from '@/lib/pharmacy-lookup/types';
 import { PharmacyLookupPanel } from './PharmacyLookupPanel';
@@ -172,14 +173,6 @@ function injectDrugLinks(text: string, matcher: DrugMatcher): string {
       });
     })
     .join('');
-}
-
-function shortDomain(uri: string): string {
-  try {
-    return new URL(uri).hostname.replace(/^www\./, '');
-  } catch {
-    return uri;
-  }
 }
 
 // Gemini grounding URIs are typically vertexaisearch.cloud.google.com redirect
