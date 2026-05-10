@@ -16,6 +16,9 @@ const SEROTONERGIC = new Set([
   'ondansetron', 'sumatriptan',
 ]);
 
+const QT_DRUGS_ARRAY = Array.from(QT_DRUGS);
+const SEROTONERGIC_ARRAY = Array.from(SEROTONERGIC);
+
 const has = (drugs: string[], name: string): boolean =>
   drugs.some(d => d.toLowerCase().includes(name));
 
@@ -86,7 +89,7 @@ export const generateSafetyFlags = (cls: QueryClassification): SafetyFlag[] => {
     });
   }
 
-  const qtCount = drugs.filter(d => [...QT_DRUGS].some(q => d.includes(q))).length;
+  const qtCount = drugs.filter(d => QT_DRUGS_ARRAY.some(q => d.includes(q))).length;
   if (qtCount >= 2) {
     flags.push({
       level: 'warning',
@@ -95,7 +98,7 @@ export const generateSafetyFlags = (cls: QueryClassification): SafetyFlag[] => {
     });
   }
 
-  if (has(drugs, 'linezolid') && drugs.some(d => [...SEROTONERGIC].some(s => d.includes(s)))) {
+  if (has(drugs, 'linezolid') && drugs.some(d => SEROTONERGIC_ARRAY.some(s => d.includes(s)))) {
     flags.push({
       level: 'critical',
       category: 'interaction',
