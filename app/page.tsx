@@ -5,7 +5,8 @@ import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
 import { ClinicalCalculators } from '@/components/ClinicalCalculators';
 import { DrugReference } from '@/components/DrugReference';
-import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical } from 'lucide-react';
+import { PharmOracleSearch } from '@/components/PharmOracleSearch';
+import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 
@@ -78,6 +79,13 @@ export default function Home() {
           >
             <FlaskConical size={13} strokeWidth={2.5} />
             Drug Reference
+          </button>
+          <button
+            onClick={() => setActiveTab('pharmoracle')}
+            className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full flex items-center gap-1.5 ${activeTab === 'pharmoracle' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <Sparkles size={13} strokeWidth={2.5} />
+            PharmOracle
           </button>
         </nav>
       </header>
@@ -185,6 +193,12 @@ export default function Home() {
         {activeTab === 'calculators' && <ClinicalCalculators />}
 
         {activeTab === 'drugref' && <DrugReference openDrug={pendingDrug} />}
+
+        {activeTab === 'pharmoracle' && (
+          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
+            <PharmOracleSearch />
+          </div>
+        )}
       </main>
     </div>
   );
