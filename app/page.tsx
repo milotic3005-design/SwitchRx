@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SwitchingProtocols } from '@/components/SwitchingProtocols';
 import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
@@ -7,9 +7,31 @@ import { ClinicalCalculators } from '@/components/ClinicalCalculators';
 import { DrugReference } from '@/components/DrugReference';
 import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical } from 'lucide-react';
 import { motion } from 'motion/react';
+import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
+  // Cross-tab navigation state. Each "pending" payload carries a token so the
+  // child component re-applies the request even when the same drug/scenario
+  // is requested twice in a row (otherwise the prop value wouldn't change and
+  // useEffect would no-op).
+  const [pendingDrug, setPendingDrug] = useState<{ drugKey: string; token: number } | null>(null);
+  const [pendingScenario, setPendingScenario] = useState<{ scenario: string; autoSubmit: boolean; token: number } | null>(null);
+
+  useEffect(() => {
+    const offDrug = onOpenDrug(({ drugKey }) => {
+      setActiveTab('drugref');
+      setPendingDrug({ drugKey, token: Date.now() });
+    });
+    const offCopilot = onAskCopilot(({ scenario, autoSubmit }) => {
+      setActiveTab('infusion');
+      setPendingScenario({ scenario, autoSubmit: !!autoSubmit, token: Date.now() });
+    });
+    return () => {
+      offDrug();
+      offCopilot();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col font-sans text-slate-200 selection:bg-blue-500/30">
@@ -150,7 +172,7 @@ export default function Home() {
 
         {activeTab === 'infusion' && (
           <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
-            <InfusionConsult />
+            <InfusionConsult prefillScenario={pendingScenario} />
           </div>
         )}
 
@@ -162,7 +184,7 @@ export default function Home() {
 
         {activeTab === 'calculators' && <ClinicalCalculators />}
 
-        {activeTab === 'drugref' && <DrugReference />}
+        {activeTab === 'drugref' && <DrugReference openDrug={pendingDrug} />}
       </main>
     </div>
   );

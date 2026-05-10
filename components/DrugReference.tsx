@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search, X, AlertTriangle, ShieldAlert, ExternalLink,
-  ChevronDown, ChevronRight, Pill, Droplet, Thermometer, FlaskConical
+  ChevronDown, ChevronRight, Pill, Droplet, Thermometer, FlaskConical, Network
 } from 'lucide-react';
 import { DRUG_DB } from '@/data/drug-database';
 import type { Drug } from '@/lib/iv-reference-types';
 import { getAntimicrobialDetails, type AntimicrobialDetails, type SpectrumCoverage } from '@/data/antimicrobial-details';
+import { emitAskCopilot } from '@/lib/cross-tab-events';
 
 /* ── Badge ────────────────────────────────────────────────────── */
 function IVBadge({ type, children }: { type: string; children: React.ReactNode }) {
@@ -455,21 +456,38 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
         </div>
 
         {/* Footer */}
-        <div className="bg-white/[0.03] px-5 py-3 border-t border-white/10 flex justify-between items-center flex-shrink-0">
+        <div className="bg-white/[0.03] px-5 py-3 border-t border-white/10 flex justify-between items-center gap-3 flex-shrink-0">
           <a
             href={drug.sourceUrl || '#'}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-medium text-xs transition-colors"
+            className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-medium text-xs transition-colors shrink-0"
           >
             DailyMed <ExternalLink className="w-3.5 h-3.5" />
           </a>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-white text-black rounded-full text-sm font-semibold hover:bg-slate-200 transition-colors"
-          >
-            Done
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                // Hand off this drug to the Infusion Copilot pre-filled with a
+                // structured scenario the AI can immediately reason against.
+                emitAskCopilot({
+                  scenario: `Generate a consult brief for ${drug.genericName} (${drug.brandName})${drug.drugClass ? ' — ' + drug.drugClass : ''}. Include indication, weight-based dosing for an average 70 kg adult with normal renal/hepatic function, monitoring labs and frequency, infusion preparation (diluent, final concentration, rate, line/filter requirements), and key adverse effects with management.`,
+                });
+                onClose();
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 hover:text-blue-200 border border-blue-500/30 hover:border-blue-400/60 rounded-full text-xs font-semibold transition-colors"
+              title="Open this drug in Infusion Copilot with a pre-filled scenario"
+            >
+              <Network className="w-3.5 h-3.5" />
+              Ask Copilot
+            </button>
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-white text-black rounded-full text-sm font-semibold hover:bg-slate-200 transition-colors"
+            >
+              Done
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -531,11 +549,50 @@ function DrugCard({ drug, onClick }: { drug: Drug; onClick: () => void }) {
   );
 }
 
+/* ── Resolve a drug by id OR by lowercased generic/brand name ──── */
+export function resolveDrugByKey(key: string): Drug | null {
+  if (!key) return null;
+  const k = key.trim().toLowerCase();
+  // Exact id match (e.g. "a32")
+  const byId = DRUG_DB.find(d => d.id.toLowerCase() === k);
+  if (byId) return byId;
+  // Generic / brand exact match (case-insensitive)
+  const byName = DRUG_DB.find(
+    d =>
+      d.genericName.toLowerCase() === k ||
+      d.brandName.toLowerCase() === k ||
+      // Normalize "/" → "-" so "piperacillin/tazobactam" matches "piperacillin-tazobactam"
+      d.genericName.toLowerCase().replace(/\s*\/\s*/g, '-') === k
+  );
+  if (byName) return byName;
+  // Substring fallback: pick the shortest match so "vanco" doesn't grab a
+  // longer record that happens to contain the substring.
+  const subs = DRUG_DB.filter(
+    d =>
+      d.genericName.toLowerCase().includes(k) ||
+      d.brandName.toLowerCase().includes(k)
+  );
+  return subs.sort((a, b) => a.genericName.length - b.genericName.length)[0] ?? null;
+}
+
 /* ── Main Drug Reference component ────────────────────────────── */
-export function DrugReference() {
+export function DrugReference({
+  openDrug,
+}: {
+  openDrug?: { drugKey: string; token: number } | null;
+} = {}) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('All');
   const [selected, setSelected] = useState<Drug | null>(null);
+
+  // When the parent emits a new openDrug request (token changes), look up the
+  // drug and pop its modal automatically. Re-runs even on duplicate requests
+  // because the token field is a fresh Date.now() each time.
+  useEffect(() => {
+    if (!openDrug?.drugKey) return;
+    const match = resolveDrugByKey(openDrug.drugKey);
+    if (match) setSelected(match);
+  }, [openDrug?.token, openDrug?.drugKey]);
 
   // Unique categories
   const categories = useMemo(() => {

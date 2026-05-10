@@ -1,13 +1,15 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon } from 'lucide-react';
+import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon, FlaskConical } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { runPharmacyLookup, formatLookupForPrompt } from '@/lib/pharmacy-lookup';
 import type { LookupResult } from '@/lib/pharmacy-lookup/types';
 import { PharmacyLookupPanel } from './PharmacyLookupPanel';
+import { DRUG_DB } from '@/data/drug-database';
+import { emitOpenDrug } from '@/lib/cross-tab-events';
 
 type GroundingSource = { uri: string; title: string };
 
@@ -75,6 +77,23 @@ const markdownComponents = {
         </a>
       );
     }
+    // Drug Reference cross-link: links written as #drug:<key> resolve to a
+    // chip-style affordance that switches tabs and opens the matching drug
+    // monograph. Plain text links remain untouched.
+    if (typeof href === 'string' && href.startsWith('#drug:')) {
+      const drugKey = href.slice('#drug:'.length);
+      return (
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); emitOpenDrug({ drugKey }); }}
+          title={`Open ${flat} in Drug Reference`}
+          className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 hover:border-emerald-400/60 rounded-md px-1.5 py-0.5 mx-0.5 no-underline transition-colors leading-none align-baseline"
+        >
+          <FlaskConical size={10} strokeWidth={2} className="shrink-0 opacity-80" />
+          {children}
+        </button>
+      );
+    }
     return (
       <a
         {...props}
@@ -89,6 +108,71 @@ const markdownComponents = {
     );
   },
 };
+
+/**
+ * Build a regex (and reverse map) that detects any drug name from DRUG_DB
+ * inside the brief text. Sorted by length DESC so "Piperacillin/Tazobactam"
+ * matches before "Piperacillin" alone. Word-boundary anchored so we don't
+ * grab substrings inside other words.
+ */
+type DrugMatcher = { regex: RegExp; lookup: Map<string, string> };
+function buildDrugMatcher(): DrugMatcher {
+  const entries: Array<{ pattern: string; key: string }> = [];
+  for (const d of DRUG_DB) {
+    const candidates = [d.genericName, d.brandName].filter(Boolean) as string[];
+    for (const name of candidates) {
+      // Skip very short names (≤3 chars) to avoid noise like "PD" matching prose
+      if (name.length < 4) continue;
+      entries.push({ pattern: name, key: d.genericName.toLowerCase() });
+    }
+  }
+  entries.sort((a, b) => b.pattern.length - a.pattern.length);
+  const lookup = new Map<string, string>();
+  for (const e of entries) lookup.set(e.pattern.toLowerCase(), e.key);
+  // Build alternation, escaping regex metacharacters; "/" needs no escape inside class.
+  const escaped = entries.map(e => e.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  // \b doesn't work next to "/", so use a custom boundary that allows "/" or "-"
+  // Use lookbehind/lookahead for non-letter characters.
+  const regex = new RegExp(`(?<![A-Za-z])(${escaped.join('|')})(?![A-Za-z])`, 'gi');
+  return { regex, lookup };
+}
+
+/**
+ * Replace drug names in markdown text with `[Name](#drug:<key>)` so the link
+ * renderer turns them into clickable chips. Skips replacements inside fenced
+ * code blocks, inline code, and existing markdown links to avoid breaking
+ * citation links or formatted code.
+ */
+function injectDrugLinks(text: string, matcher: DrugMatcher): string {
+  if (!text) return text;
+  // Split out segments we should NOT touch (fenced code, inline code, links).
+  const segments: Array<{ kind: 'safe' | 'skip'; content: string }> = [];
+  const skipRegex = /(```[\s\S]*?```|`[^`\n]+`|\[[^\]]+\]\([^)]+\))/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = skipRegex.exec(text)) !== null) {
+    if (m.index > last) segments.push({ kind: 'safe', content: text.slice(last, m.index) });
+    segments.push({ kind: 'skip', content: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segments.push({ kind: 'safe', content: text.slice(last) });
+
+  return segments
+    .map(seg => {
+      if (seg.kind === 'skip') return seg.content;
+      // For each safe segment, replace each drug-name match ONCE per segment to
+      // avoid pelting every occurrence of "vancomycin" with a chip — keeps the
+      // brief readable. Track replaced keys per-segment.
+      const seen = new Set<string>();
+      return seg.content.replace(matcher.regex, (match) => {
+        const key = matcher.lookup.get(match.toLowerCase());
+        if (!key || seen.has(key)) return match;
+        seen.add(key);
+        return `[${match}](#drug:${key})`;
+      });
+    })
+    .join('');
+}
 
 function shortDomain(uri: string): string {
   try {
@@ -131,7 +215,11 @@ function displayDomain(src: { uri: string; title: string }): string {
   return host;
 }
 
-export function InfusionConsult() {
+export function InfusionConsult({
+  prefillScenario,
+}: {
+  prefillScenario?: { scenario: string; autoSubmit: boolean; token: number } | null;
+} = {}) {
   const [scenario, setScenario] = useState('');
   const [brief, setBrief] = useState('');
   const [thinking, setThinking] = useState('');
@@ -141,6 +229,18 @@ export function InfusionConsult() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
+
+  // Build drug-name regex once per session — DRUG_DB is static at runtime.
+  const drugMatcher = useMemo(() => buildDrugMatcher(), []);
+
+  // Apply a pre-filled scenario coming from another tab (e.g. Drug Reference's
+  // "Ask Copilot" button). Re-fires whenever the parent passes a new token.
+  useEffect(() => {
+    if (!prefillScenario?.scenario) return;
+    setScenario(prefillScenario.scenario);
+    // Optionally auto-submit. We hold off here so the user can review and
+    // tweak before pressing Generate; flip if you want zero-click handoff.
+  }, [prefillScenario?.token, prefillScenario?.scenario]);
 
   const handleGenerate = async () => {
     if (!scenario.trim() || isLoading) return;
@@ -370,7 +470,11 @@ export function InfusionConsult() {
                                 prose-hr:my-6 prose-hr:border-white/10
                                 prose-blockquote:border-l-blue-500/40 prose-blockquote:bg-blue-500/5 prose-blockquote:py-1 prose-blockquote:not-italic">
                   <Markdown components={markdownComponents}>
-                    {injectCitationLinks(brief, sources)}
+                    {/* Layer order matters: citation links run first (they
+                        consume "[N]" markers), then drug-name detection
+                        wraps Generic/Brand names in `#drug:<key>` chips
+                        that switch tabs to Drug Reference on click. */}
+                    {injectDrugLinks(injectCitationLinks(brief, sources), drugMatcher)}
                   </Markdown>
                 </div>
                 {sources.length > 0 && (
