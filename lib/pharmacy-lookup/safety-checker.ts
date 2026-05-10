@@ -20,6 +20,9 @@ const SEROTONERGIC = new Set([
   'ondansetron', 'sumatriptan',
 ]);
 
+const QT_PROLONGING_ARRAY = Array.from(QT_PROLONGING);
+const SEROTONERGIC_ARRAY = Array.from(SEROTONERGIC);
+
 const titleCase = (s: string) =>
   s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
@@ -110,7 +113,7 @@ export const generateSafetyFlags = (
     });
   }
 
-  const qtCount = drugs.filter(d => [...QT_PROLONGING].some(q => d.includes(q))).length;
+  const qtCount = drugs.filter(d => QT_PROLONGING_ARRAY.some(q => d.includes(q))).length;
   if (qtCount >= 2) {
     flags.push({
       level: 'warning',
@@ -121,7 +124,7 @@ export const generateSafetyFlags = (
 
   if (
     drugContains(drugs, 'linezolid') &&
-    drugs.some(d => [...SEROTONERGIC].some(s => d.includes(s)))
+    drugs.some(d => SEROTONERGIC_ARRAY.some(s => d.includes(s)))
   ) {
     flags.push({
       level: 'critical',
