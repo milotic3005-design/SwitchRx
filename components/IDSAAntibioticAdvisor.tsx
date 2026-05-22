@@ -8,6 +8,7 @@ import {
   ClipboardCheck, Microscope,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
 
 type GroundingSource = { uri: string; title: string };
@@ -19,34 +20,59 @@ const IDSA_SYSTEM_PROMPT = `You are an IDSA-certified infectious-disease clinica
 Embedded in an outpatient infusion center tool used by pharmacists, infusion nurses, and prescribers. The clinical environment is OUTPATIENT INFUSION — not ICU, not inpatient. Therapy must be practically administrable in an ambulatory setting (typical OPAT regimens: once-daily or extended-interval IV; oral conversion when bioavailability ≥70%).
 
 ## REQUIRED OUTPUT STRUCTURE
-Always return exactly four H2 sections in this order. Use clinical pharmacy shorthand (q8h, IV, BID, CrCl, AUC/MIC).
+
+CRITICAL MARKDOWN RULES (FOLLOW EXACTLY):
+- Every section heading MUST start with "## " (two hashes + space) on its own line
+- Every subsection MUST start with "### " on its own line
+- Tables MUST have a blank line before AND after them
+- Table header row, separator row (|---|---|...), and each data row MUST each be on their own line — NEVER collapse a table onto one line
+- Do NOT use LaTeX or math notation ($...$). Write "fT>MIC > 40%" as plain text
+- Use **bold** for inline labels, never colons-only
+
+Return exactly four H2 sections, in this order, with a blank line between each section. Use clinical pharmacy shorthand (q8h, IV, BID, CrCl, AUC/MIC).
 
 ## Section 1 — Antibiotic Selection
-Render a markdown table with rows:
+
+Render exactly this markdown table (one row per line, blank line before and after the table):
+
 | Tier | Drug · Dose · Route · Frequency · Duration | Rationale |
 |---|---|---|
-| First-line | | |
-| Renal-adjusted (CrCl X mL/min) | | |  ← include only if CrCl provided
-| Allergy-adjusted | | |  ← include only if allergy listed
-| Second-line alternative | | |
+| First-line | Drug · dose · IV · qNh · X–Y days | One-line rationale |
+| Renal-adjusted (CrCl X mL/min) | … | … |
+| Allergy-adjusted | … | … |
+| Second-line alternative | … | … |
 
-Every drug recommendation MUST include all five elements: drug, dose, route, frequency, AND total duration.
+OMIT the Renal-adjusted row if no CrCl/SCr provided. OMIT the Allergy-adjusted row if no allergy listed. Every drug recommendation MUST include all five elements: drug, dose, route, frequency, AND total duration.
 
 ## Section 2 — Monitoring Plan
-- **Baseline labs (pre-therapy):** specific labs by drug class
-- **Ongoing monitoring:** parameter + interval (e.g., "SCr q48–72h")
-- **Therapeutic drug monitoring (TDM) targets:** AUC/MIC, troughs where applicable
-- **Clinical / infusion-site checkpoints:** weekly clinical review, line care, fever curve
+
+### Baseline labs (pre-therapy)
+- Specific labs by drug class
+
+### Ongoing monitoring
+- Parameter + interval (e.g., "SCr q48–72h")
+
+### Therapeutic drug monitoring (TDM) targets
+- AUC/MIC, troughs where applicable; "Not required for [drug class] with normal renal function" if N/A
+
+### Clinical / infusion-site checkpoints
+- Weekly clinical review, line care, fever curve
 
 ## Section 3 — Safety Alerts
-- Drug–drug interactions (DDI flags)
+
+Use these inline icons at the start of each alert (line them up as bullets):
+- 🔴 for critical alerts
+- 🟡 for warnings
+- 🟢 for informational
+
+Cover (one bullet each, in this order):
 - Resistance / stewardship warnings (e.g., MERINO for ESBL bacteremia + pip-tazo)
-- Pregnancy category if pregnant
+- Drug–drug interactions (DDI flags)
 - Allergy cross-reactivity caveats
-- Use 🔴 for critical alerts, 🟡 for warnings, 🟢 for informational
+- Pregnancy category (always include, write "N/A" if not applicable)
 
 ## Section 4 — Primary Source Reference
-Provide the verifiable IDSA guideline citation in this exact format:
+
 - **Guideline:** [Full guideline name]
 - **Citation:** Authors · Year · Title · Publication · DOI
 - **Direct URL:** [hyperlink to the official IDSA practice-guidelines page or the journal article]
@@ -67,6 +93,42 @@ Your output is successful when:
 - Renal and allergy adjustments are auto-applied when data is present
 - A pharmacist can verify therapy with zero additional lookups
 - No drug is recommended without a named evidence source`;
+
+// ─── Output post-processing (repair common LLM markdown malformations) ───
+// The model occasionally collapses a 4-row markdown table onto a single line,
+// omits the `##` prefix on Section headings, or leaks LaTeX math notation.
+// These repairs run before react-markdown so the structured output renders
+// even when the model's formatting drifts.
+function repairLLMMarkdown(raw: string): string {
+  let out = raw;
+
+  // 1) Promote bare "Section N — Title" lines to H2 if not already prefixed.
+  out = out.replace(/^(Section\s+\d+\s*[—\-:].*)$/gm, '## $1');
+
+  // 2) Split inline-collapsed tables. The pattern "|<whitespace>|" only occurs
+  //    at a ROW BOUNDARY in a markdown table (within a row, pipes always have
+  //    cell content between them). So replacing every `|\s+|` with `|\n|`
+  //    cleanly unspools "| h1 | h2 | |---|---|---| | r1c1 | r1c2 |" into
+  //    proper line-per-row markdown.
+  out = out.replace(/\|(\s+)\|/g, '|\n|');
+
+  // 3) Ensure a blank line BEFORE a table starts (any pipe-line preceded by a
+  //    non-pipe line), then collapse any blank line BETWEEN consecutive
+  //    pipe-lines (GFM tables must be contiguous — header/separator/data rows
+  //    cannot be split by blank lines or the table won't parse).
+  out = out.replace(/([^\n|])\n(\|)/g, '$1\n\n$2');
+  out = out.replace(/(\|[^\n]*\|)\n\n+(\|)/g, '$1\n$2');
+
+  // 4) Strip LaTeX-style math markers ("$fT_{>MIC}$" → "fT>MIC").
+  out = out.replace(/\$([^$]+)\$/g, (_m, expr) =>
+    String(expr).replace(/[\{\}\\_]/g, '').replace(/\s+/g, ' ').trim()
+  );
+
+  // 5) Ensure each "## Section" is preceded by a blank line.
+  out = out.replace(/([^\n])\n(## Section)/g, '$1\n\n$2');
+
+  return out;
+}
 
 // ─── Markdown link rendering (same pattern as InfusionConsult) ────
 const markdownComponents = {
@@ -620,19 +682,25 @@ export function IDSAAntibioticAdvisor() {
               <div className="text-red-400 text-[14px]">{error}</div>
             ) : output ? (
               <div className="flex flex-col">
-                <div className="prose prose-sm prose-invert max-w-none
+                <div className="idsa-brief prose prose-sm prose-invert max-w-none
                                 prose-headings:font-semibold prose-headings:text-white
-                                prose-h2:text-[17px] prose-h2:mt-6 prose-h2:mb-3 prose-h2:pb-2 prose-h2:border-b prose-h2:border-emerald-500/20 prose-h2:text-emerald-300 first:prose-h2:mt-0
-                                prose-h3:text-[14px] prose-h3:mt-5 prose-h3:mb-2 prose-h3:text-blue-300
-                                prose-p:my-2.5 prose-p:leading-7 prose-p:text-slate-300
-                                prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-1.5 prose-li:leading-relaxed prose-li:text-slate-300
+                                prose-h2:text-[18px] prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2.5 prose-h2:border-b prose-h2:border-emerald-500/30 prose-h2:text-emerald-300 prose-h2:tracking-wide first:prose-h2:mt-0
+                                prose-h3:text-[14px] prose-h3:mt-5 prose-h3:mb-2 prose-h3:text-blue-300 prose-h3:uppercase prose-h3:tracking-wider first:prose-h3:mt-0
+                                prose-h4:text-[12px] prose-h4:mt-4 prose-h4:mb-2 prose-h4:text-slate-300 prose-h4:uppercase prose-h4:tracking-wider
+                                prose-p:my-3 prose-p:leading-7 prose-p:text-slate-300
+                                prose-ul:my-3 prose-ol:my-3 prose-li:my-2 prose-li:leading-relaxed prose-li:text-slate-300
                                 prose-strong:text-white
-                                prose-table:my-4 prose-table:text-[12px]
-                                prose-th:bg-emerald-500/10 prose-th:text-emerald-200 prose-th:font-semibold prose-th:px-3 prose-th:py-2 prose-th:border-emerald-500/20
-                                prose-td:px-3 prose-td:py-2 prose-td:border-white/10 prose-td:align-top
                                 prose-hr:my-6 prose-hr:border-white/10
-                                prose-blockquote:border-l-emerald-500/40 prose-blockquote:bg-emerald-500/5 prose-blockquote:py-1 prose-blockquote:not-italic">
-                  <Markdown components={markdownComponents}>{output}</Markdown>
+                                prose-blockquote:border-l-emerald-500/40 prose-blockquote:bg-emerald-500/5 prose-blockquote:py-1 prose-blockquote:not-italic
+                                [&_table]:my-5 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-emerald-500/20 [&_table]:rounded-xl [&_table]:overflow-hidden [&_table]:text-[12.5px]
+                                [&_thead]:bg-emerald-500/10
+                                [&_th]:text-emerald-200 [&_th]:font-bold [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-[11px] [&_th]:border-b [&_th]:border-emerald-500/20
+                                [&_tbody_tr:nth-child(even)]:bg-white/[0.02]
+                                [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-top [&_td]:border-t [&_td]:border-white/5 [&_td]:text-slate-300 [&_td]:leading-relaxed
+                                [&_td:first-child]:font-semibold [&_td:first-child]:text-white [&_td:first-child]:whitespace-nowrap">
+                  <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {repairLLMMarkdown(output)}
+                  </Markdown>
                 </div>
 
                 {sources.length > 0 && (
