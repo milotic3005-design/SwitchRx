@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Calculator, SlidersHorizontal, ListChecks, ChevronDown } from 'lucide-react';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
+import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
 
 // ── CADD drug presets ──────────────────────────────────────────────────────────
 const CADD_PRESETS: Record<string, { dose: number; freq: number; conc: number; kvo: number }> = {
@@ -26,6 +27,7 @@ const DAYS = [1, 2, 3, 4, 5];
 
 // ── Calculator list ────────────────────────────────────────────────────────────
 const CALCULATORS = [
+  { id: 'idsa-abx', label: 'IDSA Antibiotic Advisor' },
   { id: 'cadd',    label: 'CADD Bag Calculator' },
   { id: 'ivig',   label: 'IVIG Infusion Rate' },
   { id: 'biolrate', label: 'Biologic Rate Titration' },
@@ -590,6 +592,7 @@ export function ClinicalCalculators() {
           <h2 className="font-bold text-white">{active?.label}</h2>
         </div>
 
+        {activeCalc === 'idsa-abx' && <IDSAAntibioticAdvisor />}
         {activeCalc === 'cadd'    && <CADDCalculator />}
         {activeCalc === 'ivig'   && <IVIGRateCalculator />}
         {activeCalc === 'biolrate' && <InfusionRateCalculator />}
