@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import {
   Stethoscope, Send, Loader2, AlertTriangle, ShieldAlert, ExternalLink,
   Link as LinkIcon, ChevronDown, ChevronUp, Network, Pill, FlaskConical,
-  ClipboardCheck, Microscope,
+  ClipboardCheck, Microscope, MessageSquare, Bot, User, CornerDownRight,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -93,6 +93,23 @@ Your output is successful when:
 - Renal and allergy adjustments are auto-applied when data is present
 - A pharmacist can verify therapy with zero additional lookups
 - No drug is recommended without a named evidence source`;
+
+// ─── Follow-up chat addendum ──────────────────────────────────────
+// Appended to the system prompt for the conversational thread that runs AFTER
+// the structured recommendation. It tells the model to behave like a clinical
+// chat partner — answer the specific follow-up concisely — rather than
+// re-emitting the full 4-section template every turn.
+const FOLLOWUP_ADDENDUM = `## FOLLOW-UP CHAT MODE
+The structured 4-section recommendation has already been delivered above and is in your conversation history along with the full patient context. You are now in interactive clinical-chat mode with the pharmacist.
+
+- Answer ONLY the specific follow-up question asked — be concise and conversational.
+- Do NOT re-emit the full four-section template unless the pharmacist explicitly asks you to regenerate it.
+- Stay anchored to the same patient: reuse their renal function, allergies, diagnosis, and cultures from the history without asking again.
+- Keep the SAME markdown discipline: headings on their own line with "## "/"### ", tables with a blank line before and after and one row per line, no LaTeX.
+- When you state a dose, interval, duration, or guideline claim, keep it IDSA-aligned and name the guideline.
+- If the question moves outside OPAT/ID scope, say so briefly and redirect.`;
+
+type ChatTurn = { role: 'user' | 'model'; content: string; sources?: GroundingSource[] };
 
 // ─── Output post-processing (repair common LLM markdown malformations) ───
 // The model occasionally collapses a 4-row markdown table onto a single line,
@@ -298,6 +315,17 @@ export function IDSAAntibioticAdvisor() {
   const [error, setError] = useState('');
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(false);
 
+  // ─── Follow-up clinical chat (seeded after a recommendation is generated) ──
+  const [chat, setChat] = useState<ChatTurn[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatSessionRef = useRef<any>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat, isChatLoading]);
+
   const setField = <K extends keyof PatientInput>(field: K, value: PatientInput[K]) =>
     setInput(prev => ({ ...prev, [field]: value }));
 
@@ -317,6 +345,10 @@ export function IDSAAntibioticAdvisor() {
     setThinking('');
     setSources([]);
     setIsThinkingExpanded(false);
+    // Reset any prior follow-up conversation — it belonged to the last patient.
+    setChat([]);
+    setChatInput('');
+    chatSessionRef.current = null;
 
     try {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
@@ -374,11 +406,105 @@ export function IDSAAntibioticAdvisor() {
       if (sourceMap.size > lastEmittedSourceCount) {
         setSources(Array.from(sourceMap.values()));
       }
+
+      // Seed a follow-up chat session with the full patient context and the
+      // recommendation as history, so the pharmacist can ask follow-up
+      // questions without re-entering the case. Multi-turn chat sessions don't
+      // support the googleSearch grounding tool, so follow-up sources are
+      // fetched via a per-message grounding sidecar (see handleChatSend).
+      if (fullResponse.trim()) {
+        try {
+          const chatAi = new GoogleGenAI({ apiKey });
+          chatSessionRef.current = chatAi.chats.create({
+            model: 'gemini-flash-latest',
+            config: {
+              systemInstruction: `${IDSA_SYSTEM_PROMPT}\n\n${FOLLOWUP_ADDENDUM}`,
+              temperature: 0.15,
+            },
+            history: [
+              { role: 'user', parts: [{ text: prompt }] },
+              { role: 'model', parts: [{ text: fullResponse }] },
+            ],
+          });
+        } catch (e) {
+          console.error('Failed to seed follow-up chat session:', e);
+        }
+      }
     } catch (err: any) {
       console.error('IDSA advisor error:', err);
       setError(err?.message ?? 'An error occurred generating the recommendation.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ─── Follow-up chat send ──────────────────────────────────────────
+  const handleChatSend = async () => {
+    const question = chatInput.trim();
+    if (!question || isChatLoading || !chatSessionRef.current) return;
+
+    setChatInput('');
+    setChat(prev => [...prev, { role: 'user', content: question }, { role: 'model', content: '' }]);
+    setIsChatLoading(true);
+
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+
+      // Grounding sidecar — real, verifiable URLs without breaking the chat session.
+      const groundingSidecar = apiKey
+        ? new GoogleGenAI({ apiKey }).models.generateContent({
+            model: 'gemini-flash-latest',
+            contents: `Find the most authoritative IDSA / infectious-disease guideline sources for this OPAT follow-up question: ${question}`,
+            config: { tools: [{ googleSearch: {} }], temperature: 0.0 },
+          }).catch(() => null)
+        : Promise.resolve(null);
+
+      const stream = await chatSessionRef.current.sendMessageStream({ message: question });
+
+      let full = '';
+      for await (const chunk of stream) {
+        if (chunk.text) {
+          full += chunk.text;
+          setChat(prev => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], content: full };
+            return next;
+          });
+        }
+      }
+
+      const groundingResult = await groundingSidecar;
+      if (groundingResult) {
+        const sourceMap = new Map<string, GroundingSource>();
+        const chunks = groundingResult.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+        for (const gc of chunks as any[]) {
+          const web = gc.web ?? gc.retrievedContext;
+          if (!web?.uri) continue;
+          const title = (web.title || '').trim() || web.uri;
+          const key = `${web.uri}::${title.toLowerCase()}`;
+          if (!sourceMap.has(key)) sourceMap.set(key, { uri: web.uri, title });
+        }
+        if (sourceMap.size > 0) {
+          const srcs = Array.from(sourceMap.values());
+          setChat(prev => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], sources: srcs };
+            return next;
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('IDSA follow-up chat error:', err);
+      setChat(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last && last.role === 'model' && !last.content) {
+          next[next.length - 1] = { ...last, content: 'Error: unable to process the follow-up. Check API configuration and try again.' };
+        }
+        return next;
+      });
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
@@ -738,6 +864,116 @@ export function IDSAAntibioticAdvisor() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Follow-up clinical chat — appears once a recommendation is generated */}
+      {output && !isLoading && !error && (
+        <div className="glass-panel overflow-hidden shadow-sm flex flex-col">
+          <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-2">
+            <MessageSquare size={16} className="text-blue-400" />
+            <h3 className="text-[15px] font-medium text-white">Follow-up Clinical Chat</h3>
+            <span className="text-[11px] text-slate-500 ml-1">— same patient context, ask anything about this case</span>
+          </div>
+
+          <div className="max-h-[460px] overflow-y-auto p-5 space-y-5 bg-[#0a0a0a]">
+            {chat.length === 0 && (
+              <div className="flex items-start gap-3 text-[13px] text-slate-400">
+                <CornerDownRight size={15} className="text-blue-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  The recommendation above is loaded as context. Ask follow-ups like{' '}
+                  <span className="text-slate-300">“why not cefazolin here?”</span>,{' '}
+                  <span className="text-slate-300">“convert this to an oral step-down”</span>, or{' '}
+                  <span className="text-slate-300">“adjust for CrCl 25”</span>.
+                </p>
+              </div>
+            )}
+
+            {chat.map((msg, i) => (
+              <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-white/10 text-white' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  {msg.role === 'user' ? <User size={14} strokeWidth={1.5} /> : <Bot size={14} strokeWidth={1.5} />}
+                </div>
+                <div className={`max-w-[85%] rounded-2xl p-4 text-[14px] ${msg.role === 'user' ? 'bg-white text-black rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/5'}`}>
+                  {msg.role === 'user' ? (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  ) : msg.content ? (
+                    <div className="flex flex-col">
+                      <div className="prose prose-sm prose-invert max-w-none
+                                      prose-headings:font-semibold prose-headings:text-white
+                                      prose-h2:text-[15px] prose-h2:mt-5 prose-h2:mb-2.5 prose-h2:pb-1.5 prose-h2:border-b prose-h2:border-emerald-500/30 prose-h2:text-emerald-300 first:prose-h2:mt-0
+                                      prose-h3:text-[13px] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:text-blue-300 prose-h3:uppercase prose-h3:tracking-wider first:prose-h3:mt-0
+                                      prose-p:my-2 prose-p:leading-7 prose-p:text-slate-300
+                                      prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-li:leading-relaxed prose-li:text-slate-300
+                                      prose-strong:text-white
+                                      [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-emerald-500/20 [&_table]:rounded-lg [&_table]:overflow-hidden [&_table]:text-[12px]
+                                      [&_thead]:bg-emerald-500/10
+                                      [&_th]:text-emerald-200 [&_th]:font-bold [&_th]:px-2.5 [&_th]:py-2 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-[10.5px] [&_th]:border-b [&_th]:border-emerald-500/20
+                                      [&_tbody_tr:nth-child(even)]:bg-white/[0.02]
+                                      [&_td]:px-2.5 [&_td]:py-2 [&_td]:align-top [&_td]:border-t [&_td]:border-white/5 [&_td]:text-slate-300
+                                      [&_td:first-child]:font-semibold [&_td:first-child]:text-white">
+                        <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                          {repairLLMMarkdown(msg.content)}
+                        </Markdown>
+                      </div>
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-white/10">
+                          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">
+                            <LinkIcon size={10} strokeWidth={1.5} />
+                            <span className="font-medium">Verified Sources ({msg.sources.length})</span>
+                          </div>
+                          <ol className="space-y-1.5">
+                            {msg.sources.map((src, idx) => (
+                              <li key={src.uri + idx} className="text-[11.5px] flex gap-2">
+                                <span className="text-slate-500 shrink-0 tabular-nums">[{idx + 1}]</span>
+                                <a
+                                  href={src.uri}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-400 hover:text-blue-300 underline decoration-blue-400/40 hover:decoration-blue-300 break-all inline-flex items-start gap-1 leading-snug"
+                                  title={src.uri}
+                                >
+                                  <span>{src.title}</span>
+                                  <ExternalLink size={9} strokeWidth={1.5} className="inline shrink-0 mt-0.5 opacity-70" />
+                                </a>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 text-slate-400">
+                      <Loader2 size={14} className="animate-spin" /> Thinking…
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="p-4 border-t border-white/10 flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleChatSend()}
+              placeholder="Ask a follow-up about this case…"
+              disabled={isChatLoading}
+              className="flex-1 px-4 py-3 border border-white/10 rounded-xl focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500/50 outline-none bg-white/5 text-[14px] text-slate-200 placeholder:text-slate-500 disabled:opacity-50"
+            />
+            <button
+              onClick={handleChatSend}
+              disabled={isChatLoading || !chatInput.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 text-white px-5 py-3 rounded-xl transition-colors flex items-center justify-center"
+            >
+              {isChatLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={1.5} />}
+            </button>
+          </div>
+          <p className="text-[12px] text-center text-slate-500 pb-3 -mt-1">
+            AI-generated · IDSA-aligned · verify with primary literature before acting.
+          </p>
         </div>
       )}
     </div>
