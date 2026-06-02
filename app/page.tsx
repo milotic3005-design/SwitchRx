@@ -5,7 +5,7 @@ import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
 import { ClinicalCalculators } from '@/components/ClinicalCalculators';
 import { DrugReference } from '@/components/DrugReference';
-import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical } from 'lucide-react';
+import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 
@@ -17,6 +17,31 @@ export default function Home() {
   // useEffect would no-op).
   const [pendingDrug, setPendingDrug] = useState<{ drugKey: string; token: number } | null>(null);
   const [pendingScenario, setPendingScenario] = useState<{ scenario: string; autoSubmit: boolean; token: number } | null>(null);
+
+  // Theme. The pre-paint script in layout.tsx already set the <html> class from
+  // localStorage to avoid a flash; here we mirror it into React state on mount.
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [themeReady, setThemeReady] = useState(false);
+  useEffect(() => {
+    let stored: 'dark' | 'light' | null = null;
+    try {
+      stored = localStorage.getItem('theme') as 'dark' | 'light' | null;
+    } catch {}
+    if (stored) setTheme(stored);
+    setThemeReady(true);
+  }, []);
+  // Keep the DOM class and localStorage in sync with state. Running the side
+  // effect here (not inside the setState updater) keeps it idempotent and safe
+  // under React StrictMode's double-invocation. Skip until the initial read is
+  // done so we don't clobber the stored value with the default on first render.
+  useEffect(() => {
+    if (!themeReady) return;
+    document.documentElement.classList.toggle('light', theme === 'light');
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {}
+  }, [theme, themeReady]);
+  const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   useEffect(() => {
     const offDrug = onOpenDrug(({ drugKey }) => {
@@ -78,6 +103,14 @@ export default function Home() {
           >
             <FlaskConical size={13} strokeWidth={2.5} />
             Drug Reference
+          </button>
+          <button
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="ml-1 p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center"
+          >
+            {theme === 'dark' ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
           </button>
         </nav>
       </header>
@@ -160,31 +193,41 @@ export default function Home() {
           </div>
         )}
 
-        {activeTab === 'switching' && (
-          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
+        {/* The working tabs stay MOUNTED and toggle visibility with `hidden`
+            instead of conditional rendering. Unmounting a tab would reset all
+            of its local React state (typed scenarios, generated briefs, chat
+            history, calculator inputs), so switching tabs and coming back used
+            to wipe progress. Keeping them mounted preserves that state. The
+            home tab has no state, so it stays conditionally rendered. */}
+        <div className={activeTab === 'switching' ? 'contents' : 'hidden'}>
+          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
             <div className="mb-8">
               <h1 className="text-3xl font-bold tracking-tight text-white">Medication Switching</h1>
               <p className="text-[15px] text-slate-400 mt-2">Evidence-based replacement therapies tailored to patient outcomes.</p>
             </div>
             <SwitchingProtocols />
           </div>
-        )}
+        </div>
 
-        {activeTab === 'infusion' && (
-          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
+        <div className={activeTab === 'infusion' ? 'contents' : 'hidden'}>
+          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
             <InfusionConsult prefillScenario={pendingScenario} />
           </div>
-        )}
+        </div>
 
-        {activeTab === 'chat' && (
-          <div className="pt-28 pb-8 px-6 md:px-12 max-w-5xl mx-auto w-full h-screen animate-in fade-in duration-500">
+        <div className={activeTab === 'chat' ? 'contents' : 'hidden'}>
+          <div className="pt-28 pb-8 px-6 md:px-12 max-w-5xl mx-auto w-full h-screen">
             <ClinicalChat />
           </div>
-        )}
+        </div>
 
-        {activeTab === 'calculators' && <ClinicalCalculators />}
+        <div className={activeTab === 'calculators' ? 'contents' : 'hidden'}>
+          <ClinicalCalculators />
+        </div>
 
-        {activeTab === 'drugref' && <DrugReference openDrug={pendingDrug} />}
+        <div className={activeTab === 'drugref' ? 'contents' : 'hidden'}>
+          <DrugReference openDrug={pendingDrug} />
+        </div>
       </main>
     </div>
   );

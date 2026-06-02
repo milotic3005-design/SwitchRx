@@ -32,10 +32,10 @@ const CALCULATORS = [
   { id: 'ivig',   label: 'IVIG Infusion Rate' },
   { id: 'biolrate', label: 'Biologic Rate Titration' },
   { id: 'crcl',   label: 'CrCl (Cockcroft-Gault)' },
-  { id: 'adjbw',  label: 'Adjusted Body Weight' },
+  // Combined: BMI + Ideal/Adjusted Body Weight all from one set of inputs.
+  { id: 'bodywt', label: 'Body Weight & BMI' },
   { id: 'iron',   label: 'Iron Deficit (Ganzoni)' },
   { id: 'calcium',label: 'Corrected Calcium' },
-  { id: 'bmi',    label: 'BMI Calculator' },
 ];
 
 // ── Shared style helpers ───────────────────────────────────────────────────────
@@ -133,43 +133,69 @@ function CrClCalculator() {
   );
 }
 
-// ── Adjusted Body Weight ───────────────────────────────────────────────────────
-function AdjBWCalculator() {
+// ── Body Weight & BMI (combined) ──────────────────────────────────────────────
+// One height/weight/sex input set produces three derived metrics:
+//   • IBW (Devine formula)
+//   • Adjusted BW (used for many dose calcs when ABW > IBW)
+//   • BMI + WHO category
+// Combines what used to be two separate calculators (Adjusted BW, BMI Calculator)
+// so the pharmacist only enters height and weight once.
+function BodyMetricsCalculator() {
   const [ht, setHt] = useState('');
   const [wt, setWt] = useState('');
   const [female, setFemale] = useState(false);
   const [htUnit, setHtUnit] = useState('cm');
   const [wtUnit, setWtUnit] = useState('kg');
 
-  const result = (() => {
-    const htIn = htUnit === 'cm' ? parseFloat(ht) / 2.54 : parseFloat(ht);
-    const wtKg = wtUnit === 'lb' ? parseFloat(wt) / 2.20462 : parseFloat(wt);
-    if (htIn > 0 && wtKg > 0) {
-      const over5ft = htIn - 60;
-      const base = female ? 45.5 : 50;
-      let ibw = base + Math.max(0, 2.3 * over5ft);
-      if (over5ft < 0) ibw = base;
-      if (wtKg <= ibw) return `${wtKg.toFixed(1)} (actual ≤ IBW)`;
-      const adj = (ibw + 0.4 * (wtKg - ibw)).toFixed(1);
-      return adj;
-    }
-    return null;
+  const htInches = htUnit === 'cm' ? parseFloat(ht) / 2.54 : parseFloat(ht);
+  const wtKg = wtUnit === 'lb' ? parseFloat(wt) / 2.20462 : parseFloat(wt);
+  const hasHt = htInches > 0;
+  const hasWt = wtKg > 0;
+
+  // Devine IBW. Below 5 ft we floor at the base value (clinically common
+  // convention; the formula's linear extrapolation becomes meaningless below
+  // 60 inches).
+  const ibwNum = hasHt
+    ? (female ? 45.5 : 50) + Math.max(0, 2.3 * (htInches - 60))
+    : null;
+
+  // Adjusted BW only meaningful when ABW > IBW. Otherwise just report actual.
+  const adjResult = (() => {
+    if (ibwNum == null || !hasWt) return null;
+    if (wtKg <= ibwNum) return `${wtKg.toFixed(1)} (actual ≤ IBW)`;
+    return (ibwNum + 0.4 * (wtKg - ibwNum)).toFixed(1);
   })();
 
-  const ibwOnly = (() => {
-    const htIn = htUnit === 'cm' ? parseFloat(ht) / 2.54 : parseFloat(ht);
-    if (htIn > 0) {
-      const over5ft = htIn - 60;
-      const base = female ? 45.5 : 50;
-      return (base + Math.max(0, 2.3 * over5ft)).toFixed(1);
-    }
-    return null;
+  // BMI (always uses ACTUAL body weight).
+  const { bmiValue, bmiCategory } = (() => {
+    if (!hasHt || !hasWt) return { bmiValue: null, bmiCategory: null };
+    const htM = htInches * 0.0254;
+    const b = wtKg / (htM * htM);
+    let cat = '';
+    if (b < 18.5) cat = 'Underweight';
+    else if (b < 25) cat = 'Normal weight';
+    else if (b < 30) cat = 'Overweight';
+    else if (b < 35) cat = 'Obese Class I';
+    else if (b < 40) cat = 'Obese Class II';
+    else cat = 'Obese Class III (Morbid)';
+    return { bmiValue: b.toFixed(1), bmiCategory: cat };
+  })();
+
+  const bmiColor: 'blue' | 'emerald' | 'amber' | 'rose' = (() => {
+    if (!bmiValue) return 'blue';
+    const v = parseFloat(bmiValue);
+    if (v < 18.5) return 'blue';
+    if (v < 25) return 'emerald';
+    if (v < 30) return 'amber';
+    return 'rose';
   })();
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300 max-w-sm">
       <p className="text-xs text-slate-500 leading-relaxed">
-        Calculates Ideal Body Weight (Devine formula) and Adjusted Body Weight for obese patients.
+        Single input → three metrics. <span className="text-slate-300 font-semibold">IBW</span> (Devine),{' '}
+        <span className="text-slate-300 font-semibold">Adjusted BW</span> for obese patients, and{' '}
+        <span className="text-slate-300 font-semibold">BMI</span> with WHO classification.
       </p>
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -191,13 +217,18 @@ function AdjBWCalculator() {
         <input type="checkbox" checked={female} onChange={e => setFemale(e.target.checked)} className="w-4 h-4 rounded accent-emerald-500" />
         <span className="text-sm font-semibold text-slate-300">Female Patient</span>
       </label>
-      {ibwOnly && (
+
+      {ibwNum != null && (
         <div className="flex justify-between text-sm px-1">
-          <span className="text-slate-500">IBW</span>
-          <span className="text-slate-300 font-semibold">{ibwOnly} kg</span>
+          <span className="text-slate-500">IBW (Devine)</span>
+          <span className="text-slate-300 font-semibold">{ibwNum.toFixed(1)} kg</span>
         </div>
       )}
-      <ResultBadge label="Adjusted BW" value={result} unit="kg" color="emerald" />
+      <ResultBadge label="Adjusted BW" value={adjResult} unit="kg" color="emerald" />
+      <ResultBadge label="BMI" value={bmiValue} unit="kg/m²" color={bmiColor} />
+      {bmiCategory && bmiValue && (
+        <p className="text-xs text-slate-400 px-1 font-medium">{bmiCategory}</p>
+      )}
     </div>
   );
 }
@@ -281,68 +312,6 @@ function CorrectedCalciumCalculator() {
       <ResultBadge label="Corrected Ca" value={result} unit="mg/dL" color="rose" />
       {flag && result && (
         <p className={`text-xs font-semibold ${flag.color} px-1`}>{flag.text} (normal 8.5–10.5 mg/dL)</p>
-      )}
-    </div>
-  );
-}
-
-// ── BMI Calculator ─────────────────────────────────────────────────────────────
-function BMICalculator() {
-  const [ht, setHt] = useState('');
-  const [wt, setWt] = useState('');
-  const [htUnit, setHtUnit] = useState('cm');
-  const [wtUnit, setWtUnit] = useState('kg');
-
-  const { bmi, category } = (() => {
-    const htM = htUnit === 'cm' ? parseFloat(ht) / 100 : parseFloat(ht) * 0.0254;
-    const wtKg = wtUnit === 'lb' ? parseFloat(wt) / 2.20462 : parseFloat(wt);
-    if (htM > 0 && wtKg > 0) {
-      const b = wtKg / (htM * htM);
-      let cat = '';
-      if (b < 18.5) cat = 'Underweight';
-      else if (b < 25) cat = 'Normal weight';
-      else if (b < 30) cat = 'Overweight';
-      else if (b < 35) cat = 'Obese Class I';
-      else if (b < 40) cat = 'Obese Class II';
-      else cat = 'Obese Class III (Morbid)';
-      return { bmi: b.toFixed(1), category: cat };
-    }
-    return { bmi: null, category: null };
-  })();
-
-  const bmiColor = (() => {
-    if (!bmi) return 'blue';
-    const v = parseFloat(bmi);
-    if (v < 18.5) return 'blue';
-    if (v < 25) return 'emerald';
-    if (v < 30) return 'amber';
-    return 'rose';
-  })();
-
-  return (
-    <div className="space-y-4 animate-in fade-in duration-300 max-w-sm">
-      <p className="text-xs text-slate-500 leading-relaxed">
-        Body Mass Index — weight (kg) ÷ height² (m²).
-      </p>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Height</label>
-          <div className="relative">
-            <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '170' : '67'} className={`${inputCls} pr-12`} />
-            <UnitToggle unit={htUnit} onClick={() => setHtUnit(u => u === 'cm' ? 'in' : 'cm')} />
-          </div>
-        </div>
-        <div>
-          <label className={labelCls}>Weight</label>
-          <div className="relative">
-            <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '75' : '165'} className={`${inputCls} pr-12`} />
-            <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => u === 'kg' ? 'lb' : 'kg')} />
-          </div>
-        </div>
-      </div>
-      <ResultBadge label="BMI" value={bmi} unit="kg/m²" color={bmiColor} />
-      {category && bmi && (
-        <p className="text-xs text-slate-400 px-1 font-medium">{category}</p>
       )}
     </div>
   );
@@ -597,10 +566,9 @@ export function ClinicalCalculators() {
         {activeCalc === 'ivig'   && <IVIGRateCalculator />}
         {activeCalc === 'biolrate' && <InfusionRateCalculator />}
         {activeCalc === 'crcl'   && <CrClCalculator />}
-        {activeCalc === 'adjbw'  && <AdjBWCalculator />}
+        {activeCalc === 'bodywt' && <BodyMetricsCalculator />}
         {activeCalc === 'iron'   && <IronDeficitCalculator />}
         {activeCalc === 'calcium'&& <CorrectedCalciumCalculator />}
-        {activeCalc === 'bmi'    && <BMICalculator />}
       </div>
     </div>
   );

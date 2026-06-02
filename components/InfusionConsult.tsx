@@ -457,17 +457,17 @@ export function InfusionConsult({
                     grounded URLs. */}
                 <div className="consult-brief prose prose-sm prose-invert max-w-none
                                 prose-headings:font-semibold prose-headings:text-white
-                                prose-h2:text-[18px] prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2 prose-h2:border-b prose-h2:border-white/10 first:prose-h2:mt-0
-                                prose-h3:text-[15px] prose-h3:mt-7 prose-h3:mb-3 prose-h3:text-blue-300 prose-h3:tracking-wide first:prose-h3:mt-0
-                                prose-h4:text-[13px] prose-h4:mt-5 prose-h4:mb-2 prose-h4:text-slate-200 prose-h4:uppercase prose-h4:tracking-wider
-                                prose-p:my-3 prose-p:leading-7 prose-p:text-slate-300
-                                prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5 prose-li:leading-relaxed prose-li:text-slate-300
-                                prose-strong:text-white prose-strong:font-semibold
+                                prose-h2:text-[18px] prose-h2:mt-12 prose-h2:mb-5 prose-h2:pb-3 prose-h2:border-b prose-h2:border-white/10 first:prose-h2:mt-0
+                                prose-h3:text-[15px] prose-h3:mt-9 prose-h3:mb-3.5 prose-h3:text-blue-300 prose-h3:tracking-wide first:prose-h3:mt-2
+                                prose-h4:text-[13px] prose-h4:mt-6 prose-h4:mb-2.5 prose-h4:text-slate-200 prose-h4:uppercase prose-h4:tracking-wider
+                                prose-p:my-4 prose-p:leading-7 prose-p:text-slate-300
+                                prose-ul:my-4 prose-ol:my-4 prose-li:my-2 prose-li:leading-relaxed prose-li:text-slate-300
+                                prose-strong:font-semibold
                                 prose-em:text-slate-200
-                                prose-table:my-5 prose-table:text-[12px]
+                                prose-table:my-6 prose-table:text-[12px]
                                 prose-th:bg-white/5 prose-th:text-slate-200 prose-th:font-semibold prose-th:px-3 prose-th:py-2
                                 prose-td:px-3 prose-td:py-2 prose-td:border-white/10
-                                prose-hr:my-6 prose-hr:border-white/10
+                                prose-hr:my-8 prose-hr:border-white/10
                                 prose-blockquote:border-l-blue-500/40 prose-blockquote:bg-blue-500/5 prose-blockquote:py-1 prose-blockquote:not-italic">
                   <Markdown components={markdownComponents}>
                     {/* Layer order matters: citation links run first (they

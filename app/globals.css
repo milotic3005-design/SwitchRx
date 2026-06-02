@@ -13,18 +13,41 @@
   --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Glass/Glow Design System */
+  /* Glass/Glow Design System (dark defaults) */
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   --glass-blur: blur(24px);
+
+  /* ── Theme tokens (dark is the default) ───────────────────────── */
+  --bg-gradient: radial-gradient(ellipse at 50% -20%, #171126 0%, #0a0a0a 60%);
+  --text-base: #f0f0ff;
+  --panel-bg: rgba(15, 15, 20, 0.4);
+  --panel-border: rgba(255, 255, 255, 0.05);
+  --grain-opacity: 0.03;
+  /* Emphasis colour for **bold** text inside the AI consult brief */
+  --brief-strong: #6ee7b7; /* emerald-300 — high contrast on dark */
+}
+
+/* ── Light theme overrides ──────────────────────────────────────── */
+html.light {
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+
+  --bg-gradient: radial-gradient(ellipse at 50% -20%, #eef2ff 0%, #f6f8fc 55%);
+  --text-base: #1e293b;
+  --panel-bg: rgba(255, 255, 255, 0.78);
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --grain-opacity: 0.015;
+  --brief-strong: #047857; /* emerald-700 — high contrast on light */
 }
 
 body {
-  /* Dark Premium SaaS World + Deep Blue/Purple Gradient */
-  background: radial-gradient(ellipse at 50% -20%, #171126 0%, #0a0a0a 60%);
+  background: var(--bg-gradient);
   background-attachment: fixed;
-  color: #f0f0ff;
+  color: var(--text-base);
+  transition: background 0.4s var(--ease-smooth), color 0.4s var(--ease-smooth);
 }
 
 /* Textures & Grain */
@@ -32,7 +55,7 @@ body::after {
   content: '';
   position: fixed; inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
-  opacity: 0.03;
+  opacity: var(--grain-opacity);
   mix-blend-mode: overlay;
   pointer-events: none;
   z-index: 9999;
@@ -62,8 +85,8 @@ body::after {
 }
 
 .glass-panel {
-  background: rgba(15, 15, 20, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   backdrop-filter: blur(16px);
   border-radius: 16px;
 }
@@ -93,3 +116,65 @@ h1, h2, h3, h4, h5, h6 {
 .font-accent {
   font-family: var(--font-accent);
 }
+
+/* ── AI brief bold-emphasis colour ──────────────────────────────────
+   The model wraps key clinical values (doses, drugs, thresholds) in
+   **bold**. Render those in an accent colour for contrast instead of
+   plain white/slate, in both the Infusion Copilot brief and the IDSA
+   advisor output. Token flips automatically between themes. */
+.consult-brief strong,
+.idsa-brief strong {
+  color: var(--brief-strong);
+  font-weight: 600;
+}
+
+/* ── Light-theme retrofit ───────────────────────────────────────────
+   The UI is authored with dark-only utility classes (text-white,
+   text-slate-*, bg-white/*, border-white/*). Rather than rewrite every
+   component with dark: variants, remap the high-traffic utilities when
+   html.light is active. `html.light .x` (specificity 0,2,1) outranks the
+   bare utility (0,1,0), so no !important is needed. */
+html.light .text-white { color: #0f172a; }
+html.light .text-slate-100,
+html.light .text-slate-200 { color: #1e293b; }
+html.light .text-slate-300 { color: #334155; }
+html.light .text-slate-400 { color: #475569; }
+html.light .text-slate-500 { color: #64748b; }
+html.light .text-slate-600 { color: #94a3b8; }
+
+/* Accent text — darken for legible contrast on light surfaces */
+html.light .text-blue-200\/80,
+html.light .text-blue-300,
+html.light .text-blue-400 { color: #2563eb; }
+html.light .text-emerald-200\/80,
+html.light .text-emerald-300,
+html.light .text-emerald-400 { color: #059669; }
+
+/* Surfaces */
+html.light .bg-white\/5 { background-color: rgba(15, 23, 42, 0.04); }
+html.light .bg-white\/10 { background-color: rgba(15, 23, 42, 0.06); }
+html.light .bg-white\/\[0\.02\] { background-color: rgba(15, 23, 42, 0.025); }
+html.light .bg-black\/20 { background-color: rgba(15, 23, 42, 0.03); }
+html.light .bg-black\/40 { background-color: rgba(15, 23, 42, 0.05); }
+html.light .bg-\[\#0a0a0a\] { background-color: #f8fafc; }
+
+/* Hardcoded near-black surfaces used by selects, dropdown options, cards, and
+   inset panels. Remap them to light surfaces so they don't render as black
+   blocks in light mode. Text colour is handled by the .text-* remaps above. */
+html.light .bg-\[\#121212\],
+html.light .bg-\[\#0f0f10\] { background-color: #ffffff; color: #1e293b; }
+html.light .bg-\[\#161616\] { background-color: #f1f5f9; }
+html.light .bg-\[\#1a1a1a\] { background-color: #eef2f7; }
+html.light .bg-\[\#1e1e1e\] { background-color: #e9eef5; }
+html.light .bg-\[\#2a2a2a\] { background-color: #e2e8f0; }
+/* Hover states on the select control */
+html.light .hover\:bg-\[\#1e1e1e\]:hover { background-color: #e2e8f0; }
+html.light .hover\:bg-\[\#2a2a2a\]:hover { background-color: #dbe2ea; }
+
+/* Borders */
+html.light .border-white\/5 { border-color: rgba(15, 23, 42, 0.06); }
+html.light .border-white\/10 { border-color: rgba(15, 23, 42, 0.1); }
+
+/* The white "user message" bubble in chat needs an inverted treatment so
+   it stays distinct from the now-light panel background. */
+html.light .bg-white.text-black { background-color: #1e293b; color: #f8fafc; }
