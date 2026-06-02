@@ -174,6 +174,57 @@ function injectDrugLinks(text: string, matcher: DrugMatcher): string {
     .join('');
 }
 
+// ── Markdown repair (run before react-markdown) ────────────────────
+// The model sometimes emits:
+//   • Bare section LABELS ("Recommended Regimen", "Monitoring Parameters",
+//     "Baseline & Ongoing Monitoring:") as plain lines instead of "###" headings
+//     — so they render flush against the surrounding paragraphs with no break.
+//   • Bold lead-in items ("**Induction:**", "**Maintenance:**", ...) on
+//     consecutive lines without a blank line between them — markdown
+//     collapses them into one paragraph joined by <br>, so the prose
+//     paragraph margins (my-5) never get applied between them.
+//
+// Repair both before render so the brief reads with proper section rhythm.
+function repairBriefMarkdown(raw: string): string {
+  let out = raw;
+
+  // 1) Promote bare Title-Case section labels (≤7 words, optionally with a
+  //    trailing colon) to ### headings. Stays conservative: skips lines that
+  //    already start with #, *, -, |, a digit, or look like a sentence (too
+  //    many words / mid-line periods).
+  out = out.replace(
+    /^(?!#|\*|-|\||>|\d+\.)([A-Z][A-Za-z0-9 &/()\-]{1,60})(:?)\s*$/gm,
+    (line, label: string) => {
+      const trimmed = label.trim();
+      const words = trimmed.split(/\s+/);
+      if (words.length > 7) return line;          // too long for a label
+      if (/[a-z][.!?]/.test(trimmed)) return line; // looks like a sentence
+      // Must contain at least one Title-Cased multi-letter word beyond the
+      // first to avoid promoting random short fragments.
+      const titleish = words.filter(w => /^[A-Z][a-z]/.test(w)).length;
+      if (titleish < 1) return line;
+      return `### ${trimmed}`;
+    },
+  );
+
+  // 2) Insert a blank line between two adjacent bold-lead paragraphs so each
+  //    becomes its own <p>. Pattern: a line that starts with **...** followed
+  //    by EXACTLY one newline followed by another line starting with **...**.
+  //    Re-run until no more matches because each replacement only consumes one
+  //    boundary at a time.
+  const boldLeadJoin = /^(\*\*[^*\n]+\*\*[^\n]*)\n(\*\*[^*\n]+\*\*)/gm;
+  let prev = '';
+  while (prev !== out) {
+    prev = out;
+    out = out.replace(boldLeadJoin, '$1\n\n$2');
+  }
+
+  // 3) Ensure a blank line BEFORE any heading that isn't already preceded by one.
+  out = out.replace(/([^\n])\n(#{1,6} )/g, '$1\n\n$2');
+
+  return out;
+}
+
 function shortDomain(uri: string): string {
   try {
     return new URL(uri).hostname.replace(/^www\./, '');
@@ -458,10 +509,10 @@ export function InfusionConsult({
                 <div className="consult-brief prose prose-sm prose-invert max-w-none
                                 prose-headings:font-semibold prose-headings:text-white
                                 prose-h2:text-[18px] prose-h2:mt-12 prose-h2:mb-5 prose-h2:pb-3 prose-h2:border-b prose-h2:border-white/10 first:prose-h2:mt-0
-                                prose-h3:text-[15px] prose-h3:mt-9 prose-h3:mb-3.5 prose-h3:text-blue-300 prose-h3:tracking-wide first:prose-h3:mt-2
+                                prose-h3:text-[15px] prose-h3:mt-10 prose-h3:mb-4 prose-h3:text-blue-300 prose-h3:tracking-wide first:prose-h3:mt-2
                                 prose-h4:text-[13px] prose-h4:mt-6 prose-h4:mb-2.5 prose-h4:text-slate-200 prose-h4:uppercase prose-h4:tracking-wider
-                                prose-p:my-4 prose-p:leading-7 prose-p:text-slate-300
-                                prose-ul:my-4 prose-ol:my-4 prose-li:my-2 prose-li:leading-relaxed prose-li:text-slate-300
+                                prose-p:my-5 prose-p:leading-7 prose-p:text-slate-300
+                                prose-ul:my-5 prose-ol:my-5 prose-li:my-2.5 prose-li:leading-relaxed prose-li:text-slate-300
                                 prose-strong:font-semibold
                                 prose-em:text-slate-200
                                 prose-table:my-6 prose-table:text-[12px]
@@ -470,11 +521,15 @@ export function InfusionConsult({
                                 prose-hr:my-8 prose-hr:border-white/10
                                 prose-blockquote:border-l-blue-500/40 prose-blockquote:bg-blue-500/5 prose-blockquote:py-1 prose-blockquote:not-italic">
                   <Markdown components={markdownComponents}>
-                    {/* Layer order matters: citation links run first (they
-                        consume "[N]" markers), then drug-name detection
-                        wraps Generic/Brand names in `#drug:<key>` chips
-                        that switch tabs to Drug Reference on click. */}
-                    {injectDrugLinks(injectCitationLinks(brief, sources), drugMatcher)}
+                    {/* Layer order matters:
+                          1) repair markdown formatting (promote bare section
+                             labels to ### headings, force blank lines between
+                             bold-lead paragraphs so each gets its own <p>),
+                          2) citation links consume [N] markers,
+                          3) drug-name detection wraps Generic/Brand names in
+                             `#drug:<key>` chips that switch tabs to Drug
+                             Reference on click. */}
+                    {injectDrugLinks(injectCitationLinks(repairBriefMarkdown(brief), sources), drugMatcher)}
                   </Markdown>
                 </div>
                 {sources.length > 0 && (
