@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Calculator, SlidersHorizontal, ListChecks, ChevronDown } from 'lucide-react';
+import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle } from 'lucide-react';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
@@ -31,6 +31,7 @@ const CALCULATORS = [
   { id: 'cadd',    label: 'CADD Bag Calculator' },
   { id: 'ivig',   label: 'IVIG Infusion Rate' },
   { id: 'biolrate', label: 'Biologic Rate Titration' },
+  { id: 'vanco',  label: 'Vancomycin AUC Dosing' },
   { id: 'crcl',   label: 'CrCl (Cockcroft-Gault)' },
   // Combined: BMI + Ideal/Adjusted Body Weight all from one set of inputs.
   { id: 'bodywt', label: 'Body Weight & BMI' },
@@ -77,6 +78,412 @@ function UnitToggle({ unit, onClick }: { unit: string; onClick: () => void }) {
     >
       {unit}
     </button>
+  );
+}
+
+// ── Vancomycin AUC-guided Dosing ────────────────────────────────────────────────
+// Implements the 2020 ASHP/IDSA/PIDS/SIDP consensus methodology: AUC24/MIC
+// target of 400–600 mg·h/L (assuming MIC = 1 mg/L by broth microdilution).
+// Two workflows:
+//   • Empiric — population PK (Cockcroft-Gault CrCl → Matzke kel → CL/Vd) used
+//     to recommend a maintenance dose/interval and project AUC24, Cmax, Cmin.
+//   • Bayesian-style two-level — first-order kinetics from a measured peak +
+//     trough to compute the patient-specific AUC24, then recommend a dose
+//     adjustment to land mid-target.
+//
+// NOTE: This is a decision-support estimate, not a substitute for a validated
+// Bayesian platform or a clinical pharmacist's judgment. Population estimates
+// assume reasonably stable renal function.
+
+const VANCO_AUC_LOW = 400;
+const VANCO_AUC_HIGH = 600;
+const VANCO_AUC_MID = 500;
+
+// Devine IBW (kg). Below 5 ft, floor at base value.
+function vancoIBW(heightIn: number, female: boolean): number {
+  const base = female ? 45.5 : 50;
+  return base + Math.max(0, 2.3 * (heightIn - 60));
+}
+
+// Dosing weight: actual body weight, but use AdjBW when ABW > 1.2 × IBW
+// (obesity), a common vancomycin convention. Returns kg.
+function vancoDosingWeight(actualKg: number, ibwKg: number): { weight: number; basis: string } {
+  if (ibwKg > 0 && actualKg > 1.2 * ibwKg) {
+    const adj = ibwKg + 0.4 * (actualKg - ibwKg);
+    return { weight: adj, basis: 'Adjusted BW (obese)' };
+  }
+  return { weight: actualKg, basis: 'Actual BW' };
+}
+
+function VancomycinAUCCalculator() {
+  const [mode, setMode] = useState<'empiric' | 'levels'>('empiric');
+
+  // ── Shared demographics ──
+  const [age, setAge] = useState('');
+  const [scr, setScr] = useState('');
+  const [female, setFemale] = useState(false);
+  const [ht, setHt] = useState('');
+  const [htUnit, setHtUnit] = useState('cm');
+  const [wt, setWt] = useState('');
+  const [wtUnit, setWtUnit] = useState('kg');
+
+  const htIn = htUnit === 'cm' ? parseFloat(ht) / 2.54 : parseFloat(ht);
+  const actualKg = wtUnit === 'lb' ? parseFloat(wt) / 2.20462 : parseFloat(wt);
+  const ageN = parseFloat(age);
+  const scrN = parseFloat(scr);
+
+  // ── Empiric PK engine ──
+  const empiric = (() => {
+    if (!(ageN > 0 && actualKg > 0 && scrN > 0 && htIn > 0)) return null;
+
+    const ibw = vancoIBW(htIn, female);
+    // Cockcroft-Gault using the lower of actual/IBW is common; we use IBW unless
+    // underweight (actual < IBW), matching typical vanco practice.
+    const cgWeight = actualKg < ibw ? actualKg : ibw;
+    let crcl = ((140 - ageN) * cgWeight) / (72 * scrN);
+    if (female) crcl *= 0.85;
+
+    // Matzke population kinetics:
+    //   kel (h^-1) = 0.00083 × CrCl(mL/min) + 0.0044
+    //   Vd (L) = 0.7 L/kg × dosing weight
+    const { weight: dosingWt, basis } = vancoDosingWeight(actualKg, ibw);
+    const kel = 0.00083 * crcl + 0.0044;
+    const vd = 0.7 * dosingWt;
+    const halfLife = 0.693 / kel;
+    // Clearance (L/h) = kel × Vd
+    const cl = kel * vd;
+
+    // Target AUC24 mid = 500 → total daily dose = AUC24 × CL
+    const targetDailyDose = VANCO_AUC_MID * cl; // mg/day
+
+    // Pick a practical interval from half-life, then round dose to 250 mg.
+    const intervalOptions = [8, 12, 24, 36, 48];
+    // Heuristic: interval ≈ closest practical to ~ (1.4 × t½) but capped.
+    let interval = 12;
+    if (halfLife > 22) interval = 48;
+    else if (halfLife > 15) interval = 36;
+    else if (halfLife > 9) interval = 24;
+    else if (halfLife > 5) interval = 12;
+    else interval = 8;
+    // keep within options
+    if (!intervalOptions.includes(interval)) interval = 12;
+
+    const dosesPerDay = 24 / interval;
+    const rawDose = targetDailyDose / dosesPerDay;
+    const roundedDose = Math.round(rawDose / 250) * 250;
+    const actualDailyDose = roundedDose * dosesPerDay;
+
+    // Project AUC24 / Cmax / Cmin for the rounded regimen (1-compartment,
+    // 1-hour infusion steady-state).
+    const tInf = 1; // h
+    const projAUC = actualDailyDose / cl;
+    // Steady-state infusion model peak (end of infusion) & trough:
+    //   Cmax = (Dose/tInf) / (CL) × (1 - e^-k·tInf) / (1 - e^-k·τ)
+    const term = (roundedDose / tInf) / cl;
+    const cmax = term * ((1 - Math.exp(-kel * tInf)) / (1 - Math.exp(-kel * interval)));
+    const cmin = cmax * Math.exp(-kel * (interval - tInf));
+
+    // Loading dose 25 mg/kg actual (cap 3000 mg), per guideline for serious infx.
+    const loading = Math.min(3000, Math.round((25 * actualKg) / 250) * 250);
+
+    const inRange = projAUC >= VANCO_AUC_LOW && projAUC <= VANCO_AUC_HIGH;
+
+    return {
+      crcl, ibw, dosingWt, basis, kel, vd, halfLife, cl,
+      interval, roundedDose, actualDailyDose, projAUC, cmax, cmin, loading, inRange,
+    };
+  })();
+
+  // ── Two-level (measured) engine ──
+  const [doseGiven, setDoseGiven] = useState('');
+  const [interval2, setInterval2] = useState('12');
+  const [peak, setPeak] = useState('');
+  const [peakTime, setPeakTime] = useState('');   // h after END of infusion
+  const [trough, setTrough] = useState('');
+  const [troughTime, setTroughTime] = useState(''); // h after END of infusion
+  const [infDur, setInfDur] = useState('1');
+
+  const levels = (() => {
+    const cP = parseFloat(peak);
+    const cT = parseFloat(trough);
+    const tP = parseFloat(peakTime);
+    const tT = parseFloat(troughTime);
+    const dose = parseFloat(doseGiven);
+    const tau = parseFloat(interval2);
+    const tInf = parseFloat(infDur);
+    if (!(cP > 0 && cT > 0 && cP > cT && tT > tP && dose > 0 && tau > 0 && tInf > 0)) return null;
+
+    // Elimination rate constant from the two measured levels.
+    const kel = Math.log(cP / cT) / (tT - tP);
+    const halfLife = 0.693 / kel;
+
+    // Extrapolate to true Cmax (end of infusion, t=0) and Cmin (end of τ).
+    const cmaxExtrap = cP / Math.exp(-kel * tP);
+    const cminExtrap = cmaxExtrap * Math.exp(-kel * (tau - tInf));
+
+    // AUC over one interval via the trapezoidal method on the 1-compartment
+    // model (guideline analytic approach):
+    //   AUC_infusion (during infusion, linear-up) ≈ (Cmax + C0)/2 × tInf, with
+    //     C0 ≈ Cmin of prior interval (≈ cminExtrap at steady state)
+    //   AUC_elimination = (Cmax − Cmin)/kel
+    const aucInf = ((cmaxExtrap + cminExtrap) / 2) * tInf;
+    const aucElim = (cmaxExtrap - cminExtrap) / kel;
+    const aucTau = aucInf + aucElim;
+    const auc24 = aucTau * (24 / tau);
+
+    // Patient-specific clearance from AUC: CL = Dose(per interval) / AUC_tau
+    const cl = dose / aucTau;
+
+    // Recommend dose to hit AUC mid (500) at the same interval.
+    const targetDaily = VANCO_AUC_MID * cl;
+    const dosesPerDay = 24 / tau;
+    const newDoseRaw = targetDaily / dosesPerDay;
+    const newDose = Math.round(newDoseRaw / 250) * 250;
+
+    const inRange = auc24 >= VANCO_AUC_LOW && auc24 <= VANCO_AUC_HIGH;
+
+    return { kel, halfLife, cmaxExtrap, cminExtrap, auc24, cl, newDose, tau, inRange };
+  })();
+
+  const aucColor = (auc: number) =>
+    auc < VANCO_AUC_LOW ? 'amber' : auc > VANCO_AUC_HIGH ? 'rose' : 'emerald';
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300 max-w-2xl">
+      <div className="flex items-start gap-3 bg-violet-500/10 border border-violet-500/20 rounded-xl p-3.5">
+        <Activity className="text-violet-400 shrink-0 mt-0.5" size={15} strokeWidth={2} />
+        <p className="text-xs text-slate-300 leading-relaxed">
+          <span className="font-semibold text-violet-300">AUC-guided vancomycin dosing</span> per the
+          2020 ASHP/IDSA/PIDS/SIDP consensus guideline. Target{' '}
+          <span className="font-semibold text-white">AUC₂₄/MIC 400–600</span> (MIC assumed 1 mg/L).
+          Choose <span className="font-semibold">Empiric</span> for first-dose population PK, or{' '}
+          <span className="font-semibold">From Levels</span> to compute a measured AUC and dose adjustment.
+        </p>
+      </div>
+
+      {/* Mode toggle */}
+      <div className="flex gap-2">
+        {([['empiric', 'Empiric (first dose)'], ['levels', 'From Levels (measured)']] as const).map(
+          ([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setMode(id)}
+              className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
+                mode === id
+                  ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+              }`}
+            >
+              {label}
+            </button>
+          ),
+        )}
+      </div>
+
+      {mode === 'empiric' ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Age (yrs)</label>
+              <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="65" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>SCr (mg/dL)</label>
+              <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="1.0" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Height</label>
+              <div className="relative">
+                <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '175' : '69'} className={`${inputCls} pr-12`} />
+                <UnitToggle unit={htUnit} onClick={() => setHtUnit(u => (u === 'cm' ? 'in' : 'cm'))} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Weight</label>
+              <div className="relative">
+                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '80' : '176'} className={`${inputCls} pr-12`} />
+                <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => (u === 'kg' ? 'lb' : 'kg'))} />
+              </div>
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors">
+                <input type="checkbox" checked={female} onChange={e => setFemale(e.target.checked)} className="w-4 h-4 rounded accent-violet-500" />
+                <span className="text-sm font-semibold text-slate-300">Female</span>
+              </label>
+            </div>
+          </div>
+
+          {empiric ? (
+            <div className="space-y-4">
+              {/* Headline recommendation */}
+              <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+                  Recommended Maintenance Regimen
+                </div>
+                <div className="text-2xl font-bold text-white">
+                  {empiric.roundedDose} mg <span className="text-base font-medium text-slate-300">IV q{empiric.interval}h</span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  ≈ {empiric.actualDailyDose} mg/day · Loading dose{' '}
+                  <span className="font-semibold text-slate-200">{empiric.loading} mg</span> (25 mg/kg) for serious infection
+                </div>
+              </div>
+
+              {/* Projected exposure */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className={`p-3 rounded-xl border text-center ${
+                  empiric.inRange ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-amber-500/10 border-amber-500/25'
+                }`}>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Proj. AUC₂₄</div>
+                  <div className={`text-lg font-bold ${empiric.inRange ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {empiric.projAUC.toFixed(0)}
+                  </div>
+                  <div className="text-[10px] text-slate-500">mg·h/L</div>
+                </div>
+                <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Est. Peak</div>
+                  <div className="text-lg font-bold text-slate-200">{empiric.cmax.toFixed(1)}</div>
+                  <div className="text-[10px] text-slate-500">mg/L</div>
+                </div>
+                <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Est. Trough</div>
+                  <div className="text-lg font-bold text-slate-200">{empiric.cmin.toFixed(1)}</div>
+                  <div className="text-[10px] text-slate-500">mg/L</div>
+                </div>
+              </div>
+
+              {/* PK params */}
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Patient PK Parameters</div>
+                {[
+                  ['Est. CrCl (Cockcroft-Gault)', `${empiric.crcl.toFixed(1)} mL/min`],
+                  ['Ideal body weight', `${empiric.ibw.toFixed(1)} kg`],
+                  ['Dosing weight', `${empiric.dosingWt.toFixed(1)} kg (${empiric.basis})`],
+                  ['Elimination rate (kₑ)', `${empiric.kel.toFixed(4)} h⁻¹`],
+                  ['Half-life (t½)', `${empiric.halfLife.toFixed(1)} h`],
+                  ['Volume of distribution', `${empiric.vd.toFixed(1)} L`],
+                  ['Clearance', `${empiric.cl.toFixed(2)} L/h`],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-slate-500">{k}</span>
+                    <span className="text-slate-300 font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+              </div>
+              {!empiric.inRange && (
+                <div className="flex items-start gap-2 text-xs text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  <span>
+                    Projected AUC₂₄ is {empiric.projAUC < VANCO_AUC_LOW ? 'below' : 'above'} the 400–600 target with
+                    the nearest practical 250 mg-rounded dose. Consider the adjacent interval or verify with measured levels.
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <ResultBadge label="Recommended Dose" value={null} unit="" color="violet" />
+          )}
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Dose given (mg)</label>
+              <input type="number" value={doseGiven} onChange={e => setDoseGiven(e.target.value)} placeholder="1000" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Interval τ (h)</label>
+              <input type="number" value={interval2} onChange={e => setInterval2(e.target.value)} placeholder="12" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Infusion (h)</label>
+              <input type="number" step="0.5" value={infDur} onChange={e => setInfDur(e.target.value)} placeholder="1" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Peak (mg/L)</label>
+              <input type="number" step="0.1" value={peak} onChange={e => setPeak(e.target.value)} placeholder="25" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Peak time (h post-inf)</label>
+              <input type="number" step="0.1" value={peakTime} onChange={e => setPeakTime(e.target.value)} placeholder="1" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Trough (mg/L)</label>
+              <input type="number" step="0.1" value={trough} onChange={e => setTrough(e.target.value)} placeholder="10" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Trough time (h post-inf)</label>
+              <input type="number" step="0.1" value={troughTime} onChange={e => setTroughTime(e.target.value)} placeholder="11" className={inputCls} />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Enter two steady-state levels with their draw times measured from the END of the infusion.
+            Peak is typically drawn 1–2 h post-infusion; trough just before the next dose.
+          </p>
+
+          {levels ? (
+            <div className="space-y-4">
+              <div className={`p-4 rounded-xl border ${
+                levels.inRange ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
+              }`}>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Measured AUC₂₄
+                </div>
+                <div className={`text-3xl font-bold ${
+                  levels.inRange ? 'text-emerald-400' : levels.auc24 < VANCO_AUC_LOW ? 'text-amber-400' : 'text-rose-400'
+                }`}>
+                  {levels.auc24.toFixed(0)} <span className="text-base font-medium text-slate-400">mg·h/L</span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {levels.inRange
+                    ? 'Within target (400–600) — continue current regimen and monitor.'
+                    : levels.auc24 < VANCO_AUC_LOW
+                      ? 'Below target — underexposed; increase dose.'
+                      : 'Above target — risk of nephrotoxicity; decrease dose.'}
+                </div>
+              </div>
+
+              {!levels.inRange && (
+                <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+                    Suggested Adjustment (same interval)
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {levels.newDose} mg <span className="text-base font-medium text-slate-300">IV q{levels.tau}h</span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">Targets AUC₂₄ ≈ 500 mg·h/L using the patient's measured clearance.</div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Derived Kinetics</div>
+                {[
+                  ['Elimination rate (kₑ)', `${levels.kel.toFixed(4)} h⁻¹`],
+                  ['Half-life (t½)', `${levels.halfLife.toFixed(1)} h`],
+                  ['Extrapolated Cmax', `${levels.cmaxExtrap.toFixed(1)} mg/L`],
+                  ['Extrapolated Cmin', `${levels.cminExtrap.toFixed(1)} mg/L`],
+                  ['Clearance', `${levels.cl.toFixed(2)} L/h`],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-slate-500">{k}</span>
+                    <span className="text-slate-300 font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <ResultBadge label="Measured AUC₂₄" value={null} unit="" color="violet" />
+          )}
+        </>
+      )}
+
+      <p className="text-[10px] text-slate-600 leading-relaxed border-t border-white/5 pt-3">
+        Decision-support estimate only. Population PK assumes stable renal function; verify with measured
+        levels for critically ill, unstable-renal, or obese patients. Not a substitute for a validated
+        Bayesian platform or clinical pharmacist review.
+      </p>
+    </div>
   );
 }
 
@@ -565,6 +972,7 @@ export function ClinicalCalculators() {
         {activeCalc === 'cadd'    && <CADDCalculator />}
         {activeCalc === 'ivig'   && <IVIGRateCalculator />}
         {activeCalc === 'biolrate' && <InfusionRateCalculator />}
+        {activeCalc === 'vanco'  && <VancomycinAUCCalculator />}
         {activeCalc === 'crcl'   && <CrClCalculator />}
         {activeCalc === 'bodywt' && <BodyMetricsCalculator />}
         {activeCalc === 'iron'   && <IronDeficitCalculator />}
