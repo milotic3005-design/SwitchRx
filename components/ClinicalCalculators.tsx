@@ -115,8 +115,76 @@ function vancoDosingWeight(actualKg: number, ibwKg: number): { weight: number; b
   return { weight: actualKg, basis: 'Actual BW' };
 }
 
+// ── Bayesian (MAP) priors ──
+// Lognormal between-subject variability and proportional residual error.
+// Values are typical literature ranges for 1-compartment vancomycin popPK.
+const VANCO_OMEGA_CL = 0.30; // ~30% CV on clearance
+const VANCO_OMEGA_V = 0.25;  // ~25% CV on volume
+const VANCO_SIGMA = 0.15;    // 15% proportional assay/model residual error
+
+type VancoLevel = { conc: number; time: number }; // time = h AFTER end of infusion
+
+// Steady-state one-compartment concentration for an intermittent infusion.
+// Cmax_ss = (R0/CL)·(1−e^−k·tInf)/(1−e^−k·τ); then decays over tAfterInfEnd.
+function vancoSSConc(
+  cl: number, v: number, dose: number, tau: number, tInf: number, tAfterInfEnd: number,
+): number {
+  const k = cl / v;
+  const r0 = dose / tInf;
+  const cmax = (r0 / cl) * ((1 - Math.exp(-k * tInf)) / (1 - Math.exp(-k * tau)));
+  return cmax * Math.exp(-k * tAfterInfEnd);
+}
+
+// Maximum a posteriori (MAP) Bayesian estimate of individual CL and V given a
+// population prior and 1+ measured levels. Minimises the standard objective:
+//   OFV = Σ[(Cobs−Cpred)/(σ·Cpred)]² + (ηCL/ωCL)² + (ηV/ωV)²
+// where η are lognormal deviations from the population means. Solved with a
+// deterministic coarse-to-fine grid search (no convergence pitfalls in-browser).
+// With a single level the data under-determine the 2 params, so the prior
+// supplies what the level can't — exactly why single-trough AUC monitoring works.
+function vancoMAP(opts: {
+  clPop: number; vPop: number; dose: number; tau: number; tInf: number; levels: VancoLevel[];
+}): { cl: number; v: number; k: number; halfLife: number } | null {
+  const { clPop, vPop, dose, tau, tInf, levels } = opts;
+  if (!(clPop > 0 && vPop > 0 && dose > 0 && tau > 0 && tInf > 0) || levels.length === 0) return null;
+
+  const ofv = (etaCL: number, etaV: number): number => {
+    const cl = clPop * Math.exp(etaCL);
+    const v = vPop * Math.exp(etaV);
+    let resid = 0;
+    for (const lv of levels) {
+      const cpred = vancoSSConc(cl, v, dose, tau, tInf, lv.time);
+      if (cpred < 1e-6) return Number.POSITIVE_INFINITY;
+      const w = (lv.conc - cpred) / (VANCO_SIGMA * cpred);
+      resid += w * w;
+    }
+    return resid + (etaCL / VANCO_OMEGA_CL) ** 2 + (etaV / VANCO_OMEGA_V) ** 2;
+  };
+
+  let best = { a: 0, b: 0, f: ofv(0, 0) };
+  // Coarse pass: ±1.2 (~±4 SD) on each η.
+  for (let a = -1.2; a <= 1.2001; a += 0.06) {
+    for (let b = -1.2; b <= 1.2001; b += 0.06) {
+      const f = ofv(a, b);
+      if (f < best.f) best = { a, b, f };
+    }
+  }
+  // Fine pass around the coarse optimum.
+  const a0 = best.a, b0 = best.b;
+  for (let a = a0 - 0.06; a <= a0 + 0.0601; a += 0.004) {
+    for (let b = b0 - 0.06; b <= b0 + 0.0601; b += 0.004) {
+      const f = ofv(a, b);
+      if (f < best.f) best = { a, b, f };
+    }
+  }
+  const cl = clPop * Math.exp(best.a);
+  const v = vPop * Math.exp(best.b);
+  const k = cl / v;
+  return { cl, v, k, halfLife: 0.693 / k };
+}
+
 function VancomycinAUCCalculator() {
-  const [mode, setMode] = useState<'empiric' | 'levels'>('empiric');
+  const [mode, setMode] = useState<'empiric' | 'levels' | 'bayesian'>('empiric');
 
   // ── Shared demographics ──
   const [age, setAge] = useState('');
@@ -245,6 +313,70 @@ function VancomycinAUCCalculator() {
     return { kel, halfLife, cmaxExtrap, cminExtrap, auc24, cl, newDose, tau, inRange };
   })();
 
+  // ── Bayesian (MAP) engine ──
+  // Reuses the shared demographics (age/scr/sex/ht/wt) to build the population
+  // prior, then fits CL & V to 1–2 measured levels. Supports a single trough,
+  // which is the headline capability of commercial Bayesian dosing tools.
+  const [bDose, setBDose] = useState('');
+  const [bTau, setBTau] = useState('12');
+  const [bInf, setBInf] = useState('1');
+  const [bUseTwo, setBUseTwo] = useState(false);
+  const [bConc1, setBConc1] = useState('');
+  const [bTime1, setBTime1] = useState('');   // h after END of infusion
+  const [bConc2, setBConc2] = useState('');
+  const [bTime2, setBTime2] = useState('');
+
+  const bayesian = (() => {
+    const dose = parseFloat(bDose);
+    const tau = parseFloat(bTau);
+    const tInf = parseFloat(bInf);
+    if (!(ageN > 0 && actualKg > 0 && scrN > 0 && htIn > 0)) return { kind: 'needDemo' } as const;
+    if (!(dose > 0 && tau > 0 && tInf > 0)) return { kind: 'incomplete' } as const;
+
+    // Build population prior from the same equations the Empiric tab uses.
+    const ibw = vancoIBW(htIn, female);
+    const cgWeight = actualKg < ibw ? actualKg : ibw;
+    let crcl = ((140 - ageN) * cgWeight) / (72 * scrN);
+    if (female) crcl *= 0.85;
+    const { weight: dosingWt } = vancoDosingWeight(actualKg, ibw);
+    const kPop = 0.00083 * crcl + 0.0044;
+    const vPop = 0.7 * dosingWt;
+    const clPop = kPop * vPop;
+
+    // Assemble measured levels.
+    const levels: VancoLevel[] = [];
+    const c1 = parseFloat(bConc1), t1 = parseFloat(bTime1);
+    if (c1 > 0 && t1 >= 0) levels.push({ conc: c1, time: t1 });
+    if (bUseTwo) {
+      const c2 = parseFloat(bConc2), t2 = parseFloat(bTime2);
+      if (c2 > 0 && t2 >= 0) levels.push({ conc: c2, time: t2 });
+    }
+    if (levels.length === 0) return { kind: 'incomplete' } as const;
+
+    const fit = vancoMAP({ clPop, vPop, dose, tau, tInf, levels });
+    if (!fit) return { kind: 'incomplete' } as const;
+
+    // AUC24 from the Bayesian-fit clearance: AUC_tau = dose/CL, scaled to 24 h.
+    const auc24 = (dose / fit.cl) * (24 / tau);
+    const cmax = vancoSSConc(fit.cl, fit.v, dose, tau, tInf, 0);
+    const cmin = vancoSSConc(fit.cl, fit.v, dose, tau, tInf, tau - tInf);
+
+    // Dose to hit AUC mid (500) at the same interval.
+    const targetDaily = VANCO_AUC_MID * fit.cl;
+    const newDose = Math.round(targetDaily / (24 / tau) / 250) * 250;
+    const inRange = auc24 >= VANCO_AUC_LOW && auc24 <= VANCO_AUC_HIGH;
+
+    // Shrinkage indicator: how far the fit moved from the prior (informativeness
+    // of the data). Small move = prior-dominated (typical for a single level).
+    const clShift = ((fit.cl - clPop) / clPop) * 100;
+
+    return {
+      kind: 'result' as const,
+      clPop, vPop, crcl, fit, auc24, cmax, cmin, newDose, inRange, clShift,
+      nLevels: levels.length,
+    };
+  })();
+
   const aucColor = (auc: number) =>
     auc < VANCO_AUC_LOW ? 'amber' : auc > VANCO_AUC_HIGH ? 'rose' : 'emerald';
 
@@ -263,22 +395,24 @@ function VancomycinAUCCalculator() {
 
       {/* Mode toggle */}
       <div className="flex gap-2">
-        {([['empiric', 'Empiric (first dose)'], ['levels', 'From Levels (measured)']] as const).map(
-          ([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setMode(id)}
-              className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
-                mode === id
-                  ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
-                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-              }`}
-            >
-              {label}
-            </button>
-          ),
-        )}
+        {([
+          ['empiric', 'Empiric'],
+          ['levels', 'From Levels'],
+          ['bayesian', 'Bayesian (MAP)'],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMode(id)}
+            className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
+              mode === id
+                ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {mode === 'empiric' ? (
@@ -385,7 +519,7 @@ function VancomycinAUCCalculator() {
             <ResultBadge label="Recommended Dose" value={null} unit="" color="violet" />
           )}
         </>
-      ) : (
+      ) : mode === 'levels' ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
@@ -476,12 +610,172 @@ function VancomycinAUCCalculator() {
             <ResultBadge label="Measured AUC₂₄" value={null} unit="" color="violet" />
           )}
         </>
+      ) : (
+        <>
+          {/* Bayesian (MAP) — population prior from demographics + 1-2 levels */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Age (yrs)</label>
+              <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="65" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>SCr (mg/dL)</label>
+              <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="1.0" className={inputCls} />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors">
+                <input type="checkbox" checked={female} onChange={e => setFemale(e.target.checked)} className="w-4 h-4 rounded accent-violet-500" />
+                <span className="text-sm font-semibold text-slate-300">Female</span>
+              </label>
+            </div>
+            <div>
+              <label className={labelCls}>Height</label>
+              <div className="relative">
+                <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '175' : '69'} className={`${inputCls} pr-12`} />
+                <UnitToggle unit={htUnit} onClick={() => setHtUnit(u => (u === 'cm' ? 'in' : 'cm'))} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Weight</label>
+              <div className="relative">
+                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '80' : '176'} className={`${inputCls} pr-12`} />
+                <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => (u === 'kg' ? 'lb' : 'kg'))} />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Current dose (mg)</label>
+              <input type="number" value={bDose} onChange={e => setBDose(e.target.value)} placeholder="1000" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Interval τ (h)</label>
+              <input type="number" value={bTau} onChange={e => setBTau(e.target.value)} placeholder="12" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Infusion (h)</label>
+              <input type="number" step="0.5" value={bInf} onChange={e => setBInf(e.target.value)} placeholder="1" className={inputCls} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Measured Level(s)</span>
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                <input type="checkbox" checked={bUseTwo} onChange={e => setBUseTwo(e.target.checked)} className="w-4 h-4 rounded accent-violet-500" />
+                Add second level
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Level 1 (mg/L)</label>
+                <input type="number" step="0.1" value={bConc1} onChange={e => setBConc1(e.target.value)} placeholder="12 (trough)" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Time after inf. end (h)</label>
+                <input type="number" step="0.1" value={bTime1} onChange={e => setBTime1(e.target.value)} placeholder="11" className={inputCls} />
+              </div>
+            </div>
+            {bUseTwo && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Level 2 (mg/L)</label>
+                  <input type="number" step="0.1" value={bConc2} onChange={e => setBConc2(e.target.value)} placeholder="25 (peak)" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Time after inf. end (h)</label>
+                  <input type="number" step="0.1" value={bTime2} onChange={e => setBTime2(e.target.value)} placeholder="1" className={inputCls} />
+                </div>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              A <span className="font-semibold text-slate-300">single trough</span> is sufficient — the population
+              prior (built from the demographics above) supplies what one level can't determine. Times are measured
+              from the END of the infusion; a trough drawn just before the next dose has time ≈ τ − infusion.
+            </p>
+          </div>
+
+          {bayesian.kind === 'needDemo' ? (
+            <div className="flex items-start gap-2 text-xs text-slate-400 bg-white/[0.02] border border-white/10 rounded-xl p-3">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-slate-500" />
+              <span>Enter age, SCr, height, and weight above to build the population prior.</span>
+            </div>
+          ) : bayesian.kind === 'result' ? (
+            <div className="space-y-4">
+              <div className={`p-4 rounded-xl border ${
+                bayesian.inRange ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
+              }`}>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Bayesian AUC₂₄ ({bayesian.nLevels === 1 ? '1 level + prior' : '2 levels + prior'})
+                </div>
+                <div className={`text-3xl font-bold ${
+                  bayesian.inRange ? 'text-emerald-400' : bayesian.auc24 < VANCO_AUC_LOW ? 'text-amber-400' : 'text-rose-400'
+                }`}>
+                  {bayesian.auc24.toFixed(0)} <span className="text-base font-medium text-slate-400">mg·h/L</span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {bayesian.inRange
+                    ? 'Within target (400–600) — continue current regimen and monitor.'
+                    : bayesian.auc24 < VANCO_AUC_LOW
+                      ? 'Below target — underexposed; increase dose.'
+                      : 'Above target — nephrotoxicity risk; decrease dose.'}
+                </div>
+              </div>
+
+              {!bayesian.inRange && (
+                <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+                    Suggested Adjustment (same interval)
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {bayesian.newDose} mg <span className="text-base font-medium text-slate-300">IV q{bTau}h</span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">Targets AUC₂₄ ≈ 500 mg·h/L from the MAP-fit clearance.</div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pred. Peak</div>
+                  <div className="text-lg font-bold text-slate-200">{bayesian.cmax.toFixed(1)}</div>
+                  <div className="text-[10px] text-slate-500">mg/L</div>
+                </div>
+                <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pred. Trough</div>
+                  <div className="text-lg font-bold text-slate-200">{bayesian.cmin.toFixed(1)}</div>
+                  <div className="text-[10px] text-slate-500">mg/L</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">MAP Estimates vs Population Prior</div>
+                {[
+                  ['Population CL (prior)', `${bayesian.clPop.toFixed(2)} L/h`],
+                  ['Individual CL (MAP fit)', `${bayesian.fit.cl.toFixed(2)} L/h`],
+                  ['Individual Vd (MAP fit)', `${bayesian.fit.v.toFixed(1)} L`],
+                  ['Half-life (t½)', `${bayesian.fit.halfLife.toFixed(1)} h`],
+                  ['CL shift from prior', `${bayesian.clShift >= 0 ? '+' : ''}${bayesian.clShift.toFixed(0)}%`],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-slate-500">{k}</span>
+                    <span className="text-slate-300 font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <ResultBadge label="Bayesian AUC₂₄" value={null} unit="" color="violet" />
+          )}
+        </>
       )}
 
       <p className="text-[10px] text-slate-600 leading-relaxed border-t border-white/5 pt-3">
-        Decision-support estimate only. Population PK assumes stable renal function; verify with measured
-        levels for critically ill, unstable-renal, or obese patients. Not a substitute for a validated
-        Bayesian platform or clinical pharmacist review.
+        Decision-support estimate only. The Bayesian mode uses a 1-compartment population prior with
+        literature-typical variability (CL ω≈30%, V ω≈25%, proportional residual 15%); it is not calibrated
+        to any specific institutional model. Population PK assumes stable renal function; verify in critically
+        ill, unstable-renal, or obese patients. Not a substitute for a validated Bayesian platform or clinical
+        pharmacist review.
       </p>
     </div>
   );
