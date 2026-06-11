@@ -1,6 +1,7 @@
 "use client";
 import { useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
+import { CLAUDE_MODEL, getApiKey } from '@/lib/claude';
 import { SUMMARIZATION_PROMPT } from '@/lib/ai-prompts';
 import { FileText, Sparkles, Loader2 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -15,16 +16,21 @@ export function GuidelineSummarizer() {
     
     setIsLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: text,
-        config: {
-          systemInstruction: SUMMARIZATION_PROMPT,
-          temperature: 0.2,
-        }
+      const apiKey = getApiKey();
+      if (!apiKey) throw new Error('Anthropic API key missing.');
+      const ai = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+      const response = await ai.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 4000,
+        thinking: { type: 'adaptive', display: 'summarized' },
+        system: SUMMARIZATION_PROMPT,
+        messages: [{ role: 'user', content: text }],
       });
-      setSummary(response.text || 'No summary generated.');
+      const out = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map(b => b.text)
+        .join('');
+      setSummary(out || 'No summary generated.');
     } catch (error) {
       console.error("Error summarizing:", error);
       setSummary("Error generating summary. Please check API configuration.");

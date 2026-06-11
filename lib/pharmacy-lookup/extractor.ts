@@ -1,10 +1,11 @@
-// Drug-name + domain extractor. Uses Gemini Flash with a structured-output
+// Drug-name + domain extractor. Uses Claude with a structured-output JSON
 // schema so the response is guaranteed-shape JSON. This is the cheap first
 // step in the lookup pipeline; the expensive consult-brief generation runs
 // in parallel against the main scenario string while this extracts the
 // bookkeeping facts the lookup APIs need.
 
-import { GoogleGenAI, Type } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
+import { CLAUDE_MODEL } from '../claude';
 import type { QueryClassification, QueryDomain, Urgency } from './types';
 
 const SYSTEM = `You are an infusion-pharmacy query classifier.
@@ -20,20 +21,23 @@ iv_drug_info | drug_interaction | usp797_compounding | oncology_support | iv_iro
 
 Return JSON only — no prose.`;
 
+// JSON Schema for Claude structured outputs (output_config.format). Note: the
+// API requires additionalProperties:false on every object.
 const SCHEMA = {
-  type: Type.OBJECT,
+  type: 'object',
   properties: {
     drug_names: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: 'array',
+      items: { type: 'string' },
       description: 'Generic drug names, lowercase',
     },
-    query_domain: { type: Type.STRING },
-    urgency: { type: Type.STRING },
-    notes: { type: Type.STRING },
+    query_domain: { type: 'string' },
+    urgency: { type: 'string' },
+    notes: { type: 'string' },
   },
-  required: ['drug_names', 'query_domain', 'urgency'],
-};
+  required: ['drug_names', 'query_domain', 'urgency', 'notes'],
+  additionalProperties: false,
+} as const;
 
 const VALID_DOMAINS: QueryDomain[] = [
   'iv_drug_info', 'drug_interaction', 'usp797_compounding', 'oncology_support',
@@ -46,19 +50,19 @@ export const classifyAndExtract = async (
   scenario: string,
   apiKey: string
 ): Promise<QueryClassification> => {
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: 'gemini-flash-latest',
-    contents: scenario,
-    config: {
-      systemInstruction: SYSTEM,
-      responseMimeType: 'application/json',
-      responseSchema: SCHEMA,
-      temperature: 0,
-    },
+  const ai = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  // Classifier is a fast, deterministic extraction — omit thinking for speed and
+  // constrain the output to the JSON schema so parsing is guaranteed-shape.
+  const response = await ai.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 1024,
+    system: SYSTEM,
+    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
+    messages: [{ role: 'user', content: scenario }],
   });
 
-  const text = response.text || '{}';
+  const text =
+    response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text || '{}';
   let parsed: any = {};
   try {
     parsed = JSON.parse(text);

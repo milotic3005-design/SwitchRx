@@ -49,7 +49,7 @@ const fetchJson = async (url: string): Promise<OpenFdaResponse | null> => {
     return (await resp.json()) as OpenFdaResponse;
   } catch {
     // Network error, non-2xx, or timeout/abort — treat as "no data" so the
-    // pipeline continues and the brief still generates from Google Search.
+    // pipeline continues and the brief still generates from web search.
     return null;
   }
 };

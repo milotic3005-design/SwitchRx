@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
+import { makeClient, streamClaude } from '@/lib/claude';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
@@ -115,7 +116,7 @@ function displayDomain(src: { uri: string; title: string }): string {
   if (fromTitle) return fromTitle;
   const host = shortDomain(src.uri);
   if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
-    return 'via Google Search';
+    return 'via web search';
   }
   return host;
 }
@@ -221,10 +222,6 @@ async function retrieveClinicalContext(query: string) {
 }
 
 // Module-level cache to persist state across component unmounts/remounts.
-// Bump SESSION_VERSION whenever the chat config (model, system prompt, tools)
-// changes so stale sessions are not reused.
-const SESSION_VERSION = 2; // bumped: removed tools from chat config
-
 type GroundingSource = { uri: string; title: string };
 type ChatMessage = {
   role: 'user' | 'model',
@@ -236,8 +233,10 @@ type ChatMessage = {
 let cachedMessages: ChatMessage[] = [];
 let cachedInput = '';
 let cachedAttachedFile: { name: string, type: string, base64: string } | null = null;
-let cachedChatSession: any = null;
-let cachedSessionVersion = 0;
+// The full Claude conversation history (user/assistant turns, including any
+// attached file blocks). Persisted at module scope so the conversation survives
+// tab switches that unmount/remount this component.
+let cachedHistory: Anthropic.MessageParam[] = [];
 
 export function ClinicalChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
@@ -245,13 +244,14 @@ export function ClinicalChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, base64: string } | null>(cachedAttachedFile);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatSessionRef = useRef<any>(cachedChatSession);
+  const historyRef = useRef<Anthropic.MessageParam[]>(cachedHistory);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update caches whenever state changes
   useEffect(() => { cachedMessages = messages; }, [messages]);
   useEffect(() => { cachedInput = input; }, [input]);
   useEffect(() => { cachedAttachedFile = attachedFile; }, [attachedFile]);
+  useEffect(() => { cachedHistory = historyRef.current; });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -285,44 +285,6 @@ export function ClinicalChat() {
     setAttachedFile(null);
   };
 
-  const initChat = () => {
-    // Invalidate the cached session if the config version changed.
-    if (cachedSessionVersion !== SESSION_VERSION) {
-      cachedChatSession = null;
-      chatSessionRef.current = null;
-      cachedSessionVersion = SESSION_VERSION;
-    }
-    if (!chatSessionRef.current) {
-      // Check for both NEXT_PUBLIC_GEMINI_API_KEY and GEMINI_API_KEY
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
-      
-      if (!apiKey) {
-        console.error("Gemini API key is missing. Please ensure NEXT_PUBLIC_GEMINI_API_KEY is set in your secrets.");
-        return "API_KEY_MISSING";
-      }
-      
-      try {
-        const ai = new GoogleGenAI({ apiKey });
-        // Multi-turn chat sessions do NOT support the googleSearch grounding tool —
-        // grounding is only available on single-turn generateContent calls.
-        // Sources are fetched separately via a grounding sidecar call (see handleSend).
-        chatSessionRef.current = ai.chats.create({
-          model: 'gemini-flash-latest',
-          config: {
-            systemInstruction: CLINICAL_SYSTEM_PROMPT,
-            temperature: 0.1,
-          }
-        });
-        cachedChatSession = chatSessionRef.current;
-        return "SUCCESS";
-      } catch (err: any) {
-        console.error("Failed to initialize chat:", err);
-        return err.message || "INITIALIZATION_ERROR";
-      }
-    }
-    return "SUCCESS";
-  };
-
   const handleReformat = async (index: number) => {
     const msgToReformat = messages[index];
     if (!msgToReformat || msgToReformat.role !== 'model' || msgToReformat.isReformatting) return;
@@ -335,29 +297,20 @@ export function ClinicalChat() {
     });
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API Key missing");
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const response = await ai.models.generateContentStream({
-        model: 'gemini-flash-latest',
-        contents: `Please reformat the following clinical text to provide a much better visual experience. Use structured Markdown: bolding for key terms, bullet points for lists, clear headers (###), and tables if appropriate. Make it highly readable for a clinician. Do not change the clinical meaning, only the formatting.\n\nText to reformat:\n${msgToReformat.content}`,
-        config: {
-          temperature: 0.1
-        }
-      });
-
-      let fullResponse = '';
-      for await (const chunk of response) {
-        if (chunk.text) {
-          fullResponse += chunk.text;
-          setMessages(prev => {
+      const client = makeClient();
+      await streamClaude({
+        client,
+        system: 'You reformat clinical text for readability without changing its meaning.',
+        prompt: `Please reformat the following clinical text to provide a much better visual experience. Use structured Markdown: bolding for key terms, bullet points for lists, clear headers (###), and tables if appropriate. Make it highly readable for a clinician. Do not change the clinical meaning, only the formatting.\n\nText to reformat:\n${msgToReformat.content}`,
+        maxTokens: 4000,
+        cb: {
+          onText: full => setMessages(prev => {
             const newMsgs = [...prev];
-            newMsgs[index] = { ...newMsgs[index], content: fullResponse };
+            newMsgs[index] = { ...newMsgs[index], content: full };
             return newMsgs;
-          });
-        }
-      }
+          }),
+        },
+      });
     } catch (err) {
       console.error("Failed to reformat:", err);
     } finally {
@@ -385,41 +338,13 @@ export function ClinicalChat() {
     setAttachedFile(null);
     setIsLoading(true);
 
-    const initStatus = initChat();
-    if (initStatus !== "SUCCESS") {
-      const errorMsg = initStatus === "API_KEY_MISSING" 
-        ? "Error: Gemini API key is missing. Please add it to your environment variables or AI Studio secrets."
-        : `Error: Unable to initialize AI chat. Details: ${initStatus}`;
-        
-      setMessages((prev) => [...prev, { role: 'model', content: errorMsg }]);
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+      const client = makeClient();
 
       // 1. RAG Retrieval
       const context = await retrieveClinicalContext(sanitizedInput);
 
-      // 2. Grounding sidecar — runs a single-turn generateContent call with the
-      //    Google Search tool enabled (the only supported surface for grounding).
-      //    This is done in parallel with the chat response so latency is minimal.
-      //    The grounded chunks give us real, verifiable URLs without breaking
-      //    the multi-turn chat session (which doesn't support grounding tools).
-      const groundingQuery = sanitizedInput || "clinical pharmacy infusion therapy";
-      const groundingSidecar = apiKey
-        ? new GoogleGenAI({ apiKey }).models.generateContent({
-            model: 'gemini-flash-latest',
-            contents: `Find the most authoritative clinical sources for this question: ${groundingQuery}`,
-            config: {
-              tools: [{ googleSearch: {} }],
-              temperature: 0.0,
-            },
-          }).catch(() => null) // never block the main response
-        : Promise.resolve(null);
-
-      // 3. Construct main chat prompt with RAG context
+      // 2. Construct main chat prompt with RAG context
       let promptWithContext = sanitizedInput || "Please analyze the attached document.";
       if (context !== 'No specific clinical context found in the verified database for this query.') {
         promptWithContext = `
@@ -431,64 +356,67 @@ ${context}
 Please answer the question, incorporating the retrieved context.`;
       }
 
-      // Construct message parts
-      const messageParts: any[] = [{ text: promptWithContext }];
+      // 3. Build the user turn. Attach images as image blocks and PDFs as
+      //    document blocks (Claude reads both natively). Other file types can't
+      //    be sent inline, so we note the filename in the text instead.
+      const userContent: Anthropic.ContentBlockParam[] = [{ type: 'text', text: promptWithContext }];
       if (currentFile) {
-        messageParts.push({
-          inlineData: {
-            mimeType: currentFile.type,
-            data: currentFile.base64
-          }
-        });
+        const mime = currentFile.type;
+        if (mime.startsWith('image/')) {
+          userContent.unshift({
+            type: 'image',
+            source: { type: 'base64', media_type: mime as any, data: currentFile.base64 },
+          });
+        } else if (mime === 'application/pdf') {
+          userContent.unshift({
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: currentFile.base64 },
+          });
+        } else {
+          userContent[0] = {
+            type: 'text',
+            text: `${promptWithContext}\n\n[Attached file "${currentFile.name}" (${mime}) could not be read inline — please describe its contents in text.]`,
+          };
+        }
       }
+
+      const turn: Anthropic.MessageParam[] = [
+        ...historyRef.current,
+        { role: 'user', content: userContent },
+      ];
 
       // Add a placeholder for the model's response
       setMessages((prev) => [...prev, { role: 'model', content: '' }]);
 
-      // 4. Stream the multi-turn chat response
-      const streamResponse = await chatSessionRef.current.sendMessageStream({ message: messageParts });
-
-      let fullResponse = '';
-      for await (const chunk of streamResponse) {
-        if (chunk.text) {
-          fullResponse += chunk.text;
-          setMessages((prev) => {
+      // 4. Stream the multi-turn response with adaptive thinking + web search.
+      //    Web search runs on every turn, so each answer carries its own
+      //    verifiable [N] source links — no separate grounding sidecar needed.
+      const { text: fullResponse } = await streamClaude({
+        client,
+        system: CLINICAL_SYSTEM_PROMPT,
+        prompt: turn,
+        maxTokens: 6000,
+        webSearch: true,
+        cb: {
+          onText: full => setMessages((prev) => {
             const newMessages = [...prev];
-            newMessages[newMessages.length - 1].content = fullResponse;
+            newMessages[newMessages.length - 1].content = full;
             return newMessages;
-          });
-        }
-      }
-
-      // 5. Await grounding sidecar and attach deduplicated sources to the
-      //    message. Dedup by URI + normalized title so multiple grounding
-      //    chunks pointing at the same source collapse into one entry. The
-      //    URI resolves through Google's redirect to the real document the
-      //    title describes — verified, not memorized.
-      const groundingResult = await groundingSidecar;
-      if (groundingResult) {
-        const sourceMap = new Map<string, GroundingSource>();
-        const chunks = groundingResult.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-        for (const gc of chunks as any[]) {
-          const web = gc.web ?? gc.retrievedContext;
-          if (!web?.uri) continue;
-          const title = (web.title || '').trim() || shortDomain(web.uri);
-          const key = `${web.uri}::${title.toLowerCase()}`;
-          if (!sourceMap.has(key)) {
-            sourceMap.set(key, { uri: web.uri, title });
-          }
-        }
-        if (sourceMap.size > 0) {
-          const sources = Array.from(sourceMap.values());
-          setMessages((prev) => {
+          }),
+          onSources: srcs => setMessages((prev) => {
             const newMessages = [...prev];
-            newMessages[newMessages.length - 1].sources = sources;
+            newMessages[newMessages.length - 1].sources = srcs;
             return newMessages;
-          });
-        }
+          }),
+        },
+      });
+
+      // 5. Persist the turn so the next message keeps full conversation context.
+      if (fullResponse.trim()) {
+        historyRef.current = [...turn, { role: 'assistant', content: fullResponse }];
       }
     } catch (error) {
-      console.error("Error calling Gemini:", error);
+      console.error("Error calling Claude:", error);
       setMessages((prev) => {
         const newMessages = [...prev];
         if (newMessages[newMessages.length - 1].role === 'model' && !newMessages[newMessages.length - 1].content) {
@@ -508,7 +436,7 @@ Please answer the question, incorporating the retrieved context.`;
         <div>
           <h2 className="text-[16px] font-medium text-blue-400">Clinical Chat (RAG + Live Source Verification)</h2>
           <p className="text-[14px] text-blue-200/80 mt-1">
-            Every response is grounded in <strong>FDA package inserts, primary literature, and professional guidelines</strong> retrieved live via Google Search. Clickable source links appear under each answer for verification. <strong>PHI is automatically sanitized before processing.</strong>
+            Every response is grounded in <strong>FDA package inserts, primary literature, and professional guidelines</strong> retrieved live via web search. Clickable source links appear under each answer for verification. <strong>PHI is automatically sanitized before processing.</strong>
           </p>
         </div>
       </div>
@@ -560,7 +488,7 @@ Please answer the question, incorporating the retrieved context.`;
                           <span className="font-medium">Verified Sources ({msg.sources.length})</span>
                         </div>
                         <p className="text-[10px] text-slate-500 italic mb-2">
-                          Live Google Search grounding — each link resolves to the exact source named. Match the [N] markers above to the entries below.
+                          Live web search — each link resolves to the exact source named. Match the [N] markers above to the entries below.
                         </p>
                         <ol className="space-y-1.5">
                           {msg.sources.map((src, idx) => (

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { makeClient, streamClaude, getApiKey } from '@/lib/claude';
 import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon, FlaskConical } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -261,7 +261,7 @@ function displayDomain(src: { uri: string; title: string }): string {
   const host = shortDomain(src.uri);
   // Hide the noisy vertex AI redirect host — the title still carries the source
   if (host.includes('vertexaisearch') || host.includes('grounding-api-redirect')) {
-    return 'via Google Search';
+    return 'via web search';
   }
   return host;
 }
@@ -306,9 +306,9 @@ export function InfusionConsult({
     setIsThinkingExpanded(false); // keep minimized by default
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+      const apiKey = getApiKey();
       if (!apiKey) {
-        throw new Error("Gemini API key is missing. Please ensure NEXT_PUBLIC_GEMINI_API_KEY is set in your AI Studio secrets.");
+        throw new Error("Anthropic API key is missing. Please ensure NEXT_PUBLIC_ANTHROPIC_API_KEY is set in your environment.");
       }
 
       // Phase 1: Run the pharmacy lookup pipeline first (drug extraction +
@@ -333,15 +333,15 @@ export function InfusionConsult({
       // already has its own 8s timeout, but this is a belt-and-suspenders guard
       // so the brief ALWAYS starts within ~12s even if the pipeline stalls. If
       // the lookup wins the race we use its data; if the timeout wins, the brief
-      // proceeds on Google Search grounding alone and the lookup panel still
-      // fills in via its own setLookup when it eventually resolves.
+      // proceeds on web search alone and the lookup panel still fills in via its
+      // own setLookup when it eventually resolves.
       const lookupResult = await Promise.race([
         lookupPromise,
         new Promise<null>(resolve => setTimeout(() => resolve(null), 12000)),
       ]);
       const lookupContext = lookupResult ? formatLookupForPrompt(lookupResult) : '';
 
-      const ai = new GoogleGenAI({ apiKey });
+      const client = makeClient();
 
       // Inject the lookup data into the system instruction so the brief
       // synthesizes against real FDA-label content rather than memory.
@@ -349,68 +349,21 @@ export function InfusionConsult({
         ? `${INFUSION_SYSTEM_PROMPT}\n\n---\n\n${lookupContext}`
         : INFUSION_SYSTEM_PROMPT;
 
-      const response = await ai.models.generateContentStream({
-        model: 'gemini-3.1-pro-preview',
-        contents: scenario,
-        config: {
-          systemInstruction,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          // Google Search grounding so the brief cites real FDA labels,
-          // PubMed articles, and society guidelines with verifiable URLs.
-          tools: [{ googleSearch: {} }],
-        }
+      // Stream the brief with adaptive thinking + live web search so it cites
+      // real FDA labels, PubMed articles, and society guidelines with
+      // verifiable URLs (the [N] citation badges resolve to these sources).
+      await streamClaude({
+        client,
+        system: systemInstruction,
+        prompt: scenario,
+        maxTokens: 8000,
+        webSearch: true,
+        cb: {
+          onText: full => setBrief(full),
+          onThinking: full => setThinking(full),
+          onSources: srcs => setSources(srcs),
+        },
       });
-
-      let fullResponse = '';
-      let fullThinking = '';
-      const sourceMap = new Map<string, GroundingSource>();
-      let lastEmittedSourceCount = 0;
-
-      for await (const chunk of response) {
-        const parts = chunk.candidates?.[0]?.content?.parts;
-        if (parts) {
-          for (const part of parts) {
-            if ((part as any).thought && part.text) {
-              fullThinking += part.text;
-              setThinking(fullThinking);
-            } else if (part.text) {
-              fullResponse += part.text;
-              setBrief(fullResponse);
-            }
-          }
-        }
-        // Collect grounding chunks for verifiable, clickable sources. Dedupe
-        // by both URI and title so multiple grounding chunks pointing at the
-        // same source (common when the model cites one document several times)
-        // collapse into a single entry. The URI is the source of truth — it
-        // resolves through Google's redirect to the actual destination page,
-        // matching whatever the title says.
-        const grounding = chunk.candidates?.[0]?.groundingMetadata;
-        const groundingChunks = grounding?.groundingChunks ?? [];
-        for (const gc of groundingChunks) {
-          const web = (gc as any).web ?? (gc as any).retrievedContext;
-          if (!web?.uri) continue;
-          const title = (web.title || '').trim() || shortDomain(web.uri);
-          // Dedup key combines normalized URI and title to avoid both URL-only
-          // and title-only collisions losing distinct citations.
-          const key = `${web.uri}::${title.toLowerCase()}`;
-          if (!sourceMap.has(key)) {
-            sourceMap.set(key, { uri: web.uri, title });
-          }
-        }
-        // Stream sources to React state as soon as new ones arrive so the
-        // [N] citation badges in the brief become clickable mid-stream rather
-        // than only after the entire response finishes.
-        if (sourceMap.size > lastEmittedSourceCount) {
-          setSources(Array.from(sourceMap.values()));
-          lastEmittedSourceCount = sourceMap.size;
-        }
-      }
-
-      // Final flush in case the very last chunk added new sources.
-      if (sourceMap.size > lastEmittedSourceCount) {
-        setSources(Array.from(sourceMap.values()));
-      }
     } catch (err: any) {
       console.error("Error generating consult brief:", err);
       setError(err.message || "An error occurred while generating the consult brief.");
@@ -426,7 +379,7 @@ export function InfusionConsult({
         <div>
           <h2 className="text-[16px] font-medium text-blue-400">Rapid Infusion Consult Copilot</h2>
           <p className="text-[14px] text-blue-200/80 mt-1">
-            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief runs a <strong>verified-data lookup</strong> first — extracting drug names, querying <strong>openFDA labels &amp; shortages</strong>, and checking <strong>NIOSH / ISMP / vesicant</strong> registries — then anchors the AI synthesis to that verified data with clickable Google Search citations.
+            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief runs a <strong>verified-data lookup</strong> first — extracting drug names, querying <strong>openFDA labels &amp; shortages</strong>, and checking <strong>NIOSH / ISMP / vesicant</strong> registries — then anchors the AI synthesis to that verified data with clickable web-search citations.
           </p>
         </div>
       </div>
@@ -548,7 +501,7 @@ export function InfusionConsult({
                       <span className="font-medium">Verified Sources ({sources.length})</span>
                     </div>
                     <p className="text-[10px] text-slate-500 italic mb-3">
-                      Click any <span className="inline-flex items-center justify-center text-[9px] font-bold tabular-nums text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1.5 py-0.5 mx-0.5 align-middle leading-none">N</span> badge in the brief above to open its grounded source — same URLs listed below, sourced live from Google Search grounding metadata.
+                      Click any <span className="inline-flex items-center justify-center text-[9px] font-bold tabular-nums text-blue-300 bg-blue-500/15 border border-blue-500/30 rounded px-1.5 py-0.5 mx-0.5 align-middle leading-none">N</span> badge in the brief above to open its grounded source — same URLs listed below, sourced live from Claude web search.
                     </p>
                     <ol className="space-y-2">
                       {sources.map((src, idx) => (

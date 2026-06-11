@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import Anthropic from '@anthropic-ai/sdk';
+import { makeClient, streamClaude } from '@/lib/claude';
 import {
   Stethoscope, Send, Loader2, AlertTriangle, ShieldAlert, ExternalLink,
   Link as LinkIcon, ChevronDown, ChevronUp, Network, Pill, FlaskConical,
@@ -77,11 +78,11 @@ Cover (one bullet each, in this order):
 - **Citation:** Authors · Year · Title · Publication · DOI
 - **Direct URL:** [hyperlink to the official IDSA practice-guidelines page or the journal article]
 
-The URL MUST be a real, verifiable IDSA-controlled link from Google Search grounding. If you cannot retrieve a verified URL via search, link to https://www.idsociety.org/practice-guidelines/ and explicitly say so.
+The URL MUST be a real, verifiable IDSA-controlled link retrieved via web search. If you cannot retrieve a verified URL via search, link to https://www.idsociety.org/practice-guidelines/ and explicitly say so.
 
 ## CONSTRAINTS
 - All recommendations must map to a named IDSA guideline
-- Never hallucinate a URL — only use URLs retrieved via Google Search grounding
+- Never hallucinate a URL — only use URLs retrieved via web search
 - If input data is missing (e.g., no culture, no renal function), flag it AT THE TOP in a warning callout and adjust confidence language ("empiric recommendation pending sensitivities")
 - Outpatient regimens only — flag if the case requires inpatient management
 - If IDSA guidance doesn't cover the input condition, say so explicitly and provide the closest IDSA reference + fallback to ASHP/CDC/etc.
@@ -89,7 +90,7 @@ The URL MUST be a real, verifiable IDSA-controlled link from Google Search groun
 ## EVALUATION
 Your output is successful when:
 - Every drug recommendation includes dose + route + frequency + duration
-- The IDSA citation links to a real Google-Search-verified URL
+- The IDSA citation links to a real web-search-verified URL
 - Renal and allergy adjustments are auto-applied when data is present
 - A pharmacist can verify therapy with zero additional lookups
 - No drug is recommended without a named evidence source`;
@@ -300,7 +301,7 @@ function buildClinicalPrompt(p: PatientInput): string {
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('Produce the full 4-section IDSA-aligned OPAT recommendation per your system instructions. Use Google Search to retrieve the most current IDSA guideline URL for this condition — verify the link before citing it.');
+  lines.push('Produce the full 4-section IDSA-aligned OPAT recommendation per your system instructions. Use web search to retrieve the most current IDSA guideline URL for this condition — verify the link before citing it.');
 
   return lines.join('\n');
 }
@@ -351,84 +352,32 @@ export function IDSAAntibioticAdvisor() {
     chatSessionRef.current = null;
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('Gemini API key missing. Set NEXT_PUBLIC_GEMINI_API_KEY in your environment.');
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContentStream({
-        model: 'gemini-3.1-pro-preview',
-        contents: prompt,
-        config: {
-          systemInstruction: IDSA_SYSTEM_PROMPT,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          tools: [{ googleSearch: {} }],
+      const client = makeClient();
+      // Stream the recommendation with adaptive thinking + live web search so
+      // every IDSA citation is backed by a real, verifiable URL.
+      const { text: fullResponse } = await streamClaude({
+        client,
+        system: IDSA_SYSTEM_PROMPT,
+        prompt,
+        maxTokens: 8000,
+        webSearch: true,
+        cb: {
+          onText: full => setOutput(full),
+          onThinking: full => setThinking(full),
+          onSources: srcs => setSources(srcs),
         },
       });
 
-      let fullResponse = '';
-      let fullThinking = '';
-      const sourceMap = new Map<string, GroundingSource>();
-      let lastEmittedSourceCount = 0;
-
-      for await (const chunk of response) {
-        const parts = chunk.candidates?.[0]?.content?.parts;
-        if (parts) {
-          for (const part of parts) {
-            if ((part as any).thought && part.text) {
-              fullThinking += part.text;
-              setThinking(fullThinking);
-            } else if (part.text) {
-              fullResponse += part.text;
-              setOutput(fullResponse);
-            }
-          }
-        }
-        // Collect grounding sources (real IDSA URLs)
-        const grounding = chunk.candidates?.[0]?.groundingMetadata;
-        const groundingChunks = grounding?.groundingChunks ?? [];
-        for (const gc of groundingChunks) {
-          const web = (gc as any).web ?? (gc as any).retrievedContext;
-          if (!web?.uri) continue;
-          const title = (web.title || '').trim() || web.uri;
-          const key = `${web.uri}::${title.toLowerCase()}`;
-          if (!sourceMap.has(key)) {
-            sourceMap.set(key, { uri: web.uri, title });
-          }
-        }
-        if (sourceMap.size > lastEmittedSourceCount) {
-          setSources(Array.from(sourceMap.values()));
-          lastEmittedSourceCount = sourceMap.size;
-        }
-      }
-
-      if (sourceMap.size > lastEmittedSourceCount) {
-        setSources(Array.from(sourceMap.values()));
-      }
-
-      // Seed a follow-up chat session with the full patient context and the
-      // recommendation as history, so the pharmacist can ask follow-up
-      // questions without re-entering the case. Multi-turn chat sessions don't
-      // support the googleSearch grounding tool, so follow-up sources are
-      // fetched via a per-message grounding sidecar (see handleChatSend).
+      // Seed the follow-up conversation history with the full patient context
+      // and the recommendation, so the pharmacist can ask follow-up questions
+      // without re-entering the case. With Claude this is simply an accumulating
+      // messages array (each follow-up turn runs web search on its own), so no
+      // separate grounding sidecar is needed.
       if (fullResponse.trim()) {
-        try {
-          const chatAi = new GoogleGenAI({ apiKey });
-          chatSessionRef.current = chatAi.chats.create({
-            model: 'gemini-flash-latest',
-            config: {
-              systemInstruction: `${IDSA_SYSTEM_PROMPT}\n\n${FOLLOWUP_ADDENDUM}`,
-              temperature: 0.15,
-            },
-            history: [
-              { role: 'user', parts: [{ text: prompt }] },
-              { role: 'model', parts: [{ text: fullResponse }] },
-            ],
-          });
-        } catch (e) {
-          console.error('Failed to seed follow-up chat session:', e);
-        }
+        chatSessionRef.current = [
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: fullResponse },
+        ] as Anthropic.MessageParam[];
       }
     } catch (err: any) {
       console.error('IDSA advisor error:', err);
@@ -448,51 +397,38 @@ export function IDSAAntibioticAdvisor() {
     setIsChatLoading(true);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || (process.env as any).GEMINI_API_KEY;
+      const client = makeClient();
+      // Append this question to the running conversation history and stream the
+      // reply with web search enabled, so follow-up answers carry their own
+      // verifiable sources (no separate grounding sidecar needed).
+      const history = (chatSessionRef.current as Anthropic.MessageParam[]) ?? [];
+      const turn: Anthropic.MessageParam[] = [...history, { role: 'user', content: question }];
 
-      // Grounding sidecar — real, verifiable URLs without breaking the chat session.
-      const groundingSidecar = apiKey
-        ? new GoogleGenAI({ apiKey }).models.generateContent({
-            model: 'gemini-flash-latest',
-            contents: `Find the most authoritative IDSA / infectious-disease guideline sources for this OPAT follow-up question: ${question}`,
-            config: { tools: [{ googleSearch: {} }], temperature: 0.0 },
-          }).catch(() => null)
-        : Promise.resolve(null);
-
-      const stream = await chatSessionRef.current.sendMessageStream({ message: question });
-
-      let full = '';
-      for await (const chunk of stream) {
-        if (chunk.text) {
-          full += chunk.text;
-          setChat(prev => {
+      const { text: full, sources: srcs } = await streamClaude({
+        client,
+        system: `${IDSA_SYSTEM_PROMPT}\n\n${FOLLOWUP_ADDENDUM}`,
+        prompt: turn,
+        maxTokens: 4000,
+        webSearch: true,
+        cb: {
+          onText: t => setChat(prev => {
             const next = [...prev];
-            next[next.length - 1] = { ...next[next.length - 1], content: full };
+            next[next.length - 1] = { ...next[next.length - 1], content: t };
             return next;
-          });
-        }
-      }
-
-      const groundingResult = await groundingSidecar;
-      if (groundingResult) {
-        const sourceMap = new Map<string, GroundingSource>();
-        const chunks = groundingResult.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-        for (const gc of chunks as any[]) {
-          const web = gc.web ?? gc.retrievedContext;
-          if (!web?.uri) continue;
-          const title = (web.title || '').trim() || web.uri;
-          const key = `${web.uri}::${title.toLowerCase()}`;
-          if (!sourceMap.has(key)) sourceMap.set(key, { uri: web.uri, title });
-        }
-        if (sourceMap.size > 0) {
-          const srcs = Array.from(sourceMap.values());
-          setChat(prev => {
+          }),
+          onSources: s => setChat(prev => {
             const next = [...prev];
-            next[next.length - 1] = { ...next[next.length - 1], sources: srcs };
+            next[next.length - 1] = { ...next[next.length - 1], sources: s as GroundingSource[] };
             return next;
-          });
-        }
+          }),
+        },
+      });
+
+      // Persist the assistant turn so the next follow-up keeps full context.
+      if (full.trim()) {
+        chatSessionRef.current = [...turn, { role: 'assistant', content: full }] as Anthropic.MessageParam[];
       }
+      void srcs;
     } catch (err: any) {
       console.error('IDSA follow-up chat error:', err);
       setChat(prev => {
@@ -524,7 +460,7 @@ export function IDSAAntibioticAdvisor() {
           <p className="text-[13px] text-emerald-200/80 mt-1 leading-relaxed">
             Patient-specific antibiotic regimens from an IDSA-certified outpatient parenteral
             antimicrobial therapy (OPAT) pharmacist persona. Every recommendation maps to a
-            named IDSA guideline with a Google-Search-verified direct URL. Renal and allergy
+            named IDSA guideline with a web-search-verified direct URL. Renal and allergy
             adjustments auto-apply when data is present.
           </p>
         </div>
@@ -833,10 +769,10 @@ export function IDSAAntibioticAdvisor() {
                   <div className="mt-6 pt-4 border-t border-white/10">
                     <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-slate-400 mb-1">
                       <LinkIcon size={11} strokeWidth={1.5} />
-                      <span className="font-medium">Google-Search-Verified Sources ({sources.length})</span>
+                      <span className="font-medium">Web-Search-Verified Sources ({sources.length})</span>
                     </div>
                     <p className="text-[10px] text-slate-500 italic mb-3">
-                      Live URLs from Google Search grounding — every IDSA citation above is backed by one of the links below.
+                      Live URLs from Claude web search — every IDSA citation above is backed by one of the links below.
                     </p>
                     <ol className="space-y-2">
                       {sources.map((src, idx) => (

@@ -113,7 +113,7 @@ export const formatLookupForPrompt = (result: LookupResult): string => {
   }
 
   lines.push('');
-  lines.push('Use the above as your primary source of truth for the drug-specific facts. Supplement with Google Search ONLY for items not covered above (e.g. specific guideline recommendations, comparative trials).');
+  lines.push('Use the above as your primary source of truth for the drug-specific facts. Supplement with web search ONLY for items not covered above (e.g. specific guideline recommendations, comparative trials).');
 
   return lines.join('\n');
 };
