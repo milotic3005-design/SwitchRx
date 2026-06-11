@@ -297,7 +297,21 @@ function VancomycinAUCCalculator() {
 
     const dosesPerDay = 24 / interval;
     const rawDose = targetDailyDose / dosesPerDay;
-    const roundedDose = Math.round(rawDose / 250) * 250;
+    let roundedDose = Math.round(rawDose / 250) * 250;
+
+    // Practical safety caps (2020 ASHP/IDSA + common institutional protocols):
+    //   • single dose typically ≤ 2000–2500 mg
+    //   • total daily dose ≤ 4500 mg/day
+    // Flag when the PK-target dose would exceed these so the user knows the
+    // displayed regimen was capped (and measured-level monitoring is advised).
+    const MAX_SINGLE_DOSE = 2500;
+    const MAX_DAILY_DOSE = 4500;
+    let doseCapped = false;
+    if (roundedDose > MAX_SINGLE_DOSE) { roundedDose = MAX_SINGLE_DOSE; doseCapped = true; }
+    if (roundedDose * dosesPerDay > MAX_DAILY_DOSE) {
+      roundedDose = Math.floor((MAX_DAILY_DOSE / dosesPerDay) / 250) * 250;
+      doseCapped = true;
+    }
     const actualDailyDose = roundedDose * dosesPerDay;
 
     // Project AUC24 / Cmax / Cmin for the rounded regimen (1-compartment,
@@ -310,14 +324,19 @@ function VancomycinAUCCalculator() {
     const cmax = term * ((1 - Math.exp(-kel * tInf)) / (1 - Math.exp(-kel * interval)));
     const cmin = cmax * Math.exp(-kel * (interval - tInf));
 
-    // Loading dose 25 mg/kg actual (cap 3000 mg), per guideline for serious infx.
+    // Loading dose: 2020 ASHP/IDSA suggests 20–35 mg/kg ACTUAL body weight, not
+    // exceeding 3000 mg, for seriously ill patients. Show the 25 mg/kg midpoint
+    // plus the guideline range so the clinician can scale within it.
     const loading = Math.min(3000, Math.round((25 * actualKg) / 250) * 250);
+    const loadingLow = Math.min(3000, Math.round((20 * actualKg) / 250) * 250);
+    const loadingHigh = Math.min(3000, Math.round((35 * actualKg) / 250) * 250);
 
     const inRange = projAUC >= VANCO_AUC_LOW && projAUC <= VANCO_AUC_HIGH;
 
     return {
       crcl, ibw, dosingWt, basis, kel, vd, halfLife, cl,
-      interval, roundedDose, actualDailyDose, projAUC, cmax, cmin, loading, inRange,
+      interval, roundedDose, actualDailyDose, projAUC, cmax, cmin,
+      loading, loadingLow, loadingHigh, inRange, doseCapped,
     };
   })();
 
@@ -526,8 +545,18 @@ function VancomycinAUCCalculator() {
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   ≈ {empiric.actualDailyDose} mg/day · Loading dose{' '}
-                  <span className="font-semibold text-slate-200">{empiric.loading} mg</span> (25 mg/kg) for serious infection
+                  <span className="font-semibold text-slate-200">{empiric.loading} mg</span>{' '}
+                  (20–35 mg/kg → {empiric.loadingLow}–{empiric.loadingHigh} mg, max 3 g) for serious infection
                 </div>
+                {empiric.doseCapped && (
+                  <div className="flex items-start gap-1.5 text-[11px] text-amber-300/90 mt-2 pt-2 border-t border-white/10">
+                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                    <span>
+                      Maintenance dose capped at practical limits (≤2500 mg/dose, ≤4500 mg/day). The PK target
+                      may require measured-level Bayesian monitoring to reach AUC 400–600 safely.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Projected exposure */}
