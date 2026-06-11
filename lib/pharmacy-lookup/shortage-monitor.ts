@@ -2,6 +2,7 @@
 // Adapted from PharmOracle's server-side version to run client-side.
 
 import type { ShortageStatus } from './types';
+import { fetchWithTimeout } from './fetch-with-timeout';
 
 const BASE = 'https://api.fda.gov/drug/shortages.json';
 
@@ -32,7 +33,7 @@ export const checkShortage = async (
   const escaped = genericName.toLowerCase().replace(/"/g, '');
   const url = `${BASE}?search=generic_name:"${escaped}"&limit=1`;
   try {
-    const resp = await fetch(url);
+    const resp = await fetchWithTimeout(url);
     if (!resp.ok) {
       // 404 from openFDA = no shortage record found
       return {

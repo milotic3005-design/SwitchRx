@@ -329,7 +329,16 @@ export function InfusionConsult({
         })
         .finally(() => setIsLookupLoading(false));
 
-      const lookupResult = await lookupPromise;
+      // Bound how long the brief will wait for the lookup. Each external call
+      // already has its own 8s timeout, but this is a belt-and-suspenders guard
+      // so the brief ALWAYS starts within ~12s even if the pipeline stalls. If
+      // the lookup wins the race we use its data; if the timeout wins, the brief
+      // proceeds on Google Search grounding alone and the lookup panel still
+      // fills in via its own setLookup when it eventually resolves.
+      const lookupResult = await Promise.race([
+        lookupPromise,
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 12000)),
+      ]);
       const lookupContext = lookupResult ? formatLookupForPrompt(lookupResult) : '';
 
       const ai = new GoogleGenAI({ apiKey });
@@ -417,7 +426,7 @@ export function InfusionConsult({
         <div>
           <h2 className="text-[16px] font-medium text-blue-400">Rapid Infusion Consult Copilot</h2>
           <p className="text-[14px] text-blue-200/80 mt-1">
-            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief now runs the <strong>PharmOracle lookup pipeline</strong> first — extracting drug names, querying <strong>openFDA labels &amp; shortages</strong>, and checking <strong>NIOSH / ISMP / vesicant</strong> registries — then anchors the AI synthesis to that verified data with clickable Google Search citations.
+            Expert-level IV pharmacy AI for outpatient and home infusion. Every brief runs a <strong>verified-data lookup</strong> first — extracting drug names, querying <strong>openFDA labels &amp; shortages</strong>, and checking <strong>NIOSH / ISMP / vesicant</strong> registries — then anchors the AI synthesis to that verified data with clickable Google Search citations.
           </p>
         </div>
       </div>

@@ -5,6 +5,7 @@
 // We prefer the IV/INTRAVENOUS route filter; fall back to any-route match.
 
 import type { LabelField, LabelSection } from './types';
+import { fetchWithTimeout } from './fetch-with-timeout';
 
 const BASE = 'https://api.fda.gov/drug/label.json';
 
@@ -43,10 +44,12 @@ const truncate = (s: string, max = 800): string => {
 
 const fetchJson = async (url: string): Promise<OpenFdaResponse | null> => {
   try {
-    const resp = await fetch(url);
+    const resp = await fetchWithTimeout(url);
     if (!resp.ok) return null;
     return (await resp.json()) as OpenFdaResponse;
   } catch {
+    // Network error, non-2xx, or timeout/abort — treat as "no data" so the
+    // pipeline continues and the brief still generates from Google Search.
     return null;
   }
 };
