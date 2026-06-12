@@ -245,12 +245,15 @@ export function getAllDrugs(): string[] {
   return Object.keys(drugDatabase);
 }
 
+// Precompute drug to class mapping for O(1) lookups
+const drugToClassMap = new Map<string, string>();
+for (const [className, drugs] of Object.entries(drugClasses)) {
+  for (const drug of drugs) {
+    drugToClassMap.set(drug.toLowerCase().trim(), className);
+  }
+}
+
 export function getDrugClass(drugName: string): string | null {
   const normalized = drugName.toLowerCase().trim();
-  for (const [className, drugs] of Object.entries(drugClasses)) {
-    if (drugs.includes(normalized)) {
-      return className;
-    }
-  }
-  return null;
+  return drugToClassMap.get(normalized) || null;
 }
