@@ -547,24 +547,59 @@ export function suggestReplacements(req: {
 
   // Filter by broad category to prevent absurd cross-class suggestions
   if (isAntidepressant) {
-    candidates = candidates.filter(d => ['SSRIs', 'SNRIs', 'Atypicals / Others', 'TCAs', 'Novel / Other Antidepressants'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d)));
+    const allowedClasses = ['SSRIs', 'SNRIs', 'Atypicals / Others', 'TCAs', 'Novel / Other Antidepressants'];
+    const allowedDrugs = new Set<string>();
+    for (const c of allowedClasses) {
+      const drugs = drugClasses[c as keyof typeof drugClasses] || [];
+      for (const d of drugs) {
+        allowedDrugs.add(d);
+      }
+    }
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isAntipsychotic) {
-    candidates = candidates.filter(d => ['Antipsychotics (Atypical)', 'Antipsychotics (Typical)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d)));
+    const allowedClasses = ['Antipsychotics (Atypical)', 'Antipsychotics (Typical)'];
+    const allowedDrugs = new Set<string>();
+    for (const c of allowedClasses) {
+      const drugs = drugClasses[c as keyof typeof drugClasses] || [];
+      for (const d of drugs) {
+        allowedDrugs.add(d);
+      }
+    }
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isStatin) {
-    candidates = candidates.filter(d => drugClasses['Statins']?.includes(d));
+    const allowedDrugs = new Set<string>(drugClasses['Statins'] || []);
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isAntidiabetic) {
-    candidates = candidates.filter(d => drugClasses['Antidiabetics']?.includes(d));
+    const allowedDrugs = new Set<string>(drugClasses['Antidiabetics'] || []);
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isAntihypertensive) {
-    candidates = candidates.filter(d => ['Antihypertensives (ACE inhibitors)', 'Antihypertensives (ARBs)', 'Antihypertensives (Beta-blockers)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d)));
+    const allowedClasses = ['Antihypertensives (ACE inhibitors)', 'Antihypertensives (ARBs)', 'Antihypertensives (Beta-blockers)'];
+    const allowedDrugs = new Set<string>();
+    for (const c of allowedClasses) {
+      const drugs = drugClasses[c as keyof typeof drugClasses] || [];
+      for (const d of drugs) {
+        allowedDrugs.add(d);
+      }
+    }
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isAnticoagulant) {
-    candidates = candidates.filter(d => drugClasses['Anticoagulants']?.includes(d));
+    const allowedDrugs = new Set<string>(drugClasses['Anticoagulants'] || []);
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isMoodStabilizer) {
-    candidates = candidates.filter(d => drugClasses['Mood Stabilizers / Anticonvulsants']?.includes(d));
+    const allowedDrugs = new Set<string>(drugClasses['Mood Stabilizers / Anticonvulsants'] || []);
+    candidates = candidates.filter(d => allowedDrugs.has(d));
   } else if (isBiologic) {
     // For biologics, only suggest other biologics that are approved for the SAME indication
+    const allowedClasses = ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'];
+    const allowedDrugs = new Set<string>();
+    for (const c of allowedClasses) {
+      const drugs = drugClasses[c as keyof typeof drugClasses] || [];
+      for (const d of drugs) {
+        allowedDrugs.add(d);
+      }
+    }
     candidates = candidates.filter(d => {
-      const isBio = ['Biologics (TNF inhibitors)', 'Biologics (IL inhibitors)', 'Biologics (Integrin/Other)'].some(c => drugClasses[c as keyof typeof drugClasses]?.includes(d));
-      if (!isBio) return false;
+      if (!allowedDrugs.has(d)) return false;
       
       // If a specific indication was provided, strictly filter by it
       if (indication) {
