@@ -305,3 +305,61 @@ html .bg-white.hover\:bg-slate-200:hover { background-color: rgba(227, 194, 126,
 
 /* prose (markdown) — keep AI output legible on the night panels */
 html .prose-invert { --tw-prose-body: var(--cc-body); --tw-prose-headings: var(--cc-gold-warm); --tw-prose-bold: var(--cc-bright); --tw-prose-links: var(--cc-gold); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   LIGHT THEME — surface corrections
+   The retone above maps the app's dark utilities (translucent whites, black
+   overlays, and the many hardcoded near-black hex fills like #121212 / #1e1e1e
+   used for inputs, dropdowns, and segmented controls) to dark night-panel
+   values. Those are right for the default dark theme but stay DARK in light
+   mode, leaving dark controls with dark text on the parchment page.
+
+   Re-map every dark surface to a warm parchment equivalent here. `html.light .x`
+   (specificity 0,2,0) outranks the retone's `html .x` (0,1,0), so these win in
+   light mode only. Text colour is already handled by the html.light CSS-variable
+   flips (cosmic greys → warm browns), so it stays legible on these surfaces.
+   PRESERVED: rose / red / amber clinical signals are never remapped.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* translucent white films → faint warm-brown tints on cream */
+html.light .bg-white\/5,
+html.light .hover\:bg-white\/5:hover { background-color: rgba(74, 58, 24, 0.05); }
+html.light .bg-white\/10,
+html.light .hover\:bg-white\/10:hover { background-color: rgba(74, 58, 24, 0.085); }
+html.light .bg-white\/15,
+html.light .hover\:bg-white\/15:hover { background-color: rgba(74, 58, 24, 0.12); }
+html.light .hover\:bg-white\/20:hover { background-color: rgba(74, 58, 24, 0.16); }
+html.light .bg-white\/\[0\.02\] { background-color: rgba(74, 58, 24, 0.025); }
+html.light .bg-white\/\[0\.03\] { background-color: rgba(74, 58, 24, 0.035); }
+html.light .bg-white\/\[0\.06\] { background-color: rgba(74, 58, 24, 0.05); }
+html.light .bg-white\/\[0\.07\] { background-color: rgba(74, 58, 24, 0.06); }
+
+/* dark overlays / recessed insets → faint warm insets on cream */
+html.light .bg-black\/10 { background-color: rgba(74, 58, 24, 0.03); }
+html.light .bg-black\/20 { background-color: rgba(74, 58, 24, 0.045); }
+html.light .bg-black\/30 { background-color: rgba(74, 58, 24, 0.06); }
+html.light .bg-black\/40 { background-color: rgba(74, 58, 24, 0.07); }
+html.light .bg-black\/45 { background-color: rgba(74, 58, 24, 0.08); }
+html.light .bg-black\/70 { background-color: rgba(250, 247, 240, 0.92); }
+
+/* hardcoded near-black control / dropdown / card fills → parchment surfaces */
+html.light .bg-\[\#0a0a0a\],
+html.light .bg-\[\#0f0f10\] { background-color: #faf7f0; color: var(--cc-body); }
+html.light .bg-\[\#121212\] { background-color: #fbf8f1; color: var(--cc-body); }
+html.light .bg-\[\#161616\] { background-color: #f7f2e7; color: var(--cc-body); }
+html.light .bg-\[\#1a1a1a\] { background-color: #f6f1e6; color: var(--cc-body); }
+html.light .bg-\[\#1e1e1e\],
+html.light .hover\:bg-\[\#1e1e1e\]:hover { background-color: #efe8d8; color: var(--cc-body); }
+html.light .bg-\[\#2a2a2a\],
+html.light .hover\:bg-\[\#2a2a2a\]:hover { background-color: #e8dfca; color: var(--cc-body); }
+
+/* accent body text inside info banners → darker tones for contrast on cream */
+html.light .text-blue-200\/80 { color: rgba(122, 92, 38, 0.95); }
+html.light .text-emerald-200\/80 { color: rgba(40, 92, 86, 0.95); }
+
+/* gold accent films a touch stronger so info banners read on cream */
+html.light .bg-blue-500\/10, html.light .bg-blue-500\/15, html.light .bg-blue-500\/20 { background-color: rgba(154, 115, 34, 0.12); }
+html.light .bg-blue-600, html.light .hover\:bg-blue-700:hover, html.light .bg-blue-600\/20 { background-color: rgba(154, 115, 34, 0.16); }
+html.light .bg-emerald-500\/10, html.light .bg-emerald-500\/15, html.light .bg-emerald-500\/20,
+html.light .bg-emerald-500\/5, html.light .bg-emerald-500\/25, html.light .bg-emerald-500\/30 { background-color: rgba(47, 125, 118, 0.12); }
+html.light .bg-violet-500\/10, html.light .bg-violet-500\/15, html.light .bg-violet-500\/20 { background-color: rgba(109, 63, 209, 0.12); }
