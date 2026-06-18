@@ -8,6 +8,7 @@ import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { runPharmacyLookup, formatLookupForPrompt } from '@/lib/pharmacy-lookup';
 import type { LookupResult } from '@/lib/pharmacy-lookup/types';
 import { PharmacyLookupPanel } from './PharmacyLookupPanel';
+import { WaitGame } from './WaitGame';
 import { DRUG_DB } from '@/data/drug-database';
 import { emitOpenDrug } from '@/lib/cross-tab-events';
 
@@ -525,6 +526,14 @@ export function InfusionConsult({
                     </ol>
                   </div>
                 )}
+              </div>
+            ) : isLoading ? (
+              <div className="h-full flex flex-col items-center justify-center gap-5 py-4">
+                <div className="flex items-center gap-2 text-[13px] text-blue-400">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Synthesizing your consult brief…</span>
+                </div>
+                <WaitGame active={isLoading && !brief} />
               </div>
             ) : (
               <div className="h-full flex items-center justify-center text-[14px] text-slate-500 text-center px-8">
