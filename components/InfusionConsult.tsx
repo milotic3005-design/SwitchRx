@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
-import { streamClaude } from '@/lib/claude';
+import { streamAI } from '@/lib/ai';
 import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon, FlaskConical } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -346,7 +346,7 @@ export function InfusionConsult({
       // Stream the brief with adaptive thinking + live web search so it cites
       // real FDA labels, PubMed articles, and society guidelines with
       // verifiable URLs (the [N] citation badges resolve to these sources).
-      await streamClaude({
+      await streamAI({
         system: systemInstruction,
         prompt: scenario,
         maxTokens: 8000,

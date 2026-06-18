@@ -1,7 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import type Anthropic from '@anthropic-ai/sdk';
-import { streamClaude } from '@/lib/claude';
+import { streamAI, type ChatMessage as AIMessage, type ContentBlock } from '@/lib/ai';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
@@ -236,7 +235,7 @@ let cachedAttachedFile: { name: string, type: string, base64: string } | null = 
 // The full Claude conversation history (user/assistant turns, including any
 // attached file blocks). Persisted at module scope so the conversation survives
 // tab switches that unmount/remount this component.
-let cachedHistory: Anthropic.MessageParam[] = [];
+let cachedHistory: AIMessage[] = [];
 
 export function ClinicalChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(cachedMessages);
@@ -244,7 +243,7 @@ export function ClinicalChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string, type: string, base64: string } | null>(cachedAttachedFile);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const historyRef = useRef<Anthropic.MessageParam[]>(cachedHistory);
+  const historyRef = useRef<AIMessage[]>(cachedHistory);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update caches whenever state changes
@@ -297,7 +296,7 @@ export function ClinicalChat() {
     });
 
     try {
-      await streamClaude({
+      await streamAI({
         system: 'You reformat clinical text for readability without changing its meaning.',
         prompt: `Please reformat the following clinical text to provide a much better visual experience. Use structured Markdown: bolding for key terms, bullet points for lists, clear headers (###), and tables if appropriate. Make it highly readable for a clinician. Do not change the clinical meaning, only the formatting.\n\nText to reformat:\n${msgToReformat.content}`,
         maxTokens: 4000,
@@ -355,7 +354,7 @@ Please answer the question, incorporating the retrieved context.`;
       // 3. Build the user turn. Attach images as image blocks and PDFs as
       //    document blocks (Claude reads both natively). Other file types can't
       //    be sent inline, so we note the filename in the text instead.
-      const userContent: Anthropic.ContentBlockParam[] = [{ type: 'text', text: promptWithContext }];
+      const userContent: ContentBlock[] = [{ type: 'text', text: promptWithContext }];
       if (currentFile) {
         const mime = currentFile.type;
         if (mime.startsWith('image/')) {
@@ -376,7 +375,7 @@ Please answer the question, incorporating the retrieved context.`;
         }
       }
 
-      const turn: Anthropic.MessageParam[] = [
+      const turn: AIMessage[] = [
         ...historyRef.current,
         { role: 'user', content: userContent },
       ];
@@ -387,7 +386,7 @@ Please answer the question, incorporating the retrieved context.`;
       // 4. Stream the multi-turn response with adaptive thinking + web search.
       //    Web search runs on every turn, so each answer carries its own
       //    verifiable [N] source links — no separate grounding sidecar needed.
-      const { text: fullResponse } = await streamClaude({
+      const { text: fullResponse } = await streamAI({
         system: CLINICAL_SYSTEM_PROMPT,
         prompt: turn,
         maxTokens: 6000,

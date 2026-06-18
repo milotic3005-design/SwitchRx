@@ -1,5 +1,5 @@
-import { makeServerClient } from '@/lib/claude-server';
-import { CLAUDE_MODEL } from '@/lib/claude';
+import { makeGeminiClient } from '@/lib/ai-server';
+import { Type } from '@google/genai';
 import type { QueryClassification, QueryDomain, Urgency } from '@/lib/pharmacy-lookup/types';
 
 export const runtime = 'nodejs';
@@ -19,23 +19,20 @@ iv_drug_info | drug_interaction | usp797_compounding | oncology_support | iv_iro
 
 Return JSON only — no prose.`;
 
-// JSON Schema for Claude structured outputs (output_config.format). Note: the
-// API requires additionalProperties:false on every object.
 const SCHEMA = {
-  type: 'object',
+  type: Type.OBJECT,
   properties: {
     drug_names: {
-      type: 'array',
-      items: { type: 'string' },
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
       description: 'Generic drug names, lowercase',
     },
-    query_domain: { type: 'string' },
-    urgency: { type: 'string' },
-    notes: { type: 'string' },
+    query_domain: { type: Type.STRING },
+    urgency: { type: Type.STRING },
+    notes: { type: Type.STRING },
   },
-  required: ['drug_names', 'query_domain', 'urgency', 'notes'],
-  additionalProperties: false,
-} as const;
+  required: ['drug_names', 'query_domain', 'urgency'],
+};
 
 const VALID_DOMAINS: QueryDomain[] = [
   'iv_drug_info', 'drug_interaction', 'usp797_compounding', 'oncology_support',
@@ -56,19 +53,21 @@ export async function POST(req: Request) {
   }
 
   try {
-    const ai = makeServerClient();
-    // Classifier is a fast, deterministic extraction — omit thinking for speed
-    // and constrain the output to the JSON schema so parsing is guaranteed-shape.
-    const response = await ai.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM,
-      output_config: { format: { type: 'json_schema', schema: SCHEMA } } as any,
-      messages: [{ role: 'user', content: scenario }],
+    const ai = makeGeminiClient();
+    // Fast, deterministic extraction — constrain the output to the JSON schema
+    // so parsing is guaranteed-shape.
+    const response = await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents: scenario,
+      config: {
+        systemInstruction: SYSTEM,
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA,
+        temperature: 0,
+      },
     });
 
-    const text =
-      (response.content.find((b: any) => b.type === 'text') as any)?.text || '{}';
+    const text = response.text || '{}';
     let parsed: any = {};
     try {
       parsed = JSON.parse(text);
@@ -93,7 +92,7 @@ export async function POST(req: Request) {
 
     return Response.json(result);
   } catch (err: any) {
-    console.error('Claude classify route error:', err);
+    console.error('AI classify route error:', err);
     return Response.json(
       { error: err?.message || 'Classification failed' },
       { status: 500 },

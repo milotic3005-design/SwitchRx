@@ -9,7 +9,7 @@ import type { QueryClassification } from './types';
 export const classifyAndExtract = async (
   scenario: string,
 ): Promise<QueryClassification> => {
-  const res = await fetch('/api/claude/classify', {
+  const res = await fetch('/api/ai/classify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ scenario }),

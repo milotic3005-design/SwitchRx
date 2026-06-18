@@ -1,27 +1,34 @@
-// Client-safe Claude helpers for the clinical tools.
+// Client-safe AI helpers for the clinical tools.
 //
-// The model is NEVER called directly from the browser. All Claude traffic goes
-// through server-side Next.js API routes (app/api/claude/*) that hold
-// ANTHROPIC_API_KEY server-side — so the key never ships in the client bundle.
+// The model (Google Gemini) is NEVER called directly from the browser. All AI
+// traffic goes through server-side Next.js API routes (app/api/ai/*) that hold
+// GEMINI_API_KEY server-side — so the key never ships in the client bundle.
 // This module only contains the browser-side fetch wrapper + shared types/const.
-// The SDK is imported here for TYPES ONLY (`import type`), which is erased at
-// build time and adds nothing to the bundle. The server half lives in
-// lib/claude-server.ts.
+// The server half (Gemini SDK) lives in lib/ai-server.ts.
 //
-// Model: claude-opus-4-8 with adaptive thinking. Verified sources are preserved
-// via Claude's built-in web_search tool — every web_search_tool_result block and
-// citations_delta carries a real URL + title, surfaced as clickable [N] citations.
+// Model: gemini-3.1-pro-preview with HIGH thinking. Verified sources are
+// preserved via Gemini's Google Search grounding — every groundingChunk carries
+// a real URL + title, surfaced as clickable [N] citations.
 
-import type Anthropic from '@anthropic-ai/sdk';
-
-export const CLAUDE_MODEL = 'claude-opus-4-8';
+export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 // A normalized source the UI renders in its "Verified Sources" list.
 export type GroundingSource = { uri: string; title: string };
 
-// Re-export the SDK message type so call sites can keep using a single name
-// without importing the SDK at runtime themselves.
-export type ChatMessage = Anthropic.MessageParam;
+// Provider-neutral chat message shape (mirrors the structure components already
+// build). Content is either a plain string or an array of typed blocks so
+// images / PDFs can be attached. The server translates this to Gemini `contents`.
+export type TextBlock = { type: 'text'; text: string };
+export type ImageBlock = {
+  type: 'image';
+  source: { type: 'base64'; media_type: string; data: string };
+};
+export type DocumentBlock = {
+  type: 'document';
+  source: { type: 'base64'; media_type: string; data: string };
+};
+export type ContentBlock = TextBlock | ImageBlock | DocumentBlock;
+export type ChatMessage = { role: 'user' | 'assistant'; content: string | ContentBlock[] };
 
 export type StreamCallbacks = {
   onText?: (full: string, delta: string) => void;
@@ -29,16 +36,16 @@ export type StreamCallbacks = {
   onSources?: (sources: GroundingSource[]) => void;
 };
 
-// Run a single-turn streaming Claude request with adaptive thinking and
-// (optionally) web search — via the server route. Streams text, thinking, and
+// Run a single-turn streaming AI request with HIGH thinking and (optionally)
+// Google Search grounding — via the server route. Streams text, thinking, and
 // verified sources to the provided callbacks. Returns the final assembled text.
 //
 // The server route emits newline-delimited JSON events; we reconstruct the
-// running text/thinking here so the callback contract matches the old in-browser
-// SDK helper exactly (onText(full, delta), onThinking(full, delta), onSources).
-export async function streamClaude(opts: {
+// running text/thinking here so the callback contract is (onText(full, delta),
+// onThinking(full, delta), onSources(list)).
+export async function streamAI(opts: {
   system: string;
-  prompt: string | Anthropic.MessageParam[];
+  prompt: string | ChatMessage[];
   maxTokens?: number;
   webSearch?: boolean;
   cb?: StreamCallbacks;
@@ -46,10 +53,10 @@ export async function streamClaude(opts: {
 }): Promise<{ text: string; thinking: string; sources: GroundingSource[] }> {
   const { system, prompt, maxTokens = 8000, webSearch = false, cb, signal } = opts;
 
-  const messages: Anthropic.MessageParam[] =
+  const messages: ChatMessage[] =
     typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt;
 
-  const res = await fetch('/api/claude/stream', {
+  const res = await fetch('/api/ai/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ system, messages, maxTokens, webSearch }),
@@ -59,7 +66,7 @@ export async function streamClaude(opts: {
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => '');
     throw new Error(
-      `Claude request failed (${res.status} ${res.statusText})${detail ? `: ${detail}` : ''}`,
+      `AI request failed (${res.status} ${res.statusText})${detail ? `: ${detail}` : ''}`,
     );
   }
 
@@ -93,7 +100,7 @@ export async function streamClaude(opts: {
         cb?.onSources?.(sources);
         break;
       case 'error':
-        errorMsg = evt.message || 'Claude stream error';
+        errorMsg = evt.message || 'AI stream error';
         break;
       // 'done' — nothing to do; loop ends when the body closes.
     }

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { streamClaude } from '@/lib/claude';
+import { streamAI } from '@/lib/ai';
 import { SUMMARIZATION_PROMPT } from '@/lib/ai-prompts';
 import { FileText, Sparkles, Loader2 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -15,7 +15,7 @@ export function GuidelineSummarizer() {
     
     setIsLoading(true);
     try {
-      const { text: out } = await streamClaude({
+      const { text: out } = await streamAI({
         system: SUMMARIZATION_PROMPT,
         prompt: text,
         maxTokens: 4000,

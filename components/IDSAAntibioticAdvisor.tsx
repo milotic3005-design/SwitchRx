@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import type Anthropic from '@anthropic-ai/sdk';
-import { streamClaude } from '@/lib/claude';
+import { streamAI, type ChatMessage } from '@/lib/ai';
 import {
   Stethoscope, Send, Loader2, AlertTriangle, ShieldAlert, ExternalLink,
   Link as LinkIcon, ChevronDown, ChevronUp, Network, Pill, FlaskConical,
@@ -354,7 +353,7 @@ export function IDSAAntibioticAdvisor() {
     try {
       // Stream the recommendation with adaptive thinking + live web search so
       // every IDSA citation is backed by a real, verifiable URL.
-      const { text: fullResponse } = await streamClaude({
+      const { text: fullResponse } = await streamAI({
         system: IDSA_SYSTEM_PROMPT,
         prompt,
         maxTokens: 8000,
@@ -375,7 +374,7 @@ export function IDSAAntibioticAdvisor() {
         chatSessionRef.current = [
           { role: 'user', content: prompt },
           { role: 'assistant', content: fullResponse },
-        ] as Anthropic.MessageParam[];
+        ] as ChatMessage[];
       }
     } catch (err: any) {
       console.error('IDSA advisor error:', err);
@@ -398,10 +397,10 @@ export function IDSAAntibioticAdvisor() {
       // Append this question to the running conversation history and stream the
       // reply with web search enabled, so follow-up answers carry their own
       // verifiable sources (no separate grounding sidecar needed).
-      const history = (chatSessionRef.current as Anthropic.MessageParam[]) ?? [];
-      const turn: Anthropic.MessageParam[] = [...history, { role: 'user', content: question }];
+      const history = (chatSessionRef.current as ChatMessage[]) ?? [];
+      const turn: ChatMessage[] = [...history, { role: 'user', content: question }];
 
-      const { text: full, sources: srcs } = await streamClaude({
+      const { text: full, sources: srcs } = await streamAI({
         system: `${IDSA_SYSTEM_PROMPT}\n\n${FOLLOWUP_ADDENDUM}`,
         prompt: turn,
         maxTokens: 4000,
@@ -422,7 +421,7 @@ export function IDSAAntibioticAdvisor() {
 
       // Persist the assistant turn so the next follow-up keeps full context.
       if (full.trim()) {
-        chatSessionRef.current = [...turn, { role: 'assistant', content: full }] as Anthropic.MessageParam[];
+        chatSessionRef.current = [...turn, { role: 'assistant', content: full }] as ChatMessage[];
       }
       void srcs;
     } catch (err: any) {
