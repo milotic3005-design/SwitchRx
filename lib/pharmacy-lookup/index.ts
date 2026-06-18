@@ -30,10 +30,9 @@ const lookupOneDrug = async (drug: string): Promise<DrugLookup> => {
 };
 
 export const runPharmacyLookup = async (
-  scenario: string,
-  apiKey: string
+  scenario: string
 ): Promise<LookupResult> => {
-  const classification = await classifyAndExtract(scenario, apiKey);
+  const classification = await classifyAndExtract(scenario);
 
   const drugsToLookup = classification.drug_names.slice(0, MAX_DRUGS);
 

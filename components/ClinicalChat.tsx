@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import Anthropic from '@anthropic-ai/sdk';
-import { makeClient, streamClaude } from '@/lib/claude';
+import type Anthropic from '@anthropic-ai/sdk';
+import { streamClaude } from '@/lib/claude';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
@@ -297,9 +297,7 @@ export function ClinicalChat() {
     });
 
     try {
-      const client = makeClient();
       await streamClaude({
-        client,
         system: 'You reformat clinical text for readability without changing its meaning.',
         prompt: `Please reformat the following clinical text to provide a much better visual experience. Use structured Markdown: bolding for key terms, bullet points for lists, clear headers (###), and tables if appropriate. Make it highly readable for a clinician. Do not change the clinical meaning, only the formatting.\n\nText to reformat:\n${msgToReformat.content}`,
         maxTokens: 4000,
@@ -339,8 +337,6 @@ export function ClinicalChat() {
     setIsLoading(true);
 
     try {
-      const client = makeClient();
-
       // 1. RAG Retrieval
       const context = await retrieveClinicalContext(sanitizedInput);
 
@@ -392,7 +388,6 @@ Please answer the question, incorporating the retrieved context.`;
       //    Web search runs on every turn, so each answer carries its own
       //    verifiable [N] source links — no separate grounding sidecar needed.
       const { text: fullResponse } = await streamClaude({
-        client,
         system: CLINICAL_SYSTEM_PROMPT,
         prompt: turn,
         maxTokens: 6000,

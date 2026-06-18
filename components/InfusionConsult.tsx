@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
-import { makeClient, streamClaude, getApiKey } from '@/lib/claude';
+import { streamClaude } from '@/lib/claude';
 import { FileText, Loader2, Send, Network, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon, FlaskConical } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -307,17 +307,12 @@ export function InfusionConsult({
     setIsThinkingExpanded(false); // keep minimized by default
 
     try {
-      const apiKey = getApiKey();
-      if (!apiKey) {
-        throw new Error("Anthropic API key is missing. Please ensure NEXT_PUBLIC_ANTHROPIC_API_KEY is set in your environment.");
-      }
-
       // Phase 1: Run the pharmacy lookup pipeline first (drug extraction +
       // openFDA label + shortage check + safety flags). This blocks the brief
       // by ~1–2s but gives the AI verified ground-truth context, surfaces
       // safety flags to the user immediately, and dramatically reduces
       // hallucinated dosing/stability claims.
-      const lookupPromise = runPharmacyLookup(scenario, apiKey)
+      const lookupPromise = runPharmacyLookup(scenario)
         .then(result => {
           setLookup(result);
           return result;
@@ -342,8 +337,6 @@ export function InfusionConsult({
       ]);
       const lookupContext = lookupResult ? formatLookupForPrompt(lookupResult) : '';
 
-      const client = makeClient();
-
       // Inject the lookup data into the system instruction so the brief
       // synthesizes against real FDA-label content rather than memory.
       const systemInstruction = lookupContext
@@ -354,7 +347,6 @@ export function InfusionConsult({
       // real FDA labels, PubMed articles, and society guidelines with
       // verifiable URLs (the [N] citation badges resolve to these sources).
       await streamClaude({
-        client,
         system: systemInstruction,
         prompt: scenario,
         maxTokens: 8000,

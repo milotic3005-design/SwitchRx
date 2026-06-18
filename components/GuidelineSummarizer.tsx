@@ -1,7 +1,6 @@
 "use client";
 import { useState } from 'react';
-import Anthropic from '@anthropic-ai/sdk';
-import { CLAUDE_MODEL, getApiKey } from '@/lib/claude';
+import { streamClaude } from '@/lib/claude';
 import { SUMMARIZATION_PROMPT } from '@/lib/ai-prompts';
 import { FileText, Sparkles, Loader2 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -16,20 +15,12 @@ export function GuidelineSummarizer() {
     
     setIsLoading(true);
     try {
-      const apiKey = getApiKey();
-      if (!apiKey) throw new Error('Anthropic API key missing.');
-      const ai = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-      const response = await ai.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 4000,
-        thinking: { type: 'adaptive', display: 'summarized' },
+      const { text: out } = await streamClaude({
         system: SUMMARIZATION_PROMPT,
-        messages: [{ role: 'user', content: text }],
+        prompt: text,
+        maxTokens: 4000,
+        cb: { onText: full => setSummary(full) },
       });
-      const out = response.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-        .map(b => b.text)
-        .join('');
       setSummary(out || 'No summary generated.');
     } catch (error) {
       console.error("Error summarizing:", error);

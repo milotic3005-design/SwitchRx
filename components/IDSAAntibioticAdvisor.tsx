@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import Anthropic from '@anthropic-ai/sdk';
-import { makeClient, streamClaude } from '@/lib/claude';
+import type Anthropic from '@anthropic-ai/sdk';
+import { streamClaude } from '@/lib/claude';
 import {
   Stethoscope, Send, Loader2, AlertTriangle, ShieldAlert, ExternalLink,
   Link as LinkIcon, ChevronDown, ChevronUp, Network, Pill, FlaskConical,
@@ -352,11 +352,9 @@ export function IDSAAntibioticAdvisor() {
     chatSessionRef.current = null;
 
     try {
-      const client = makeClient();
       // Stream the recommendation with adaptive thinking + live web search so
       // every IDSA citation is backed by a real, verifiable URL.
       const { text: fullResponse } = await streamClaude({
-        client,
         system: IDSA_SYSTEM_PROMPT,
         prompt,
         maxTokens: 8000,
@@ -397,7 +395,6 @@ export function IDSAAntibioticAdvisor() {
     setIsChatLoading(true);
 
     try {
-      const client = makeClient();
       // Append this question to the running conversation history and stream the
       // reply with web search enabled, so follow-up answers carry their own
       // verifiable sources (no separate grounding sidecar needed).
@@ -405,7 +402,6 @@ export function IDSAAntibioticAdvisor() {
       const turn: Anthropic.MessageParam[] = [...history, { role: 'user', content: question }];
 
       const { text: full, sources: srcs } = await streamClaude({
-        client,
         system: `${IDSA_SYSTEM_PROMPT}\n\n${FOLLOWUP_ADDENDUM}`,
         prompt: turn,
         maxTokens: 4000,
