@@ -6,51 +6,112 @@
   --font-accent: var(--font-accent);
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   CELESTIAL CODEX — a dark, cosmic editorial aesthetic.
+   Deep night-sky backdrop, gold constellation accents, high-contrast serif
+   display type. Applied to the clinical app's existing Tailwind utility
+   classes via a global remap (see the "Utility retone" block at the bottom),
+   so every component inherits the look without per-file edits.
+   ════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* 60fps design easing variables */
+  /* Easing */
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
   --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Glass/Glow Design System (dark defaults) */
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --glass-blur: blur(24px);
+  /* ── Foundation (night sky) ── */
+  --cc-ink: #05060f;            /* deepest page background */
+  --cc-panel: rgba(12, 16, 33, 0.62);
+  --cc-panel-alt: rgba(10, 13, 28, 0.6);
+  --cc-hairline: rgba(227, 194, 126, 0.16);
+  --cc-hairline-faint: rgba(227, 194, 126, 0.08);
 
-  /* ── Theme tokens (dark is the default) ───────────────────────── */
-  --bg-gradient: radial-gradient(ellipse at 50% -20%, #171126 0%, #0a0a0a 60%);
-  --text-base: #f0f0ff;
-  --panel-bg: rgba(15, 15, 20, 0.4);
-  --panel-border: rgba(255, 255, 255, 0.05);
-  --grain-opacity: 0.03;
-  /* Emphasis colour for **bold** text inside the AI consult brief */
-  --brief-strong: #6ee7b7; /* emerald-300 — high contrast on dark */
+  /* ── Accents ── */
+  --cc-gold: #e3c27e;
+  --cc-gold-warm: #f6efda;      /* display headline text */
+  --cc-violet: #9a6cff;
+  --cc-violet-light: #b79bff;
+  --cc-teal: #5fa8a2;
+  --cc-teal-light: #6fc4bd;
+
+  /* ── Text ── */
+  --cc-body: #b3bcd4;
+  --cc-muted: #9aa4be;
+  --cc-bright: #dfe6f5;         /* inline <strong> emphasis */
+  --cc-faint: #7e88a6;
+  --cc-meta: #5a6684;
+
+  /* ── Glass / panels (mapped onto the app's existing class names) ── */
+  --glass-bg: var(--cc-panel);
+  --glass-border: var(--cc-hairline);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --glass-blur: blur(3px);
+  --panel-bg: var(--cc-panel);
+  --panel-border: var(--cc-hairline);
+
+  --bg-gradient: var(--cc-ink);
+  --text-base: var(--cc-body);
+  --grain-opacity: 0.025;
+
+  /* Inline emphasis colour for AI brief **bold** */
+  --brief-strong: var(--cc-gold);
 }
 
-/* ── Light theme overrides ──────────────────────────────────────── */
+/* ── Light theme: a warm "parchment codex" inversion ── */
 html.light {
-  --glass-bg: rgba(255, 255, 255, 0.65);
-  --glass-border: rgba(15, 23, 42, 0.08);
-  --glass-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+  --cc-ink: #f3eee0;
+  --cc-panel: rgba(255, 252, 244, 0.82);
+  --cc-panel-alt: rgba(250, 245, 233, 0.9);
+  --cc-hairline: rgba(122, 92, 38, 0.22);
+  --cc-hairline-faint: rgba(122, 92, 38, 0.12);
 
-  --bg-gradient: radial-gradient(ellipse at 50% -20%, #eef2ff 0%, #f6f8fc 55%);
-  --text-base: #1e293b;
-  --panel-bg: rgba(255, 255, 255, 0.78);
-  --panel-border: rgba(15, 23, 42, 0.08);
-  --grain-opacity: 0.015;
-  --brief-strong: #047857; /* emerald-700 — high contrast on light */
+  --cc-gold: #9a7322;
+  --cc-gold-warm: #4a3a18;
+  --cc-violet: #6d3fd1;
+  --cc-violet-light: #6d3fd1;
+  --cc-teal: #2f7d76;
+  --cc-teal-light: #2f7d76;
+
+  --cc-body: #463f30;
+  --cc-muted: #6b6452;
+  --cc-bright: #2a2418;
+  --cc-faint: #8a8068;
+  --cc-meta: #9a907a;
+
+  --glass-shadow: 0 8px 32px rgba(74, 58, 24, 0.1);
+  --grain-opacity: 0.02;
 }
 
 body {
-  background: var(--bg-gradient);
-  background-attachment: fixed;
+  background: var(--cc-ink);
   color: var(--text-base);
+  font-family: var(--font-body), system-ui, sans-serif;
   transition: background 0.4s var(--ease-smooth), color 0.4s var(--ease-smooth);
 }
 
-/* Textures & Grain */
+/* ── Atmospheric glows — fixed full-bleed radial washes behind everything ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(58, 46, 98, 0.45), transparent 55%),
+    radial-gradient(90% 70% at 85% 110%, rgba(20, 58, 74, 0.35), transparent 60%),
+    radial-gradient(70% 60% at 10% 90%, rgba(74, 40, 52, 0.28), transparent 60%),
+    linear-gradient(180deg, rgba(5, 6, 15, 0) 60%, rgba(5, 6, 15, 0.85) 100%);
+}
+html.light body::before {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(154, 115, 34, 0.12), transparent 55%),
+    radial-gradient(90% 70% at 85% 110%, rgba(47, 125, 118, 0.1), transparent 60%),
+    radial-gradient(70% 60% at 10% 90%, rgba(122, 92, 38, 0.08), transparent 60%);
+}
+
+/* Faint film grain over the starfield */
 body::after {
   content: '';
   position: fixed; inset: 0;
@@ -58,10 +119,12 @@ body::after {
   opacity: var(--grain-opacity);
   mix-blend-mode: overlay;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 1;
 }
 
-/* Reduced motion fallback */
+/* Keep app content above the fixed washes */
+body > * { position: relative; z-index: 2; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -69,112 +132,176 @@ body::after {
   }
 }
 
-.glass-card {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-radius: 20px;
-  transition: all 0.3s var(--ease-out-quart);
+/* ════════════════════════════ Typography ════════════════════════════ */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+  letter-spacing: -0.5px;
+  color: var(--cc-gold-warm);
+  font-weight: 600;
 }
 
+/* Space Grotesk eyebrow/label helper */
+.font-accent,
+.cc-eyebrow {
+  font-family: var(--font-accent), sans-serif;
+}
+.cc-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  font-size: 12px;
+  color: var(--cc-gold);
+  font-weight: 500;
+}
+
+/* Nav links — Space Grotesk, uppercase, tracked-out */
+.cc-navlink {
+  font-family: var(--font-accent), sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+/* ════════════════════════════ Components ════════════════════════════ */
+.glass-card {
+  background: var(--cc-panel);
+  border: 1px solid var(--cc-hairline);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  border-radius: 4px;
+  transition: all 0.3s var(--ease-out-quart);
+}
 .glass-card:hover {
-  border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15);
+  border-color: rgba(227, 194, 126, 0.4);
+  box-shadow: 0 8px 32px rgba(227, 194, 126, 0.1);
 }
 
 .glass-panel {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  backdrop-filter: blur(16px);
-  border-radius: 16px;
+  background: var(--cc-panel);
+  border: 1px solid var(--cc-hairline);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  border-radius: 6px;
 }
 
+/* Primary action — gold constellation button */
 .btn-premium {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  background: linear-gradient(135deg, rgba(227, 194, 126, 0.18), rgba(154, 108, 255, 0.16));
+  border: 1px solid var(--cc-gold);
+  box-shadow: 0 0 22px rgba(227, 194, 126, 0.22);
   transition: all 0.3s var(--ease-out-quart);
-  border: none;
-  color: white;
+  color: var(--cc-gold-warm);
+  font-family: var(--font-accent), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 13px !important;
 }
-
 .btn-premium:hover {
-  box-shadow: 0 0 35px rgba(99, 102, 241, 0.7);
+  box-shadow: 0 0 36px rgba(227, 194, 126, 0.4);
   transform: translateY(-2px);
+  border-color: var(--cc-gold-warm);
+}
+.btn-premium:active { transform: translateY(1px); }
+
+::selection { background: rgba(227, 194, 126, 0.28); color: var(--cc-gold-warm); }
+
+/* Entrance keyframe (content visible by default; animation only enhances) */
+@keyframes cm-rise {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: none; }
 }
 
-.btn-premium:active {
-  transform: translateY(1px);
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-  letter-spacing: -0.025em;
-}
-
-.font-accent {
-  font-family: var(--font-accent);
-}
-
-/* ── AI brief bold-emphasis colour ──────────────────────────────────
-   The model wraps key clinical values (doses, drugs, thresholds) in
-   **bold**. Render those in an accent colour for contrast instead of
-   plain white/slate, in both the Infusion Copilot brief and the IDSA
-   advisor output. Token flips automatically between themes. */
+/* AI brief bold-emphasis colour */
 .consult-brief strong,
 .idsa-brief strong {
   color: var(--brief-strong);
   font-weight: 600;
 }
 
-/* ── Light-theme retrofit ───────────────────────────────────────────
-   The UI is authored with dark-only utility classes (text-white,
-   text-slate-*, bg-white/*, border-white/*). Rather than rewrite every
-   component with dark: variants, remap the high-traffic utilities when
-   html.light is active. `html.light .x` (specificity 0,2,1) outranks the
-   bare utility (0,1,0), so no !important is needed. */
-html.light .text-white { color: #0f172a; }
-html.light .text-slate-100,
-html.light .text-slate-200 { color: #1e293b; }
-html.light .text-slate-300 { color: #334155; }
-html.light .text-slate-400 { color: #475569; }
-html.light .text-slate-500 { color: #64748b; }
-html.light .text-slate-600 { color: #94a3b8; }
+/* ════════════════════════════════════════════════════════════════════════
+   UTILITY RETONE
+   The app is authored with a blue/emerald/slate Tailwind palette. Rather than
+   edit all 8 components, remap the high-traffic utility classes to the
+   Celestial Codex palette. `html .x` (specificity 0,1,1) outranks the bare
+   utility (0,1,0), so no !important is needed.
 
-/* Accent text — darken for legible contrast on light surfaces */
-html.light .text-blue-200\/80,
-html.light .text-blue-300,
-html.light .text-blue-400 { color: #2563eb; }
-html.light .text-emerald-200\/80,
-html.light .text-emerald-300,
-html.light .text-emerald-400 { color: #059669; }
+   Mapping: blue/indigo → GOLD · emerald/teal → TEAL · violet stays VIOLET ·
+   slate text → cosmic greys · white borders → gold hairline.
+   PRESERVED: rose / red / amber — clinical danger & warning signals.
+   ════════════════════════════════════════════════════════════════════════ */
 
-/* Surfaces */
-html.light .bg-white\/5 { background-color: rgba(15, 23, 42, 0.04); }
-html.light .bg-white\/10 { background-color: rgba(15, 23, 42, 0.06); }
-html.light .bg-white\/\[0\.02\] { background-color: rgba(15, 23, 42, 0.025); }
-html.light .bg-black\/20 { background-color: rgba(15, 23, 42, 0.03); }
-html.light .bg-black\/40 { background-color: rgba(15, 23, 42, 0.05); }
-html.light .bg-\[\#0a0a0a\] { background-color: #f8fafc; }
+/* ── Text: slate greys → cosmic body greys ── */
+html .text-white { color: var(--cc-gold-warm); }
+html .text-slate-100, html .text-slate-200 { color: var(--cc-body); }
+html .text-slate-300 { color: var(--cc-body); }
+html .text-slate-400 { color: var(--cc-muted); }
+html .text-slate-500 { color: var(--cc-faint); }
+html .text-slate-600 { color: var(--cc-meta); }
+html .placeholder-slate-500::placeholder,
+html .placeholder\:text-slate-500::placeholder { color: var(--cc-meta); }
 
-/* Hardcoded near-black surfaces used by selects, dropdown options, cards, and
-   inset panels. Remap them to light surfaces so they don't render as black
-   blocks in light mode. Text colour is handled by the .text-* remaps above. */
-html.light .bg-\[\#121212\],
-html.light .bg-\[\#0f0f10\] { background-color: #ffffff; color: #1e293b; }
-html.light .bg-\[\#161616\] { background-color: #f1f5f9; }
-html.light .bg-\[\#1a1a1a\] { background-color: #eef2f7; }
-html.light .bg-\[\#1e1e1e\] { background-color: #e9eef5; }
-html.light .bg-\[\#2a2a2a\] { background-color: #e2e8f0; }
-/* Hover states on the select control */
-html.light .hover\:bg-\[\#1e1e1e\]:hover { background-color: #e2e8f0; }
-html.light .hover\:bg-\[\#2a2a2a\]:hover { background-color: #dbe2ea; }
+/* ── Brand blues / indigo → GOLD ── */
+html .text-blue-400, html .text-blue-300, html .text-blue-500,
+html .text-indigo-400, html .text-indigo-300 { color: var(--cc-gold); }
+html .text-blue-200\/80 { color: rgba(227, 194, 126, 0.85); }
+html .bg-blue-500\/10, html .bg-blue-500\/15, html .bg-blue-500\/20 { background-color: rgba(227, 194, 126, 0.1); }
+html .bg-blue-500\/30 { background-color: rgba(227, 194, 126, 0.22); }
+html .bg-blue-600, html .hover\:bg-blue-700:hover, html .bg-blue-600\/20 { background-color: rgba(227, 194, 126, 0.16); }
+html .border-blue-500\/20, html .border-blue-500\/30, html .border-blue-500\/40,
+html .border-blue-500\/50, html .focus\:border-blue-500\/50:focus { border-color: var(--cc-hairline); }
+html .focus\:ring-blue-500\/30:focus, html .focus\:ring-blue-500\/50:focus { --tw-ring-color: rgba(227, 194, 126, 0.3); }
+html .decoration-blue-400\/40 { text-decoration-color: rgba(227, 194, 126, 0.4); }
+html .hover\:text-blue-300:hover, html .hover\:text-blue-400:hover { color: var(--cc-gold-warm); }
+html .hover\:decoration-blue-300:hover { text-decoration-color: var(--cc-gold-warm); }
+html .from-blue-400 { --tw-gradient-from: var(--cc-gold); }
+html .via-indigo-400 { --tw-gradient-via: var(--cc-violet); }
 
-/* Borders */
-html.light .border-white\/5 { border-color: rgba(15, 23, 42, 0.06); }
-html.light .border-white\/10 { border-color: rgba(15, 23, 42, 0.1); }
+/* ── Emerald / green → TEAL ── */
+html .text-emerald-400, html .text-emerald-300, html .text-emerald-500,
+html .text-green-400, html .text-green-300 { color: var(--cc-teal-light); }
+html .text-emerald-200\/80 { color: rgba(111, 196, 189, 0.85); }
+html .bg-emerald-500\/10, html .bg-emerald-500\/15, html .bg-emerald-500\/20,
+html .bg-emerald-500\/5, html .bg-emerald-500\/25, html .bg-emerald-500\/30 { background-color: rgba(95, 168, 162, 0.12); }
+html .bg-emerald-600, html .hover\:bg-emerald-700:hover { background-color: rgba(95, 168, 162, 0.2); }
+html .border-emerald-500\/20, html .border-emerald-500\/25, html .border-emerald-500\/30,
+html .border-emerald-500\/40, html .focus\:border-emerald-500\/60:focus { border-color: rgba(95, 168, 162, 0.35); }
+html .to-emerald-400 { --tw-gradient-to: var(--cc-teal-light); }
 
-/* The white "user message" bubble in chat needs an inverted treatment so
-   it stays distinct from the now-light panel background. */
-html.light .bg-white.text-black { background-color: #1e293b; color: #f8fafc; }
+/* ── Violet stays VIOLET (already on-palette) ── */
+html .text-violet-300, html .text-violet-400 { color: var(--cc-violet-light); }
+html .bg-violet-500\/10, html .bg-violet-500\/15, html .bg-violet-500\/20 { background-color: rgba(154, 108, 255, 0.12); }
+html .border-violet-500\/20, html .border-violet-500\/30, html .border-violet-500\/40 { border-color: rgba(154, 108, 255, 0.35); }
+
+/* ── Surfaces: translucent whites → night-panel / gold films ── */
+html .bg-white\/5 { background-color: rgba(227, 194, 126, 0.035); }
+html .bg-white\/10 { background-color: rgba(227, 194, 126, 0.07); }
+html .bg-white\/15 { background-color: rgba(227, 194, 126, 0.1); }
+html .bg-white\/\[0\.02\] { background-color: rgba(255, 255, 255, 0.015); }
+html .hover\:bg-white\/5:hover { background-color: rgba(227, 194, 126, 0.05); }
+html .hover\:bg-white\/10:hover { background-color: rgba(227, 194, 126, 0.09); }
+html .bg-black\/20 { background-color: rgba(5, 6, 15, 0.4); }
+html .bg-black\/40 { background-color: rgba(5, 6, 15, 0.55); }
+html .bg-\[\#0a0a0a\] { background-color: var(--cc-panel-alt); }
+
+/* Hardcoded near-black control/dropdown surfaces → night panels */
+html .bg-\[\#121212\], html .bg-\[\#0f0f10\] { background-color: #0a0d1c; color: var(--cc-body); }
+html .bg-\[\#161616\] { background-color: rgba(10, 13, 28, 0.85); }
+html .bg-\[\#1a1a1a\] { background-color: rgba(12, 16, 33, 0.85); }
+html .bg-\[\#1e1e1e\] { background-color: rgba(14, 18, 38, 0.9); }
+html .bg-\[\#2a2a2a\] { background-color: rgba(20, 26, 50, 0.9); }
+html .hover\:bg-\[\#1e1e1e\]:hover { background-color: rgba(18, 24, 48, 0.95); }
+html .hover\:bg-\[\#2a2a2a\]:hover { background-color: rgba(26, 34, 62, 0.95); }
+
+/* ── Borders: white hairlines → gold hairlines ── */
+html .border-white\/5 { border-color: var(--cc-hairline-faint); }
+html .border-white\/10 { border-color: var(--cc-hairline); }
+html .border-white\/20 { border-color: rgba(227, 194, 126, 0.28); }
+html .divide-white\/10 > * + * { border-color: var(--cc-hairline); }
+
+/* The white "user message" bubble in chat → warm gold chip on night bg */
+html .bg-white.text-black { background-color: rgba(227, 194, 126, 0.14); color: var(--cc-gold-warm); }
+html .bg-white.hover\:bg-slate-200:hover { background-color: rgba(227, 194, 126, 0.22); }
+
+/* prose (markdown) — keep AI output legible on the night panels */
+html .prose-invert { --tw-prose-body: var(--cc-body); --tw-prose-headings: var(--cc-gold-warm); --tw-prose-bold: var(--cc-bright); --tw-prose-links: var(--cc-gold); }
