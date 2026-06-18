@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { SwitchingProtocols } from '@/components/SwitchingProtocols';
 import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
@@ -58,6 +58,41 @@ export default function Home() {
       offCopilot();
     };
   }, []);
+
+  // Memoize each tab's content so a tab switch (which only flips `activeTab`)
+  // doesn't re-render every mounted tab subtree. All tabs stay mounted to
+  // preserve their local state, but their elements are referentially stable
+  // here — keyed only on the props that actually change — so React reuses them
+  // and skips reconciling the heavy subtrees (e.g. the 234-card Drug Reference)
+  // on every nav click. This is what keeps tab switching snappy.
+  const switchingTab = useMemo(() => (
+    <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
+      <div className="mb-8">
+        <div className="cc-eyebrow mb-3">Protocols</div>
+        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--cc-gold-warm)' }}>
+          Medication Switching
+        </h1>
+        <p className="text-[15px] text-slate-400 mt-3">Evidence-based replacement therapies tailored to patient outcomes.</p>
+      </div>
+      <SwitchingProtocols />
+    </div>
+  ), []);
+
+  const infusionTab = useMemo(() => (
+    <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
+      <InfusionConsult prefillScenario={pendingScenario} />
+    </div>
+  ), [pendingScenario]);
+
+  const chatTab = useMemo(() => (
+    <div className="pt-28 pb-8 px-6 md:px-12 max-w-5xl mx-auto w-full h-screen">
+      <ClinicalChat />
+    </div>
+  ), []);
+
+  const calculatorsTab = useMemo(() => <ClinicalCalculators />, []);
+
+  const drugRefTab = useMemo(() => <DrugReference openDrug={pendingDrug} />, [pendingDrug]);
 
   return (
     <div className="min-h-screen flex flex-col text-slate-200">
@@ -210,36 +245,23 @@ export default function Home() {
             to wipe progress. Keeping them mounted preserves that state. The
             home tab has no state, so it stays conditionally rendered. */}
         <div className={activeTab === 'switching' ? 'contents' : 'hidden'}>
-          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
-            <div className="mb-8">
-              <div className="cc-eyebrow mb-3">Protocols</div>
-              <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--cc-gold-warm)' }}>
-                Medication Switching
-              </h1>
-              <p className="text-[15px] text-slate-400 mt-3">Evidence-based replacement therapies tailored to patient outcomes.</p>
-            </div>
-            <SwitchingProtocols />
-          </div>
+          {switchingTab}
         </div>
 
         <div className={activeTab === 'infusion' ? 'contents' : 'hidden'}>
-          <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
-            <InfusionConsult prefillScenario={pendingScenario} />
-          </div>
+          {infusionTab}
         </div>
 
         <div className={activeTab === 'chat' ? 'contents' : 'hidden'}>
-          <div className="pt-28 pb-8 px-6 md:px-12 max-w-5xl mx-auto w-full h-screen">
-            <ClinicalChat />
-          </div>
+          {chatTab}
         </div>
 
         <div className={activeTab === 'calculators' ? 'contents' : 'hidden'}>
-          <ClinicalCalculators />
+          {calculatorsTab}
         </div>
 
         <div className={activeTab === 'drugref' ? 'contents' : 'hidden'}>
-          <DrugReference openDrug={pendingDrug} />
+          {drugRefTab}
         </div>
       </main>
     </div>
