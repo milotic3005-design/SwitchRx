@@ -241,10 +241,6 @@ export function getDrugProfile(drugName: string): DrugProfile | null {
   return match ? drugDatabase[match] : null;
 }
 
-export function getAllDrugs(): string[] {
-  return Object.keys(drugDatabase);
-}
-
 export function getDrugClass(drugName: string): string | null {
   const normalized = drugName.toLowerCase().trim();
   for (const [className, drugs] of Object.entries(drugClasses)) {
