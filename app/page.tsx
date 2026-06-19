@@ -5,8 +5,9 @@ import { ClinicalChat } from '@/components/ClinicalChat';
 import { InfusionConsult } from '@/components/InfusionConsult';
 import { ClinicalCalculators } from '@/components/ClinicalCalculators';
 import { DrugReference } from '@/components/DrugReference';
+import { BreakRoom } from '@/components/BreakRoom';
 import { Starfield } from '@/components/Starfield';
-import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical, Sun, Moon } from 'lucide-react';
+import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical, Coffee, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 
@@ -94,6 +95,8 @@ export default function Home() {
 
   const drugRefTab = useMemo(() => <DrugReference openDrug={pendingDrug} />, [pendingDrug]);
 
+  const breakRoomTab = useMemo(() => <BreakRoom />, []);
+
   return (
     <div className="min-h-screen flex flex-col text-slate-200">
       <Starfield />
@@ -140,6 +143,13 @@ export default function Home() {
           >
             <FlaskConical size={13} strokeWidth={2.5} />
             Drug Reference
+          </button>
+          <button
+            onClick={() => setActiveTab('breakroom')}
+            className={`text-[13px] font-medium transition-all px-4 py-2 rounded-full flex items-center gap-1.5 ${activeTab === 'breakroom' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <Coffee size={13} strokeWidth={2.5} />
+            Break Room
           </button>
           <button
             onClick={toggleTheme}
@@ -262,6 +272,10 @@ export default function Home() {
 
         <div className={activeTab === 'drugref' ? 'contents' : 'hidden'}>
           {drugRefTab}
+        </div>
+
+        <div className={activeTab === 'breakroom' ? 'contents' : 'hidden'}>
+          {breakRoomTab}
         </div>
       </main>
     </div>
