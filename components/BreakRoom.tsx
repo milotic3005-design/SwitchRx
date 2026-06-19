@@ -1,13 +1,17 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
-  Wind, Zap, Grid3x3, Sparkles, ArrowLeft, Play, RotateCcw, Trophy,
+  Wind, Zap, Grid3x3, Sparkles, ArrowLeft, Play, RotateCcw, Trophy, Target,
   Heart, Star, Activity, Pill, FlaskConical, Stethoscope, Coffee,
 } from 'lucide-react';
 
 /**
  * The Break Room — a small arcade of quick, self-contained destress games for
- * healthcare staff to reset between cases. Four games, each a ~30–90s session:
+ * healthcare staff to reset between cases. Each is a ~30–90s session:
+ *   • Pulse          — precision-timing "perfect hit" combo game. Built on the
+ *                      dopamine-reward loop: anticipation (the closing ring),
+ *                      reward-prediction-error (unpredictable 2x golden pulses),
+ *                      and escalating combos. Skill-based, not gambling.
  *   • Box Breathing  — guided 4-4-4-4 breathing (calming, clinically used)
  *   • Reflex Test    — tap-when-green reaction timer
  *   • Memory Match   — flip-and-pair grid
@@ -16,11 +20,12 @@ import {
  * aware via the app's CSS variables. High scores persist in localStorage.
  */
 
-type GameId = 'menu' | 'breathing' | 'reflex' | 'memory' | 'pop';
+type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'memory' | 'pop';
 
 const GAMES: Array<{
   id: GameId; title: string; blurb: string; tag: string; Icon: any; accent: string;
 }> = [
+  { id: 'pulse', title: 'Pulse', blurb: 'Tap the instant the ring snaps to the mark. Chain perfect beats and chase the golden pulse.', tag: '45 sec', Icon: Target, accent: 'var(--cc-gold)' },
   { id: 'breathing', title: 'Box Breathing', blurb: 'Guided 4-4-4-4 breaths to slow the heart rate and reset focus.', tag: '60 sec', Icon: Wind, accent: 'var(--cc-teal)' },
   { id: 'reflex', title: 'Reflex Test', blurb: 'Tap the instant it turns green. Chase your fastest reaction time.', tag: '20 sec', Icon: Zap, accent: 'var(--cc-gold)' },
   { id: 'memory', title: 'Memory Match', blurb: 'Flip the cards and pair them up. A quick cognitive palate-cleanser.', tag: '60 sec', Icon: Grid3x3, accent: 'var(--cc-violet)' },
@@ -76,6 +81,7 @@ export function BreakRoom() {
           >
             <ArrowLeft size={15} /> All games
           </button>
+          {game === 'pulse' && <PulseGame />}
           {game === 'breathing' && <BoxBreathing />}
           {game === 'reflex' && <ReflexTest />}
           {game === 'memory' && <MemoryMatch />}
@@ -86,6 +92,245 @@ export function BreakRoom() {
       <p className="text-[11px] text-slate-500 text-center mt-6 italic">
         For a quick mental reset only — not a substitute for real rest or breaks.
       </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Pulse — precision-timing combo game (the dopamine-reward loop)
+//
+// Design grounded in reward-prediction-error research: a ring contracts toward
+// a fixed mark (ANTICIPATION); the player taps at the perfect instant (RELEASE);
+// perfect hits CHAIN into an escalating combo multiplier; and an unpredictable
+// ~18% "golden" pulse pays 2x (REWARD PREDICTION ERROR — the surprise bonus is
+// what spikes dopamine hardest). Skill-based, not gambling: agency drives every
+// point. Three misses ends the run.
+// ─────────────────────────────────────────────────────────────────────────
+const PULSE_HS = 'br-pulse-best';
+function PulseGame() {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [phase, setPhase] = useState<'idle' | 'playing' | 'over'>('idle');
+  const [score, setScore] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [misses, setMisses] = useState(0);
+  const [best, setBest] = useState(0);
+  const [bestCombo, setBestCombo] = useState(0);
+
+  // Geometry (logical px): ring shrinks from R0 to 0; the mark sits at RT.
+  const R0 = 140, RT = 50, PERFECT = 8, GOOD = 22;
+
+  const g = useRef({
+    phase: 'idle' as 'idle' | 'playing' | 'over',
+    ringActive: false,
+    ringR: R0,
+    elapsed: 0,
+    dur: 1.5,
+    golden: false,
+    score: 0, combo: 0, misses: 0, bestCombo: 0,
+    nextDelay: 0,
+    bursts: [] as Array<{ x: number; y: number; r: number; max: number; life: number; hue: string }>,
+    flash: null as null | { text: string; sub: string; life: number; color: string },
+    w: 600, h: 360,
+  });
+
+  useEffect(() => {
+    try {
+      const b = localStorage.getItem(PULSE_HS); if (b) setBest(parseInt(b, 10));
+      const bc = localStorage.getItem(PULSE_HS + '-combo'); if (bc) setBestCombo(parseInt(bc, 10));
+    } catch {}
+  }, []);
+
+  const start = useCallback(() => {
+    const s = g.current;
+    s.phase = 'playing'; s.ringActive = false; s.ringR = R0; s.elapsed = 0;
+    s.dur = 1.5; s.golden = false; s.score = 0; s.combo = 0; s.misses = 0;
+    s.bestCombo = 0; s.nextDelay = 0.5; s.bursts = []; s.flash = null;
+    setScore(0); setCombo(0); setMisses(0); setPhase('playing');
+  }, []);
+
+  const endGame = useCallback(() => {
+    const s = g.current;
+    s.phase = 'over'; setPhase('over');
+    setBest(prev => { const nb = Math.max(prev, s.score); try { localStorage.setItem(PULSE_HS, String(nb)); } catch {} return nb; });
+    setBestCombo(prev => { const nb = Math.max(prev, s.bestCombo); try { localStorage.setItem(PULSE_HS + '-combo', String(nb)); } catch {} return nb; });
+  }, []);
+
+  const resolve = useCallback((result: 'perfect' | 'good' | 'miss', cx: number, cy: number) => {
+    const s = g.current;
+    const mult = s.golden ? 2 : 1;
+    if (result === 'perfect') {
+      s.combo += 1;
+      const pts = Math.round((100 + (s.combo - 1) * 25) * mult);
+      s.score += pts;
+      s.flash = { text: s.golden ? `GOLDEN! +${pts}` : `PERFECT +${pts}`, sub: s.combo > 1 ? `${s.combo}x combo` : '', life: 0, color: s.golden ? '#f6d680' : '#e3c27e' };
+      for (let i = 0; i < 2; i++) s.bursts.push({ x: cx, y: cy, r: RT - 6 + i * 8, max: 110 + i * 30, life: 0, hue: s.golden ? '246,214,128' : '227,194,126' });
+    } else if (result === 'good') {
+      s.combo += 1;
+      const pts = Math.round(40 * mult);
+      s.score += pts;
+      s.flash = { text: `GOOD +${pts}`, sub: '', life: 0, color: '#5fa8a2' };
+      s.bursts.push({ x: cx, y: cy, r: RT, max: 90, life: 0, hue: '95,168,162' });
+    } else {
+      s.misses += 1; s.combo = 0;
+      s.flash = { text: 'MISS', sub: `${3 - s.misses} left`, life: 0, color: '#9aa4be' };
+    }
+    s.bestCombo = Math.max(s.bestCombo, s.combo);
+    setScore(s.score); setCombo(s.combo); setMisses(s.misses);
+    s.ringActive = false; s.golden = false; s.nextDelay = 0.32;
+    // difficulty ramps gently with score
+    s.dur = Math.max(0.78, 1.5 - s.score * 0.00035);
+    if (s.misses >= 3) endGame();
+  }, [endGame]);
+
+  // render + loop
+  useEffect(() => {
+    const canvas = canvasRef.current, wrap = wrapRef.current;
+    if (!canvas || !wrap) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    let raf = 0, dpr = Math.min(window.devicePixelRatio || 1, 2), last = 0;
+
+    const resize = () => {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = wrap.clientWidth, h = g.current.h;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.current.w = w;
+    };
+    resize();
+    const ro = new ResizeObserver(resize); ro.observe(wrap);
+
+    const loop = (t: number) => {
+      const s = g.current;
+      if (!last) last = t;
+      const dt = Math.min(0.05, (t - last) / 1000); last = t;
+      const w = s.w, h = s.h, cx = w / 2, cy = h / 2;
+      ctx.clearRect(0, 0, w, h);
+
+      if (s.phase === 'playing') {
+        if (s.ringActive) {
+          s.elapsed += dt;
+          s.ringR = R0 * (1 - s.elapsed / s.dur);
+          if (s.ringR <= RT - GOOD) resolve('miss', cx, cy); // passed the mark untapped
+        } else {
+          s.nextDelay -= dt;
+          if (s.nextDelay <= 0) {
+            s.ringActive = true; s.elapsed = 0; s.ringR = R0;
+            s.golden = Math.random() < 0.18;
+          }
+        }
+      }
+
+      // bursts
+      for (let i = s.bursts.length - 1; i >= 0; i--) {
+        const b = s.bursts[i]; b.life += dt * 2.2;
+        if (b.life >= 1) s.bursts.splice(i, 1);
+      }
+      if (s.flash) { s.flash.life += dt; if (s.flash.life > 0.9) s.flash = null; }
+
+      // ── draw mark (target) ──
+      ctx.beginPath(); ctx.arc(cx, cy, RT, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(227,194,126,0.55)'; ctx.lineWidth = 2; ctx.stroke();
+      // perfect-zone hint
+      ctx.beginPath(); ctx.arc(cx, cy, RT, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(227,194,126,0.12)'; ctx.lineWidth = PERFECT * 2; ctx.stroke();
+      // center dot
+      ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(227,194,126,0.7)'; ctx.fill();
+
+      // ── draw shrinking ring ──
+      if (s.phase === 'playing' && s.ringActive && s.ringR > 0) {
+        const near = Math.abs(s.ringR - RT) < GOOD;
+        const hue = s.golden ? '246,214,128' : '154,108,255';
+        ctx.beginPath(); ctx.arc(cx, cy, s.ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${hue},${near ? 1 : 0.8})`;
+        ctx.lineWidth = s.golden ? 5 : 4;
+        if (near) { ctx.shadowColor = `rgba(${hue},0.9)`; ctx.shadowBlur = 18; }
+        ctx.stroke(); ctx.shadowBlur = 0;
+      }
+
+      // ── bursts (expanding rings) ──
+      for (const b of s.bursts) {
+        const r = b.r + (b.max - b.r) * b.life;
+        ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${b.hue},${(1 - b.life) * 0.7})`;
+        ctx.lineWidth = 3 * (1 - b.life) + 0.5; ctx.stroke();
+      }
+
+      // ── combo (big, faint, center) ──
+      if (s.phase === 'playing' && s.combo >= 2) {
+        ctx.globalAlpha = 0.16; ctx.fillStyle = '#e3c27e';
+        ctx.font = '700 64px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${s.combo}x`, cx, cy); ctx.globalAlpha = 1;
+      }
+
+      // ── flash text ──
+      if (s.flash) {
+        const a = Math.max(0, 1 - s.flash.life / 0.9);
+        const yOff = -RT - 26 - s.flash.life * 18;
+        ctx.globalAlpha = a; ctx.fillStyle = s.flash.color;
+        ctx.font = '600 22px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(s.flash.text, cx, cy + yOff);
+        if (s.flash.sub) { ctx.font = '500 13px sans-serif'; ctx.fillStyle = 'rgba(180,190,210,1)'; ctx.fillText(s.flash.sub, cx, cy + yOff + 20); }
+        ctx.globalAlpha = 1;
+      }
+
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [resolve]);
+
+  const onTap = () => {
+    const s = g.current;
+    if (s.phase !== 'playing' || !s.ringActive) return;
+    const cx = s.w / 2, cy = s.h / 2;
+    const diff = Math.abs(s.ringR - RT);
+    if (diff <= PERFECT) resolve('perfect', cx, cy);
+    else if (diff <= GOOD) resolve('good', cx, cy);
+    else resolve('miss', cx, cy);
+  };
+
+  return (
+    <div className="flex flex-col items-center" ref={wrapRef}>
+      <h3 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--cc-gold-warm)' }}>Pulse</h3>
+      <div className="flex items-center gap-4 text-[12px] text-slate-400 mb-4">
+        <span>Score: <span className="tabular-nums text-amber-300 font-semibold">{score}</span></span>
+        <span>Combo: <span className="tabular-nums text-slate-300">{combo}x</span></span>
+        <span className="flex items-center gap-1">
+          {[0, 1, 2].map(i => (
+            <Heart key={i} size={11} className={i < 3 - misses ? 'text-rose-400 fill-rose-400' : 'text-slate-600'} />
+          ))}
+        </span>
+        <span className="flex items-center gap-1"><Trophy size={12} className="text-amber-300/80" /> <span className="tabular-nums text-slate-300">{best}</span></span>
+      </div>
+
+      <div className="relative w-full rounded-xl overflow-hidden border border-white/10 bg-black/20">
+        <canvas ref={canvasRef} className="block w-full touch-none cursor-pointer select-none" onPointerDown={onTap} />
+        {phase !== 'playing' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/40 backdrop-blur-[1px] text-center px-6">
+            {phase === 'idle' ? (
+              <>
+                <p className="text-[14px] text-slate-200 font-medium">Tap when the ring meets the mark</p>
+                <p className="text-[12px] text-slate-400 -mt-1">Nail it perfectly to build your combo. Gold rings pay double. 3 misses ends it.</p>
+                <button onClick={start} className="btn-premium px-6 py-2.5 rounded-full inline-flex items-center gap-2 mt-1">
+                  <Play size={15} /> Start
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-[15px] font-semibold" style={{ color: 'var(--cc-gold-warm)' }}>Score {score}</p>
+                <p className="text-[12px] text-slate-300">Best combo this run: <span className="text-amber-300 font-semibold">{g.current.bestCombo}x</span> · Best score: <span className="text-amber-300 font-semibold">{best}</span></p>
+                <button onClick={start} className="btn-premium px-5 py-2 rounded-full inline-flex items-center gap-2 mt-1">
+                  <RotateCcw size={14} /> Again
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-500 mt-3">Best combo ever: <span className="tabular-nums text-slate-300">{bestCombo}x</span></p>
     </div>
   );
 }
