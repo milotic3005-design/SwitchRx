@@ -1,8 +1,8 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
-  Wind, Zap, Grid3x3, Sparkles, ArrowLeft, Play, RotateCcw, Trophy, Target,
-  Heart, Star, Activity, Pill, FlaskConical, Stethoscope, Coffee,
+  Wind, Zap, Sparkles, ArrowLeft, Play, RotateCcw, Trophy, Target,
+  Heart, Coffee,
 } from 'lucide-react';
 
 /**
@@ -14,13 +14,12 @@ import {
  *                      and escalating combos. Skill-based, not gambling.
  *   • Box Breathing  — guided 4-4-4-4 breathing (calming, clinically used)
  *   • Reflex Test    — tap-when-green reaction timer
- *   • Memory Match   — flip-and-pair grid
  *   • Pill Pop       — 30-second tap-to-pop stress reliever (canvas)
  * Everything is local, themed to the Celestial Codex aesthetic, and light/dark
  * aware via the app's CSS variables. High scores persist in localStorage.
  */
 
-type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'memory' | 'pop';
+type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'pop';
 
 const GAMES: Array<{
   id: GameId; title: string; blurb: string; tag: string; Icon: any; accent: string;
@@ -28,8 +27,7 @@ const GAMES: Array<{
   { id: 'pulse', title: 'Pulse', blurb: 'Tap the instant the ring snaps to the mark. Chain perfect beats and chase the golden pulse.', tag: '45 sec', Icon: Target, accent: 'var(--cc-gold)' },
   { id: 'breathing', title: 'Box Breathing', blurb: 'Guided 4-4-4-4 breaths to slow the heart rate and reset focus.', tag: '60 sec', Icon: Wind, accent: 'var(--cc-teal)' },
   { id: 'reflex', title: 'Reflex Test', blurb: 'Tap the instant it turns green. Chase your fastest reaction time.', tag: '20 sec', Icon: Zap, accent: 'var(--cc-gold)' },
-  { id: 'memory', title: 'Memory Match', blurb: 'Flip the cards and pair them up. A quick cognitive palate-cleanser.', tag: '60 sec', Icon: Grid3x3, accent: 'var(--cc-violet)' },
-  { id: 'pop', title: 'Pill Pop', blurb: 'Pop the rising capsules for 30 seconds. Pure, satisfying catharsis.', tag: '30 sec', Icon: Sparkles, accent: 'var(--cc-gold)' },
+{ id: 'pop', title: 'Pill Pop', blurb: 'Pop the rising capsules for 30 seconds. Pure, satisfying catharsis.', tag: '30 sec', Icon: Sparkles, accent: 'var(--cc-gold)' },
 ];
 
 export function BreakRoom() {
@@ -84,8 +82,7 @@ export function BreakRoom() {
           {game === 'pulse' && <PulseGame />}
           {game === 'breathing' && <BoxBreathing />}
           {game === 'reflex' && <ReflexTest />}
-          {game === 'memory' && <MemoryMatch />}
-          {game === 'pop' && <PillPop />}
+{game === 'pop' && <PillPop />}
         </div>
       )}
 
@@ -492,130 +489,6 @@ function ReflexTest() {
         {panel.sub && <div className="text-[13px] text-slate-300/90 mt-2 px-6">{panel.sub}</div>}
         {state === 'result' && rate && <div className="text-[12px] mt-2" style={{ color: 'var(--cc-teal-light)' }}>{rate}</div>}
       </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Memory Match
-// ─────────────────────────────────────────────────────────────────────────
-const MEMORY_ICONS = [Heart, Star, Activity, Pill, FlaskConical, Stethoscope];
-const MEMORY_COLORS = ['#e0556b', 'var(--cc-gold)', 'var(--cc-teal)', 'var(--cc-violet)', '#6fb1d6', '#d98a5b'];
-type MemCard = { key: number; icon: number; flipped: boolean; matched: boolean };
-
-function buildDeck(): MemCard[] {
-  const pairs = [...Array(6).keys(), ...Array(6).keys()];
-  for (let i = pairs.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
-  }
-  return pairs.map((icon, key) => ({ key, icon, flipped: false, matched: false }));
-}
-
-function MemoryMatch() {
-  const [cards, setCards] = useState<MemCard[]>(buildDeck);
-  const [moves, setMoves] = useState(0);
-  const [secs, setSecs] = useState(0);
-  const [started, setStarted] = useState(false);
-  const iconsRef = useRef<number[]>(cards.map(c => c.icon));
-  const picksRef = useRef<number[]>([]);
-  const startedRef = useRef(false);
-  const lock = useRef(false);
-
-  const won = cards.every(c => c.matched);
-
-  useEffect(() => {
-    if (!started || won) return;
-    const id = setInterval(() => setSecs(s => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [started, won]);
-
-  const reset = () => {
-    const deck = buildDeck();
-    iconsRef.current = deck.map(c => c.icon);
-    setCards(deck); setMoves(0); setSecs(0); setStarted(false);
-    picksRef.current = []; startedRef.current = false; lock.current = false;
-  };
-
-  // Ref-based so two rapid clicks (within one render frame) can't read stale
-  // state and drop a flip. Card icons never move, so matches are checked against
-  // a static icons ref rather than peeking at state inside an updater.
-  const flip = (idx: number) => {
-    if (lock.current || picksRef.current.length >= 2) return;
-    if (picksRef.current.includes(idx)) return;
-    if (!startedRef.current) { startedRef.current = true; setStarted(true); }
-
-    let flipped = false;
-    setCards(prev => {
-      const c = prev[idx];
-      if (c.flipped || c.matched) return prev;
-      flipped = true;
-      return prev.map((cc, i) => (i === idx ? { ...cc, flipped: true } : cc));
-    });
-    if (!flipped) return;
-
-    picksRef.current = [...picksRef.current, idx];
-    if (picksRef.current.length === 2) {
-      setMoves(m => m + 1);
-      const [a, b] = picksRef.current;
-      lock.current = true;
-      const isMatch = iconsRef.current[a] === iconsRef.current[b];
-      setTimeout(() => {
-        setCards(cur => cur.map((cc, i) =>
-          i === a || i === b
-            ? (isMatch ? { ...cc, matched: true } : { ...cc, flipped: false })
-            : cc,
-        ));
-        picksRef.current = [];
-        lock.current = false;
-      }, isMatch ? 350 : 750);
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center">
-      <h3 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--cc-gold-warm)' }}>Memory Match</h3>
-      <div className="flex items-center gap-4 text-[12px] text-slate-400 mb-5">
-        <span>Moves: <span className="tabular-nums text-slate-300">{moves}</span></span>
-        <span>Time: <span className="tabular-nums text-slate-300">{secs}s</span></span>
-        <button onClick={reset} className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors">
-          <RotateCcw size={12} /> New
-        </button>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2.5 sm:gap-3" style={{ maxWidth: 360 }}>
-        {cards.map((c, i) => {
-          const Icon = MEMORY_ICONS[c.icon];
-          const show = c.flipped || c.matched;
-          return (
-            <button
-              key={c.key}
-              onClick={() => flip(i)}
-              className="rounded-xl flex items-center justify-center transition-all duration-200"
-              style={{
-                width: 76, height: 76, maxWidth: '20vw', maxHeight: '20vw',
-                background: show ? 'rgba(227,194,126,0.10)' : 'var(--cc-panel-alt)',
-                border: `1px solid ${show ? 'rgba(227,194,126,0.45)' : 'var(--cc-hairline)'}`,
-                opacity: c.matched ? 0.55 : 1,
-                cursor: show ? 'default' : 'pointer',
-              }}
-            >
-              {show
-                ? <Icon size={30} strokeWidth={1.7} style={{ color: MEMORY_COLORS[c.icon] }} />
-                : <Sparkles size={18} className="text-slate-600" strokeWidth={1.5} />}
-            </button>
-          );
-        })}
-      </div>
-
-      {won && (
-        <div className="mt-5 text-center">
-          <p className="text-[15px] font-semibold" style={{ color: 'var(--cc-teal-light)' }}>Cleared in {moves} moves · {secs}s</p>
-          <button onClick={reset} className="btn-premium px-5 py-2 rounded-full inline-flex items-center gap-2 mt-3">
-            <RotateCcw size={14} /> Play again
-          </button>
-        </div>
-      )}
     </div>
   );
 }
