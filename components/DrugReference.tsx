@@ -8,6 +8,10 @@ import {
 import { DRUG_DB } from '@/data/drug-database';
 import type { Drug } from '@/lib/iv-reference-types';
 import { getAntimicrobialDetails, type AntimicrobialDetails, type SpectrumCoverage } from '@/data/antimicrobial-details';
+import {
+  getBudStability, USP797_BUD, USP797_LIMIT_HOURS, effectiveBud,
+  type DrugStability, type EffectiveBud,
+} from '@/data/bud-stability';
 import { emitAskCopilot } from '@/lib/cross-tab-events';
 
 /* ── Badge ────────────────────────────────────────────────────── */
@@ -167,6 +171,136 @@ function RenalDosingTable({ tiers, hepatic }: { tiers: AntimicrobialDetails['ren
   );
 }
 
+/* ── BUD: stability broken out by container type ──────────────── */
+function ContainerStabilityTable({ stability }: { stability: DrugStability }) {
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full text-[12px] min-w-[440px]">
+          <thead>
+            <tr className="bg-white/5 text-left">
+              <th className="px-2.5 py-2 font-semibold text-slate-200">Container</th>
+              <th className="px-2.5 py-2 font-semibold text-slate-200">Conc · Diluent</th>
+              <th className="px-2.5 py-2 font-semibold text-blue-300 text-center whitespace-nowrap">Room</th>
+              <th className="px-2.5 py-2 font-semibold text-emerald-300 text-center whitespace-nowrap">Fridge</th>
+              <th className="px-2.5 py-2 font-semibold text-slate-300 text-center whitespace-nowrap">Frozen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stability.containers.map((c, i) => (
+              <tr key={i} className={`border-t border-white/5 ${i % 2 ? 'bg-white/[0.02]' : ''} align-top`}>
+                <td className="px-2.5 py-2 text-slate-200 font-medium whitespace-nowrap">{c.container}</td>
+                <td className="px-2.5 py-2 text-slate-400">
+                  {c.concentration}<span className="text-slate-600"> · </span>{c.diluent}
+                </td>
+                <td className="px-2.5 py-2 text-center text-blue-200 tabular-nums whitespace-nowrap">{c.roomTemp}</td>
+                <td className="px-2.5 py-2 text-center text-emerald-200 tabular-nums whitespace-nowrap">{c.refrigerated}</td>
+                <td className="px-2.5 py-2 text-center text-slate-400 tabular-nums whitespace-nowrap">{c.frozen || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {stability.note && (
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          <span className="font-semibold text-slate-300">Note:</span> {stability.note}
+        </p>
+      )}
+      <p className="text-[10px] text-slate-600">
+        Chemical/physical stability (≥90% potency). Source: {stability.source}. d = days, h = hours, w = weeks, mo = months.
+      </p>
+    </div>
+  );
+}
+
+/* ── BUD: USP <797> microbiological cross-check ───────────────── */
+function USP797CrossCheck({ category, chemRoom, chemRefrig }: {
+  category: string; chemRoom?: string; chemRefrig?: string;
+}) {
+  const isCat1 = category === 'Category 1';
+  const limits = isCat1 ? USP797_LIMIT_HOURS.cat1 : USP797_LIMIT_HOURS.cat2;
+
+  const rtEff = effectiveBud(chemRoom, limits.roomTemp);
+  const refEff = effectiveBud(chemRefrig, limits.refrigerated);
+
+  const tag = (e: EffectiveBud) =>
+    e.limitedBy === 'usp797' ? 'USP <797> cap'
+    : e.limitedBy === 'stability' ? 'stability cap'
+    : '—';
+  const tagTone = (e: EffectiveBud) =>
+    e.limitedBy === 'usp797' ? 'text-amber-300'
+    : e.limitedBy === 'stability' ? 'text-emerald-300'
+    : 'text-slate-500';
+
+  const scenario = isCat1
+    ? 'Category 1 CSP (segregated compounding area)'
+    : 'Category 2 CSP — aseptically processed, no sterility test';
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-slate-400 leading-relaxed">
+        USP <span className="font-semibold text-slate-300">&lt;797&gt;</span> caps the BUD by sterility risk,
+        independent of chemical stability. The <span className="font-semibold text-slate-200">assignable BUD is
+        the lesser</span> of the two. Cross-check below uses{' '}
+        <span className="font-semibold text-slate-200">{scenario}</span> (this drug is tagged{' '}
+        <span className="font-semibold text-slate-200">{category}</span>).
+      </p>
+
+      {/* Effective assignable BUD */}
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { label: 'Room Temp', eff: rtEff, chem: chemRoom, limit: isCat1 ? '12 h' : '4 d' },
+          { label: 'Refrigerated', eff: refEff, chem: chemRefrig, limit: isCat1 ? '24 h' : '10 d' },
+        ].map(b => (
+          <div key={b.label} className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{b.label}</p>
+            <p className="text-lg font-bold text-white mt-0.5">{b.eff.value}</p>
+            <p className={`text-[10px] font-semibold ${tagTone(b.eff)}`}>{tag(b.eff)}</p>
+            <p className="text-[10px] text-slate-500 mt-1">
+              stability {b.chem || '—'} · <span className="whitespace-nowrap">&lt;797&gt; {b.limit}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Full USP <797> limit reference */}
+      <Section title="USP <797> BUD limits (full table)" icon="📑" defaultOpen={false}>
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-[11px] min-w-[520px]">
+            <thead>
+              <tr className="bg-white/5 text-left">
+                <th className="px-2 py-2 font-semibold text-slate-200">Storage</th>
+                <th className="px-2 py-2 font-semibold text-slate-300 text-center">Cat 1</th>
+                <th className="px-2 py-2 font-semibold text-slate-300 text-center">Cat 2<br/>aseptic,<br/>no test</th>
+                <th className="px-2 py-2 font-semibold text-slate-300 text-center">Cat 2<br/>aseptic,<br/>tested</th>
+                <th className="px-2 py-2 font-semibold text-slate-300 text-center">Cat 2<br/>terminal,<br/>no test</th>
+                <th className="px-2 py-2 font-semibold text-slate-300 text-center">Cat 2<br/>terminal,<br/>tested</th>
+              </tr>
+            </thead>
+            <tbody>
+              {USP797_BUD.map((r, i) => (
+                <tr key={i} className={`border-t border-white/5 ${i % 2 ? 'bg-white/[0.02]' : ''}`}>
+                  <td className="px-2 py-2 text-slate-200 font-medium">{r.storage}</td>
+                  <td className="px-2 py-2 text-center text-slate-400 tabular-nums">{r.cat1}</td>
+                  <td className={`px-2 py-2 text-center tabular-nums ${!isCat1 ? 'text-amber-200 font-semibold bg-amber-500/5' : 'text-slate-400'}`}>{r.cat2AsepticNoTest}</td>
+                  <td className="px-2 py-2 text-center text-slate-400 tabular-nums">{r.cat2AsepticTested}</td>
+                  <td className="px-2 py-2 text-center text-slate-400 tabular-nums">{r.cat2TerminalNoTest}</td>
+                  <td className="px-2 py-2 text-center text-slate-400 tabular-nums">{r.cat2TerminalTested}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[10px] text-slate-600 mt-2 leading-relaxed">
+          USP &lt;797&gt; (2023). &ldquo;Tested&rdquo; = sterility test performed and passed. The highlighted
+          column is the scenario applied above. Sterility testing or terminal sterilization extends the
+          allowable BUD; confirm your facility&rsquo;s category and process.
+        </p>
+      </Section>
+    </div>
+  );
+}
+
 /* ── Drug detail modal ────────────────────────────────────────── */
 function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void }) {
   const [modalSearch, setModalSearch] = useState('');
@@ -186,10 +320,19 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
     drug.infusion?.lightProtection, drug.infusion?.pvtFreeLinRequired,
   ].some(v => matches(v)), [q, drug]);
 
-  const showBUD = useMemo(() => !q || [
-    drug.bud?.roomTemp, drug.bud?.refrigerated, drug.bud?.frozen,
-    drug.bud?.usp797Category, drug.bud?.basisNote,
-  ].some(v => matches(v)), [q, drug]);
+  const showBUD = useMemo(() => {
+    if (!q) return true;
+    if ([
+      drug.bud?.roomTemp, drug.bud?.refrigerated, drug.bud?.frozen,
+      drug.bud?.usp797Category, drug.bud?.basisNote,
+    ].some(v => matches(v))) return true;
+    if (matches('usp 797') || matches('beyond-use') || matches('bud') || matches('stability') || matches('container')) return true;
+    const bs = getBudStability(drug.genericName);
+    return !!bs && (matches(bs.note) || bs.containers.some(c =>
+      matches(c.container) || matches(c.diluent) || matches(c.concentration) ||
+      matches(c.roomTemp) || matches(c.refrigerated) || matches(c.frozen)
+    ));
+  }, [q, drug]);
 
   const showClinical = useMemo(() => !q || [
     drug.summary?.pearls, drug.summary?.dosing, drug.summary?.monitoring,
@@ -208,6 +351,10 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
   // iv-pharm-app point-of-care reference. Only present for ID antibiotics
   // currently in the registry — other drugs simply skip these sections.
   const amDetails = useMemo(() => getAntimicrobialDetails(drug.genericName), [drug.genericName]);
+
+  // Container-specific BUD stability (ASHP ESPD 6th ed.) — present for the top
+  // IV antibiotics; drives the per-container table and USP <797> cross-check.
+  const budStab = useMemo(() => getBudStability(drug.genericName), [drug.genericName]);
 
   const showSpectrum = useMemo(() => {
     if (!amDetails) return false;
@@ -326,6 +473,9 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
 
           {showBUD && (
             <Section title="Beyond-Use Dating" icon="🌡️">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                Chemical stability {budStab ? '(representative)' : ''}
+              </p>
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {[
                   { label: 'Room Temp', val: drug.bud?.roomTemp },
@@ -344,6 +494,28 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
                   {hl(drug.bud.basisNote)}
                 </p>
               )}
+
+              {/* Per-container breakdown (ASHP ESPD) */}
+              {budStab && (
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    Stability by container type
+                  </p>
+                  <ContainerStabilityTable stability={budStab} />
+                </div>
+              )}
+
+              {/* USP <797> microbiological cross-check */}
+              <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300 mb-2">
+                  Assigned BUD — USP &lt;797&gt; cross-check
+                </p>
+                <USP797CrossCheck
+                  category={drug.bud?.usp797Category || 'Category 2'}
+                  chemRoom={drug.bud?.roomTemp}
+                  chemRefrig={drug.bud?.refrigerated}
+                />
+              </div>
             </Section>
           )}
 

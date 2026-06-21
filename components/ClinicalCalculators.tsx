@@ -1,26 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle } from 'lucide-react';
+import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle, ArrowUp, ArrowDown, Pause, Check, Droplets } from 'lucide-react';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
 
 // ── CADD drug presets ──────────────────────────────────────────────────────────
-const CADD_PRESETS: Record<string, { dose: number; freq: number; conc: number; kvo: number }> = {
-  'Ampicillin':               { dose: 6000,  freq: 4,  conc: 40,    kvo: 2 },
-  'Cefazolin':                { dose: 6000,  freq: 8,  conc: 50,    kvo: 2 },
-  'Cefepime':                 { dose: 6000,  freq: 8,  conc: 50,    kvo: 2 },
-  'Ceftazidime':              { dose: 6000,  freq: 8,  conc: 50,    kvo: 2 },
-  'Ceftriaxone':              { dose: 2000,  freq: 24, conc: 40,    kvo: 2 },
-  'Daptomycin':               { dose: 500,   freq: 24, conc: 50,    kvo: 2 },
-  'Ertapenem':                { dose: 1000,  freq: 24, conc: 20,    kvo: 2 },
-  'Fluconazole':              { dose: 400,   freq: 24, conc: 2,     kvo: 2 },
-  'Meropenem':                { dose: 3000,  freq: 8,  conc: 40,    kvo: 2 },
-  'Nafcillin':                { dose: 6000,  freq: 4,  conc: 40,    kvo: 2 },
-  'Ampicillin/Sulbactam':      { dose: 3000,  freq: 6,  conc: 45,    kvo: 2 },
-  'Piperacillin/Tazobactam':  { dose: 13500, freq: 8,  conc: 67.5,  kvo: 2 },
-  'Vancomycin':               { dose: 1500,  freq: 12, conc: 5,     kvo: 2 },
+// Concentration, KVO, concentration range, unit, and stability notes are sourced
+// directly from the "CADD bag calculator" workbook. Dose and frequency are NOT in
+// that workbook (they are patient-specific), so they default to a typical OPAT
+// starting point the user adjusts.
+type CADDPreset = {
+  dose: number; freq: number;          // typical starting point — user-editable
+  conc: number; kvo: number;           // pulled from the CADD bag calculator workbook
+  concLabel: string; unit: string;     // workbook concentration range + units
+  note?: string;                       // workbook stability / handling note
+};
+const CADD_PRESETS: Record<string, CADDPreset> = {
+  'Acyclovir':                       { dose: 750,     freq: 8,  conc: 7,     kvo: 0.8, concLabel: '1–7',      unit: 'mg/mL',    note: 'Extended stability 4 days RT; sterility 48 h RT.' },
+  'Aztreonam':                       { dose: 2000,    freq: 8,  conc: 10,    kvo: 0.8, concLabel: '10',       unit: 'mg/mL',    note: 'Less stable at 20 mg/mL.' },
+  'Cefazolin':                       { dose: 2000,    freq: 8,  conc: 20,    kvo: 2,   concLabel: '20',       unit: 'mg/mL' },
+  'Cefepime':                        { dose: 2000,    freq: 8,  conc: 10,    kvo: 0.8, concLabel: '10',       unit: 'mg/mL' },
+  'Ceftazidime':                     { dose: 2000,    freq: 8,  conc: 20,    kvo: 2,   concLabel: '10 or 20', unit: 'mg/mL' },
+  'Ceftriaxone':                     { dose: 2000,    freq: 24, conc: 10,    kvo: 2,   concLabel: '10',       unit: 'mg/mL' },
+  'Ganciclovir':                     { dose: 350,     freq: 12, conc: 5,     kvo: 0.8, concLabel: '1–5',      unit: 'mg/mL' },
+  'Meropenem':                       { dose: 1000,    freq: 8,  conc: 10,    kvo: 0.8, concLabel: '5–10',     unit: 'mg/mL',    note: 'Unstable at higher concentration (~4 d fridge / 25 h RT). Consider ertapenem if ESBL.' },
+  'Nafcillin':                       { dose: 2000,    freq: 4,  conc: 20,    kvo: 2,   concLabel: '20–25',    unit: 'mg/mL',    note: 'Very thick solution.' },
+  'Penicillin G':                    { dose: 4000000, freq: 4,  conc: 20000, kvo: 2,   concLabel: '20,000',   unit: 'units/mL', note: 'Dose & concentration are in UNITS. Final units = final volume × concentration.' },
+  'Piperacillin/Tazobactam (Zosyn)': { dose: 4500,    freq: 8,  conc: 33.75, kvo: 2,   concLabel: '33.75',    unit: 'mg/mL' },
+  'Ampicillin/Sulbactam (Unasyn)':   { dose: 3000,    freq: 6,  conc: 30,    kvo: 0.8, concLabel: '30',       unit: 'mg/mL' },
+  'Vancomycin':                      { dose: 1250,    freq: 12, conc: 10,    kvo: 0.8, concLabel: '10',       unit: 'mg/mL' },
 };
 
 const DAYS = [1, 2, 3, 4, 5];
@@ -36,6 +46,7 @@ const CALCULATORS = [
   // Combined: BMI + Ideal/Adjusted Body Weight all from one set of inputs.
   { id: 'bodywt', label: 'Body Weight & BMI' },
   { id: 'iron',   label: 'Iron Deficit (Ganzoni)' },
+  { id: 'esa',    label: 'ESA Dosing (CKD Anemia)' },
   { id: 'calcium',label: 'Corrected Calcium' },
 ];
 
@@ -1152,6 +1163,11 @@ function CADDCalculator() {
 
   const freqPerDay = freq > 0 ? 24 / freq : 0;
 
+  // Selected preset (if any) drives the displayed units and the workbook hint.
+  const preset = selectedDrug ? CADD_PRESETS[selectedDrug] : undefined;
+  const concUnit = preset?.unit ?? 'mg/mL';        // e.g. "mg/mL" or "units/mL"
+  const massUnit = concUnit.split('/')[0];          // e.g. "mg" or "units"
+
   const getPracticalBagVol = (days: number) => {
     const drugV = conc > 0 ? (dose * freqPerDay * days) / conc : 0;
     const kvoV = kvo * 24 * days;
@@ -1166,7 +1182,8 @@ function CADDCalculator() {
       {/* Left – parameters */}
       <div className="w-full lg:w-72 flex-shrink-0 space-y-5">
         <p className="text-xs text-slate-500 leading-relaxed">
-          Calculates CADD bag volumes and doses for 1–5 day durations. Select a preset antibiotic or enter custom values.
+          Calculates CADD bag volumes and doses for 1–5 day durations. Pick a drug to pull its concentration and
+          KVO from the CADD bag calculator workbook, then enter the patient&apos;s dose and frequency.
         </p>
 
         {/* Drug preset */}
@@ -1189,12 +1206,32 @@ function CADDCalculator() {
               </div>
             </div>
           </div>
+
+          {/* Workbook values for the selected drug */}
+          {preset && (
+            <div className="mt-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Concentration</span>
+                <span className="text-emerald-300 font-semibold">{preset.concLabel} {preset.unit}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">KVO</span>
+                <span className="text-emerald-300 font-semibold">{preset.kvo} mL/hr</span>
+              </div>
+              {preset.note && (
+                <p className="text-[11px] text-amber-300/90 leading-relaxed pt-1.5 border-t border-white/10">
+                  {preset.note}
+                </p>
+              )}
+              <p className="text-[10px] text-slate-500 pt-0.5">From CADD bag calculator workbook. Adjust below if needed.</p>
+            </div>
+          )}
         </div>
 
         {/* Dose & Freq */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Dose (mg)</label>
+            <label className={labelCls}>Dose ({massUnit})</label>
             <input type="number" value={dose} onChange={e => setDose(parseFloat(e.target.value) || 0)} className={tableInputCls} />
           </div>
           <div>
@@ -1205,7 +1242,7 @@ function CADDCalculator() {
 
         {/* Concentration */}
         <div>
-          <label className={labelCls}>Concentration (mg/mL)</label>
+          <label className={labelCls}>Concentration ({concUnit})</label>
           <input type="number" step="0.01" value={conc} onChange={e => setConc(parseFloat(e.target.value) || 0)} className={tableInputCls} />
         </div>
 
@@ -1232,6 +1269,10 @@ function CADDCalculator() {
             <span className="text-white font-semibold">
               {conc > 0 ? ((dose * freqPerDay) / conc).toFixed(1) : '—'} mL
             </span>
+          </div>
+          <div className="flex justify-between text-slate-400">
+            <span>Daily drug amount</span>
+            <span className="text-white font-semibold">{(dose * freqPerDay).toLocaleString(undefined, { maximumFractionDigits: 0 })} {massUnit}</span>
           </div>
           <div className="flex justify-between text-slate-400">
             <span>Daily KVO vol</span>
@@ -1306,14 +1347,16 @@ function CADDCalculator() {
                     <span className="text-[10px] text-slate-500 uppercase tracking-wide">Adjusted for volume</span>
                   </td>
                   {DAYS.map(d => {
-                    const mg = getPracticalBagVol(d) * conc;
-                    const display = mg >= 1000
-                      ? `${(mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} g`
-                      : `${Math.round(mg)} mg`;
+                    const amt = getPracticalBagVol(d) * conc;
+                    // Only convert to grams for mass-based drugs; unit-based drugs
+                    // (e.g. Penicillin G) stay in units.
+                    const display = massUnit === 'mg' && amt >= 1000
+                      ? `${(amt / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} g`
+                      : `${Math.round(amt).toLocaleString()} ${massUnit}`;
                     return (
                       <td key={d} className="px-4 py-3 text-center border-l border-white/5 align-top">
                         <span className="text-emerald-400 font-bold text-base block">{display}</span>
-                        <span className="text-[10px] text-slate-500 block">{Math.round(mg).toLocaleString()} mg</span>
+                        <span className="text-[10px] text-slate-500 block">{Math.round(amt).toLocaleString()} {massUnit}</span>
                       </td>
                     );
                   })}
@@ -1323,6 +1366,512 @@ function CADDCalculator() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── ESA Dosing for Anemia of CKD ────────────────────────────────────────────────
+// Three workflows:
+//   • Initiation  — Week 0 eligibility + starting dose (darbepoetin / epoetin alfa-epbx)
+//   • Titration   — Week 5+ dose adjustment from Hgb response (4 decision rows)
+//   • Iron        — IV iron repletion thresholds from TSAT + ferritin
+//
+// Decision-support only. Where the decision table leaves a gap the tool flags it
+// rather than inventing a recommendation.
+
+const ESA_SYRINGE = [25, 40, 60, 100, 150, 200, 300, 500] as const; // Aranesp syringe sizes (mcg)
+const EPO_STRENGTHS = [2000, 3000, 4000, 10000, 20000, 40000] as const; // common Retacrit vial strengths (units)
+
+type EsaAgentId = 'darbepoetin' | 'epoetin';
+
+const ESA_AGENTS: Record<EsaAgentId, {
+  label: string; brand: string; note: string; unit: 'mcg' | 'units';
+  sizeLabel: string; weightBased: boolean; initSchedule: string;
+  initDosePerKg?: number; initDoseFixed?: number;
+}> = {
+  darbepoetin: {
+    label: 'Darbepoetin alfa', brand: 'Aranesp', note: 'Preferred ESA agent',
+    unit: 'mcg', sizeLabel: 'syringe', weightBased: true,
+    initDosePerKg: 0.45, initSchedule: 'Week 1 — 0.45 mcg/kg SQ',
+  },
+  epoetin: {
+    label: 'Epoetin alfa-epbx', brand: 'Retacrit', note: 'Alternative ESA agent',
+    unit: 'units', sizeLabel: 'vial', weightBased: false,
+    initDoseFixed: 10000, initSchedule: 'Weeks 1 & 3 — 10,000 units SQ',
+  },
+};
+
+const esaNearestSyringe = (v: number): number =>
+  ESA_SYRINGE.reduce((best, s) => (Math.abs(s - v) < Math.abs(best - v) ? s : best), ESA_SYRINGE[0]);
+
+const esaFmtDose = (v: number, unit: 'mcg' | 'units'): string =>
+  unit === 'units' ? `${Math.round(v).toLocaleString()} units` : `${v % 1 === 0 ? v : v.toFixed(1)} mcg`;
+
+type EsaAction = 'increase' | 'decrease' | 'continue' | 'hold' | 'judgment';
+
+// Week-5+ titration decision. Safety-ordered so the hold/decrease ceilings take
+// precedence over the increase rules (which only apply below 10 / 10.6 g/dL).
+function esaTitration(agentId: EsaAgentId, currentHgb: number, priorHgb: number | null, dose: number | null) {
+  if (!(currentHgb > 0)) return null;
+  const agent = ESA_AGENTS[agentId];
+  const hasPrior = priorHgb != null && priorHgb > 0;
+  const rise = hasPrior ? currentHgb - priorHgb! : null;
+
+  let action: EsaAction;
+  let color: string;
+  let rule: string;
+  let factor: number | null = null; // multiplier applied to current dose (null = no new dose, e.g. hold)
+
+  if (currentHgb > 11) {
+    action = 'hold'; color = 'rose';
+    rule = 'Hgb > 11 g/dL → Hold ESA.';
+  } else if (currentHgb >= 10.6) {
+    action = 'decrease'; color = 'amber'; factor = 0.75;
+    rule = `Hgb ≥ 10.6 g/dL → Decrease dose by 25% (round to nearest ${agent.sizeLabel} size).`;
+  } else {
+    // Hgb < 10.6 — the increase / continue rules need the 4-week Hgb change.
+    if (!hasPrior) return { incomplete: true as const };
+    if (rise! > 1) {
+      action = 'continue'; color = 'emerald'; factor = 1;
+      rule = 'Hgb rise > 1 g/dL and Hgb < 10.6 g/dL → Continue the same dose.';
+    } else if (currentHgb < 10) {
+      action = 'increase'; color = 'blue'; factor = 1.25;
+      rule = `Hgb rise ≤ 1 g/dL and Hgb < 10 g/dL → Increase dose by 25% (round to nearest ${agent.sizeLabel} size).`;
+    } else {
+      // 10 ≤ Hgb < 10.6 with rise ≤ 1 g/dL — gap between the four standard decision rows.
+      action = 'judgment'; color = 'violet'; factor = 1;
+      rule = 'Hgb 10–10.6 g/dL with a rise ≤ 1 g/dL falls in a gap between the four standard decision rows. Hgb is approaching target — continuing the current dose is the conservative default; confirm with the provider.';
+    }
+  }
+
+  // New dose (only when we have a factor and a current dose).
+  let rawNew: number | null = null;
+  let roundedNew: number | null = null;
+  let multiSyringe = false;
+  if (factor != null && dose != null && dose > 0) {
+    rawNew = dose * factor;
+    if (agentId === 'darbepoetin') {
+      if (rawNew > 500) { multiSyringe = true; roundedNew = rawNew; }
+      else roundedNew = esaNearestSyringe(rawNew);
+    } else {
+      roundedNew = Math.round(rawNew / 100) * 100; // epoetin: nearest 100 units; combine vials per stock
+    }
+  }
+
+  return { incomplete: false as const, action, color, rule, factor, rawNew, roundedNew, multiSyringe, agent };
+}
+
+// IV iron repletion decision from TSAT (%) and ferritin (ng/mL).
+function esaIron(tsat: number, ferritin: number) {
+  if (!(tsat > 0 && ferritin > 0)) return null;
+  if (ferritin > 1000 || tsat > 30) {
+    return {
+      action: 'none' as const, color: 'amber',
+      title: 'No iron — assess for iron overload',
+      detail: 'Ferritin > 1000 ng/mL and/or TSAT > 30%. Hold iron supplementation; provider documentation required for iron-overload states.',
+      regimens: [] as string[],
+    };
+  }
+  if (tsat < 20 && ferritin > 800) {
+    return {
+      action: 'discretion' as const, color: 'violet',
+      title: 'Iron per provider discretion',
+      detail: 'TSAT < 20% with ferritin 800–1000 ng/mL. Iron at provider discretion.',
+      regimens: [] as string[],
+    };
+  }
+  const replace = (tsat < 20 && ferritin < 800) || (tsat >= 20 && tsat <= 30 && ferritin < 100);
+  if (replace) {
+    return {
+      action: 'replace' as const, color: 'blue',
+      title: 'IV iron repletion indicated',
+      detail: tsat < 20 ? 'TSAT < 20% with ferritin < 800 ng/mL.' : 'TSAT 20–30% with ferritin < 100 ng/mL.',
+      regimens: [
+        'Ferumoxytol (Feraheme) 510 mg IV weekly × 2 doses',
+        'Iron sucrose 200 mg IV every 48 h × 5 doses',
+        'Ferric carboxymaltose (Injectafer) 750 mg IV weekly × 2 doses',
+      ],
+    };
+  }
+  return {
+    action: 'adequate' as const, color: 'emerald',
+    title: 'Iron stores adequate',
+    detail: 'Values do not meet IV iron repletion thresholds. No iron supplementation indicated at this time; recheck per the monitoring schedule.',
+    regimens: [] as string[],
+  };
+}
+
+const ESA_CARD_COLORS: Record<string, string> = {
+  blue:    'bg-blue-500/10 border-blue-500/30',
+  emerald: 'bg-emerald-500/10 border-emerald-500/30',
+  amber:   'bg-amber-500/10 border-amber-500/30',
+  rose:    'bg-rose-500/10 border-rose-500/30',
+  violet:  'bg-violet-500/10 border-violet-500/30',
+};
+const ESA_TEXT_COLORS: Record<string, string> = {
+  blue: 'text-blue-300', emerald: 'text-emerald-300', amber: 'text-amber-300',
+  rose: 'text-rose-300', violet: 'text-violet-300',
+};
+
+const ESA_ACTION_META: Record<EsaAction, { label: string; Icon: typeof ArrowUp }> = {
+  increase: { label: 'Increase dose 25%', Icon: ArrowUp },
+  decrease: { label: 'Decrease dose 25%', Icon: ArrowDown },
+  continue: { label: 'Continue same dose', Icon: Check },
+  hold:     { label: 'Hold ESA', Icon: Pause },
+  judgment: { label: 'Clinician judgment', Icon: AlertTriangle },
+};
+
+// Week-0 eligibility criteria (inclusion all-met + no exclusion present).
+const ESA_INCLUSION = [
+  'Hgb < 10.0 g/dL, drawn within 7 days of the dose',
+  'Ferritin ≥ 100 ng/mL OR TSAT ≥ 20% (within 3 months)',
+  'Vitamin B-12 and folate within normal limits (within 3 months)',
+  'Serum creatinine within 30 days; Stage III+ CKD (GFR < 60) and NOT on dialysis',
+  'Physician order for pharmacist to manage ESA therapy',
+];
+const ESA_EXCLUSION = [
+  'Uncontrolled hypertension (> 180/100)',
+  'Active bleeding',
+  'Cancer treatment for malignancy with curative intent',
+  'Bone marrow fibrosis',
+  'Erythropoietin resistance (neutralizing antibodies)',
+];
+
+function ESADosingCalculator() {
+  const [mode, setMode] = useState<'initiation' | 'titration' | 'iron'>('titration');
+  const [agentId, setAgentId] = useState<EsaAgentId>('darbepoetin');
+  const agent = ESA_AGENTS[agentId];
+
+  // Initiation state
+  const [wt, setWt] = useState('');
+  const [wtUnit, setWtUnit] = useState('kg');
+  const [inclusion, setInclusion] = useState<boolean[]>(() => ESA_INCLUSION.map(() => false));
+  const [exclusion, setExclusion] = useState<boolean[]>(() => ESA_EXCLUSION.map(() => false));
+
+  // Titration state
+  const [curHgb, setCurHgb] = useState('');
+  const [priorHgb, setPriorHgb] = useState('');
+  const [curDose, setCurDose] = useState('');
+
+  // Iron state
+  const [tsat, setTsat] = useState('');
+  const [ferritin, setFerritin] = useState('');
+
+  // ── Initiation derived ──
+  const wtKg = wtUnit === 'lb' ? parseFloat(wt) / 2.20462 : parseFloat(wt);
+  const initDose = (() => {
+    if (agent.weightBased) {
+      if (!(wtKg > 0)) return null;
+      const raw = agent.initDosePerKg! * wtKg;
+      return { raw, rounded: esaNearestSyringe(raw) };
+    }
+    return { raw: agent.initDoseFixed!, rounded: agent.initDoseFixed! };
+  })();
+  const eligible = inclusion.every(Boolean) && exclusion.every(v => !v);
+  const anyEligibilityTouched = inclusion.some(Boolean) || exclusion.some(Boolean);
+
+  // ── Titration derived ──
+  const titration = esaTitration(
+    agentId,
+    parseFloat(curHgb),
+    priorHgb ? parseFloat(priorHgb) : null,
+    curDose ? parseFloat(curDose) : null,
+  );
+
+  // ── Iron derived ──
+  const iron = esaIron(parseFloat(tsat), parseFloat(ferritin));
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300 max-w-2xl">
+      <div className="flex items-start gap-3 bg-violet-500/10 border border-violet-500/20 rounded-xl p-3.5">
+        <Droplets className="text-violet-400 shrink-0 mt-0.5" size={15} strokeWidth={2} />
+        <p className="text-xs text-slate-300 leading-relaxed">
+          <span className="font-semibold text-violet-300">ESA dosing for anemia of CKD</span> — goal: lowest ESA dose that keeps Hgb just
+          high enough to avoid transfusion. Choose a workflow below.
+        </p>
+      </div>
+
+      {/* Mode toggle */}
+      <div className="flex gap-2">
+        {([
+          ['initiation', 'Initiation'],
+          ['titration', 'Dose Titration'],
+          ['iron', 'Iron Repletion'],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMode(id)}
+            className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
+              mode === id
+                ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Agent toggle (initiation + titration) */}
+      {mode !== 'iron' && (
+        <div className="flex gap-2">
+          {(Object.keys(ESA_AGENTS) as EsaAgentId[]).map(id => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setAgentId(id)}
+              className={`flex-1 py-2 rounded-xl text-[12px] font-semibold border transition-colors ${
+                agentId === id
+                  ? 'bg-white/10 border-white/25 text-white'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+              }`}
+            >
+              {ESA_AGENTS[id].label}
+              <span className="block text-[10px] font-normal opacity-70">{ESA_AGENTS[id].brand} · {ESA_AGENTS[id].note}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── INITIATION ── */}
+      {mode === 'initiation' && (
+        <div className="space-y-4">
+          {agent.weightBased ? (
+            <div className="max-w-xs">
+              <label className={labelCls}>Weight</label>
+              <div className="relative">
+                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '70' : '154'} className={`${inputCls} pr-12`} />
+                <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => (u === 'kg' ? 'lb' : 'kg'))} />
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">Epoetin alfa-epbx initiation is a fixed dose — no weight needed.</p>
+          )}
+
+          {/* Starting dose */}
+          <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+              Starting Dose — {agent.label} ({agent.brand})
+            </div>
+            {initDose ? (
+              <>
+                <div className="text-2xl font-bold text-white">
+                  {agent.weightBased
+                    ? `${esaNearestSyringe(initDose.raw)} mcg`
+                    : esaFmtDose(initDose.rounded, agent.unit)}
+                  <span className="text-base font-medium text-slate-300"> SQ</span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {agent.initSchedule}
+                  {agent.weightBased && (
+                    <> · calculated {initDose.raw.toFixed(1)} mcg → nearest syringe {esaNearestSyringe(initDose.raw)} mcg</>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 italic">Enter weight to compute the starting dose.</div>
+            )}
+          </div>
+
+          {/* Eligibility checklist */}
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Inclusion criteria (all required)</div>
+            <div className="space-y-2">
+              {ESA_INCLUSION.map((c, i) => (
+                <label key={i} className="flex items-start gap-2.5 cursor-pointer text-[13px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={inclusion[i]}
+                    onChange={e => setInclusion(prev => prev.map((v, j) => (j === i ? e.target.checked : v)))}
+                    className="w-4 h-4 rounded accent-emerald-500 mt-0.5 shrink-0"
+                  />
+                  <span>{c}</span>
+                </label>
+              ))}
+            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 pt-2 border-t border-white/10">Exclusion criteria (none may be present)</div>
+            <div className="space-y-2">
+              {ESA_EXCLUSION.map((c, i) => (
+                <label key={i} className="flex items-start gap-2.5 cursor-pointer text-[13px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={exclusion[i]}
+                    onChange={e => setExclusion(prev => prev.map((v, j) => (j === i ? e.target.checked : v)))}
+                    className="w-4 h-4 rounded accent-rose-500 mt-0.5 shrink-0"
+                  />
+                  <span>{c} <span className="text-[11px] text-slate-500">(check if present)</span></span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {anyEligibilityTouched && (
+            <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 ${eligible ? ESA_CARD_COLORS.emerald : ESA_CARD_COLORS.amber}`}>
+              {eligible
+                ? <Check size={16} className="text-emerald-300 shrink-0 mt-0.5" />
+                : <AlertTriangle size={16} className="text-amber-300 shrink-0 mt-0.5" />}
+              <p className="text-[13px] text-slate-200">
+                {eligible
+                  ? 'All inclusion criteria met and no exclusions present — eligible to initiate ESA therapy.'
+                  : 'Not yet eligible: confirm every inclusion criterion is met and that no exclusion criteria are present before initiating.'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TITRATION ── */}
+      {mode === 'titration' && (
+        <div className="space-y-4">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Week 5 and every 4 weeks thereafter. Enter the current Hgb, the Hgb from ~4 weeks ago (to derive the
+            rise), and the current dose. Decreases may be made at any time; <span className="text-slate-300 font-semibold">increases no more often than every 4 weeks</span>.
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Current Hgb (g/dL)</label>
+              <input type="number" step="0.1" value={curHgb} onChange={e => setCurHgb(e.target.value)} placeholder="9.8" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Prior Hgb (g/dL)</label>
+              <input type="number" step="0.1" value={priorHgb} onChange={e => setPriorHgb(e.target.value)} placeholder="9.2" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Current dose ({agent.unit})</label>
+              <input type="number" value={curDose} onChange={e => setCurDose(e.target.value)} placeholder={agent.unit === 'mcg' ? '40' : '10000'} className={inputCls} />
+            </div>
+          </div>
+
+          {titration && !titration.incomplete ? (
+            <div className="space-y-4">
+              {(() => {
+                const meta = ESA_ACTION_META[titration.action];
+                const ActionIcon = meta.Icon;
+                return (
+                  <div className={`p-4 rounded-xl border ${ESA_CARD_COLORS[titration.color]}`}>
+                    <div className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider ${ESA_TEXT_COLORS[titration.color]} mb-1.5`}>
+                      <ActionIcon size={14} /> Recommendation
+                    </div>
+                    <div className="text-2xl font-bold text-white">{meta.label}</div>
+
+                    {/* New dose / instruction */}
+                    {titration.action === 'hold' ? (
+                      <div className="text-xs text-slate-400 mt-1.5">
+                        Hold the dose and recheck Hgb. Resume at a reduced dose once Hgb falls below target, per provider.
+                      </div>
+                    ) : titration.roundedNew != null ? (
+                      <div className="text-sm text-slate-200 mt-1.5">
+                        New dose:{' '}
+                        <span className="font-bold text-white">
+                          {agentId === 'darbepoetin' && !titration.multiSyringe
+                            ? `${titration.roundedNew} mcg`
+                            : esaFmtDose(titration.roundedNew, agent.unit)}
+                        </span>
+                        {titration.action !== 'continue' && titration.action !== 'judgment' && titration.rawNew != null && (
+                          <span className="text-slate-400">
+                            {' '}(calculated {esaFmtDose(titration.rawNew, agent.unit)}
+                            {agentId === 'darbepoetin' && !titration.multiSyringe ? ` → nearest ${agent.sizeLabel}` : ''})
+                          </span>
+                        )}
+                        {agentId === 'epoetin' && (titration.action === 'increase' || titration.action === 'decrease') && (
+                          <span className="block text-[11px] text-slate-500 mt-0.5">Round to the nearest available vial size / combination per pharmacy stock.</span>
+                        )}
+                        {titration.multiSyringe && (
+                          <span className="block text-[11px] text-amber-300/90 mt-0.5">Exceeds the 500 mcg syringe — combine syringes or verify with provider.</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 italic mt-1.5">Enter the current dose to compute the adjusted dose.</div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Rationale */}
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Protocol rule applied</div>
+                <p className="text-slate-300 leading-relaxed">{titration.rule}</p>
+                {titration.rawNew != null && (
+                  <div className="flex justify-between pt-1.5 border-t border-white/10">
+                    <span className="text-slate-500">Hgb change (4 wk)</span>
+                    <span className="text-slate-300 font-semibold tabular-nums">
+                      {priorHgb ? `${(parseFloat(curHgb) - parseFloat(priorHgb)) >= 0 ? '+' : ''}${(parseFloat(curHgb) - parseFloat(priorHgb)).toFixed(1)} g/dL` : '—'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-white/[0.02] border border-white/10 rounded-xl p-3">
+                <Activity size={13} className="shrink-0 mt-0.5 text-violet-400" />
+                <span>
+                  <span className="font-semibold text-slate-300">Week 12 assessment:</span> if Hgb has not risen above
+                  10 g/dL over 12 weeks and transfusions have not decreased, notify the provider and discuss discharge
+                  from service. Consider extending to every-6-week intervals to smooth Hgb fluctuations.
+                </span>
+              </div>
+            </div>
+          ) : titration && titration.incomplete ? (
+            <div className="flex items-start gap-2 text-xs text-slate-400 bg-white/[0.02] border border-white/10 rounded-xl p-3">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-slate-500" />
+              <span>Hgb is below 10.6 g/dL — enter the prior (≈4-week) Hgb to determine the rise and the correct adjustment.</span>
+            </div>
+          ) : (
+            <ResultBadge label="Recommendation" value={null} unit="" color="violet" />
+          )}
+        </div>
+      )}
+
+      {/* ── IRON REPLETION ── */}
+      {mode === 'iron' && (
+        <div className="space-y-4">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            IV iron repletion thresholds based on TSAT and ferritin. ESA therapy may continue during iron
+            supplementation with appropriate documentation.
+          </p>
+          <div className="grid grid-cols-2 gap-4 max-w-md">
+            <div>
+              <label className={labelCls}>TSAT / Fe Sat (%)</label>
+              <input type="number" step="1" value={tsat} onChange={e => setTsat(e.target.value)} placeholder="18" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Ferritin (ng/mL)</label>
+              <input type="number" value={ferritin} onChange={e => setFerritin(e.target.value)} placeholder="90" className={inputCls} />
+            </div>
+          </div>
+
+          {iron ? (
+            <div className="space-y-4">
+              <div className={`p-4 rounded-xl border ${ESA_CARD_COLORS[iron.color]}`}>
+                <div className={`text-[11px] font-bold uppercase tracking-wider ${ESA_TEXT_COLORS[iron.color]} mb-1`}>Recommendation</div>
+                <div className="text-xl font-bold text-white">{iron.title}</div>
+                <div className="text-xs text-slate-400 mt-1">{iron.detail}</div>
+                {iron.regimens.length > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {iron.regimens.map((r, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[13px] text-slate-200">
+                        <span className="text-slate-500 mt-0.5">•</span><span>{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-white/[0.02] border border-white/10 rounded-xl p-3">
+                <Activity size={13} className="shrink-0 mt-0.5 text-violet-400" />
+                <span>Re-check iron levels 1–2 weeks after completing the iron course; allow no fewer than 1 week between an iron dose and the lab draw.</span>
+              </div>
+            </div>
+          ) : (
+            <ResultBadge label="Recommendation" value={null} unit="" color="violet" />
+          )}
+        </div>
+      )}
+
+      <p className="text-[10px] text-slate-600 leading-relaxed border-t border-white/5 pt-3">
+        Decision-support tool for ESA dosing in CKD-related anemia. Not a substitute for prescribing information
+        or clinical pharmacist and provider judgment. Confirm all labs are current and within the required draw
+        windows before acting.
+      </p>
     </div>
   );
 }
@@ -1381,6 +1930,7 @@ export function ClinicalCalculators() {
         {activeCalc === 'crcl'   && <CrClCalculator />}
         {activeCalc === 'bodywt' && <BodyMetricsCalculator />}
         {activeCalc === 'iron'   && <IronDeficitCalculator />}
+        {activeCalc === 'esa'    && <ESADosingCalculator />}
         {activeCalc === 'calcium'&& <CorrectedCalciumCalculator />}
       </div>
     </div>
