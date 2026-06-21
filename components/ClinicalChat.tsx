@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { streamAI, type ChatMessage as AIMessage, type ContentBlock } from '@/lib/ai';
 import { CLINICAL_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { sanitizePHI } from '@/lib/sanitization';
+import { parseCitationNumbers } from '@/lib/utils';
 import { Send, ShieldAlert, Bot, User, Loader2, Paperclip, X, FileText, Sparkles, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
 
@@ -42,24 +43,6 @@ const markdownComponents = {
     );
   },
 };
-
-// Parse citation marker contents like "1", "1, 3", "1-3", "1–3" into number list.
-function parseCitationNumbers(content: string): number[] {
-  const out: number[] = [];
-  for (const part of content.split(',')) {
-    const trimmed = part.trim();
-    const range = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
-    if (range) {
-      const start = parseInt(range[1], 10);
-      const end = parseInt(range[2], 10);
-      for (let i = start; i <= Math.min(end, start + 20); i++) out.push(i);
-    } else {
-      const n = parseInt(trimmed, 10);
-      if (!isNaN(n)) out.push(n);
-    }
-  }
-  return out;
-}
 
 // Convert plain "[N]" markers in the model's response into markdown links
 // pointing at the corresponding grounded source URL. Multi-citation markers

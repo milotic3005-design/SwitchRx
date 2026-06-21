@@ -7,31 +7,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { INFUSION_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 import { runPharmacyLookup, formatLookupForPrompt } from '@/lib/pharmacy-lookup';
 import type { LookupResult } from '@/lib/pharmacy-lookup/types';
+import { parseCitationNumbers } from '@/lib/utils';
 import { PharmacyLookupPanel } from './PharmacyLookupPanel';
 import { WaitGame } from './WaitGame';
 import { DRUG_DB } from '@/data/drug-database';
 import { emitOpenDrug } from '@/lib/cross-tab-events';
 
 type GroundingSource = { uri: string; title: string };
-
-// Parse "1", "1, 2", "1-3", "1–3" inside a citation marker into a list of
-// numbers so we can map each to its grounding source URL.
-function parseCitationNumbers(content: string): number[] {
-  const out: number[] = [];
-  for (const part of content.split(',')) {
-    const trimmed = part.trim();
-    const range = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
-    if (range) {
-      const start = parseInt(range[1], 10);
-      const end = parseInt(range[2], 10);
-      for (let i = start; i <= Math.min(end, start + 20); i++) out.push(i);
-    } else {
-      const n = parseInt(trimmed, 10);
-      if (!isNaN(n)) out.push(n);
-    }
-  }
-  return out;
-}
 
 // The model writes plain bracketed markers like [1], [2], [1, 3] inline.
 // Convert each marker into a markdown link pointing at the corresponding
