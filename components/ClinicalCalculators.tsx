@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle, ArrowUp, ArrowDown, Pause, Check, Droplets } from 'lucide-react';
+import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle, ArrowUp, ArrowDown, Pause, Check, Droplets, FlaskConical, ShieldAlert } from 'lucide-react';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
@@ -48,6 +48,7 @@ const CALCULATORS = [
   { id: 'iron',   label: 'Iron Deficit (Ganzoni)' },
   { id: 'esa',    label: 'ESA Dosing (CKD Anemia)' },
   { id: 'calcium',label: 'Corrected Calcium' },
+  { id: 'hbv',    label: 'HBV Serology Interpreter' },
 ];
 
 // ── Shared style helpers ───────────────────────────────────────────────────────
@@ -1876,6 +1877,393 @@ function ESADosingCalculator() {
   );
 }
 
+// ── HBV Serology Interpreter ────────────────────────────────────────────────────
+// Interprets a hepatitis B serologic panel and returns the clinical status plus the
+// recommended next step, with emphasis on HBV-reactivation screening before high-risk
+// immunosuppressive therapy.
+//
+// Interpretation logic verified against:
+//   • CDC, "Interpretation of Hepatitis B Serologic Test Results" (serologic chart v8)
+//   • CDC MMWR 2023 (RR-72-1) — triple-panel screening (HBsAg + total anti-HBc + anti-HBs)
+// Reactivation framing follows the institutional HBV reactivation chart (rev. 06/11/2019)
+// and NCCN guidance (order quantitative HBV DNA by PCR if HBsAg or anti-HBc is positive).
+
+type Sero = 'pos' | 'neg' | 'unknown';
+type HBVRisk = 'none' | 'low' | 'moderate' | 'high' | 'incomplete';
+
+const HBV_HIGH_RISK_DRUGS = [
+  'Rituximab', 'Obinutuzumab', 'Ofatumumab', 'Ibritumomab tiuxetan',
+  'I-131 tositumomab', 'Ocrelizumab', 'Romidepsin',
+];
+
+interface HBVResult {
+  status: string;
+  risk: HBVRisk;
+  riskLabel: string;
+  color: 'emerald' | 'amber' | 'rose' | 'blue';
+  next: string[];
+  note?: string;
+}
+
+// Pure interpretation engine. HBsAg + total anti-HBc are the required pair; anti-HBs,
+// IgM anti-HBc and HBV DNA refine the call where available.
+function interpretHBV(sAg: Sero, cAb: Sero, sAb: Sero, igM: Sero, dna: Sero): HBVResult {
+  if (sAg === 'unknown' || cAb === 'unknown') {
+    return {
+      status: 'Incomplete panel',
+      risk: 'incomplete',
+      riskLabel: 'Cannot determine status',
+      color: 'blue',
+      next: [
+        'HBsAg (surface antigen) and total anti-HBc (core antibody) are both required to determine status.',
+        'Order the missing required test(s); add anti-HBs for a full triple-panel screen.',
+      ],
+    };
+  }
+
+  // ── HBsAg POSITIVE → active infection ──
+  if (sAg === 'pos') {
+    if (igM === 'pos') {
+      return {
+        status: 'Acute hepatitis B infection',
+        risk: 'high', riskLabel: 'High risk — active infection', color: 'rose',
+        next: [
+          'Hepatology / infectious disease consultation recommended.',
+          'Order quantitative HBV DNA (PCR), HBeAg / anti-HBe, and a liver profile.',
+          'Defer or co-manage high-risk immunosuppression with a specialist.',
+        ],
+      };
+    }
+    if (igM === 'neg') {
+      return {
+        status: 'Chronic hepatitis B infection',
+        risk: 'high', riskLabel: 'High reactivation risk', color: 'rose',
+        next: [
+          'Hepatology / infectious disease consultation recommended.',
+          'Order quantitative HBV DNA (PCR) and HBeAg / anti-HBe.',
+          'Start antiviral prophylaxis before — and continue through — high-risk immunosuppression.',
+        ],
+      };
+    }
+    return {
+      status: 'Active HBV infection (HBsAg positive)',
+      risk: 'high', riskLabel: 'High reactivation risk', color: 'rose',
+      next: [
+        'Order IgM anti-HBc to distinguish acute (IgM+) from chronic (IgM−).',
+        'Order quantitative HBV DNA (PCR) and HBeAg / anti-HBe.',
+        'Hepatology / ID consult; antiviral prophylaxis before high-risk immunosuppression.',
+      ],
+    };
+  }
+
+  // ── HBsAg NEGATIVE ──
+  if (cAb === 'pos') {
+    // anti-HBc positive
+    if (sAb === 'pos') {
+      // Resolved infection / immune from natural infection
+      if (dna === 'pos') {
+        return {
+          status: 'Resolved HBV pattern — HBV DNA detectable', risk: 'moderate',
+          riskLabel: 'Moderate reactivation risk', color: 'amber',
+          next: [
+            'Manage as chronic HBV — hepatology / ID consultation.',
+            'Antiviral prophylaxis before high-risk immunosuppression.',
+          ],
+        };
+      }
+      if (dna === 'neg') {
+        return {
+          status: 'Resolved HBV infection (immune from natural infection)', risk: 'low',
+          riskLabel: 'Low reactivation risk', color: 'amber',
+          next: [
+            'Monitor liver profile every 2–3 months during the at-risk period.',
+            'Consider antiviral prophylaxis if starting a high-risk agent (e.g. anti-CD20).',
+          ],
+        };
+      }
+      return {
+        status: 'Resolved HBV infection — immune (natural)', risk: 'low',
+        riskLabel: 'Low → moderate reactivation risk', color: 'amber',
+        next: [
+          'Check quantitative HBV DNA (PCR).',
+          'If DNA positive → manage as chronic HBV.',
+          'If DNA negative → monitor liver profile every 2–3 months during the at-risk period.',
+          'Consider antiviral prophylaxis before high-risk immunosuppression.',
+        ],
+      };
+    }
+    // anti-HBs negative or unknown → isolated core antibody
+    if (dna === 'pos') {
+      return {
+        status: 'Isolated anti-HBc — HBV DNA detectable ("low-level" chronic)', risk: 'moderate',
+        riskLabel: 'Moderate reactivation risk', color: 'amber',
+        next: [
+          'Manage as chronic HBV — hepatology / ID consultation.',
+          'Antiviral prophylaxis before high-risk immunosuppression.',
+        ],
+      };
+    }
+    return {
+      status: 'Isolated core antibody (anti-HBc only) — interpretation unclear',
+      risk: dna === 'neg' ? 'low' : 'moderate',
+      riskLabel: dna === 'neg' ? 'Low reactivation risk' : 'Possible reactivation risk',
+      color: 'amber',
+      next: [
+        'Four possibilities: (1) resolved infection — most common, (2) false-positive anti-HBc, (3) "low-level" chronic infection, (4) resolving acute infection.',
+        dna === 'neg'
+          ? 'HBV DNA negative → resolved infection or false-positive most likely.'
+          : 'Check quantitative HBV DNA (PCR).',
+        'In patients without HBV risk factors, consider retesting if a false-positive is suspected.',
+        'If starting high-risk immunosuppression, monitor liver profile ± antiviral prophylaxis.',
+      ],
+      note: sAb === 'unknown' ? 'Add anti-HBs to complete the panel.' : undefined,
+    };
+  }
+
+  // ── HBsAg NEGATIVE, anti-HBc NEGATIVE ──
+  if (sAb === 'pos') {
+    return {
+      status: 'Immune due to hepatitis B vaccination', risk: 'none',
+      riskLabel: 'No reactivation risk', color: 'emerald',
+      next: ['No intervention necessary.'],
+    };
+  }
+  if (sAb === 'neg') {
+    return {
+      status: 'Never infected — susceptible (no immunity)', risk: 'none',
+      riskLabel: 'No reactivation risk', color: 'emerald',
+      next: ['Recommend hepatitis B vaccination for high-risk / at-risk patients.'],
+    };
+  }
+  return {
+    status: 'No current or past infection — immunity unconfirmed', risk: 'none',
+    riskLabel: 'No reactivation risk', color: 'blue',
+    next: [
+      'Add anti-HBs to distinguish vaccine immunity from susceptibility.',
+      'If susceptible, recommend hepatitis B vaccination for at-risk patients.',
+    ],
+  };
+}
+
+// Reference chart (CDC serologic chart v8 + reactivation framing).
+const HBV_REFERENCE: { status: string; sAg: string; sAb: string; cAb: string; igM: string; risk: string }[] = [
+  { status: 'Never infected (susceptible)', sAg: '−', sAb: '−', cAb: '−', igM: '−', risk: 'None — no immunity' },
+  { status: 'Immune — vaccination',          sAg: '−', sAb: '+', cAb: '−', igM: '−', risk: 'None' },
+  { status: 'Resolved — immune (natural)',   sAg: '−', sAb: '+', cAb: '+', igM: '−', risk: 'Low (DNA−) → moderate (DNA+)' },
+  { status: 'Acute infection',               sAg: '+', sAb: '−', cAb: '+', igM: '+', risk: 'High' },
+  { status: 'Chronic infection',             sAg: '+', sAb: '−', cAb: '+', igM: '−', risk: 'High' },
+  { status: 'Isolated core Ab (4 possibilities)', sAg: '−', sAb: '−', cAb: '+', igM: '±', risk: 'Possible' },
+];
+
+function SeroSelect({
+  label, sub, value, onChange, required,
+}: {
+  label: string; sub?: string; value: Sero; onChange: (v: Sero) => void; required?: boolean;
+}) {
+  const opts: { v: Sero; t: string }[] = [
+    { v: 'pos', t: 'Positive' },
+    { v: 'neg', t: 'Negative' },
+    { v: 'unknown', t: 'Not done' },
+  ];
+  return (
+    <div>
+      <label className={labelCls}>
+        {label}{required && <span className="text-rose-400 ml-1" title="Required">*</span>}
+      </label>
+      {sub && <p className="text-[11px] text-slate-500 -mt-0.5 mb-2 normal-case tracking-normal font-normal">{sub}</p>}
+      <div className="grid grid-cols-3 gap-1.5">
+        {opts.map(o => (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => onChange(o.v)}
+            className={`px-2 py-2 rounded-lg text-[12px] font-semibold border transition-all ${
+              value === o.v
+                ? 'bg-violet-500/20 border-violet-500/50 text-white'
+                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            {o.t}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HBVSerologyInterpreter() {
+  const [sAg, setSAg] = useState<Sero>('unknown');
+  const [cAb, setCAb] = useState<Sero>('unknown');
+  const [sAb, setSAb] = useState<Sero>('unknown');
+  const [igM, setIgM] = useState<Sero>('unknown');
+  const [dna, setDna] = useState<Sero>('unknown');
+  const [showRef, setShowRef] = useState(false);
+  const [showDrugs, setShowDrugs] = useState(false);
+
+  const touched = sAg !== 'unknown' && cAb !== 'unknown';
+  const r = interpretHBV(sAg, cAb, sAb, igM, dna);
+
+  const verdictCls: Record<HBVResult['color'], string> = {
+    emerald: 'bg-emerald-500/10 border-emerald-500/30',
+    amber:   'bg-amber-500/10 border-amber-500/30',
+    rose:    'bg-rose-500/10 border-rose-500/30',
+    blue:    'bg-blue-500/10 border-blue-500/30',
+  };
+  const verdictText: Record<HBVResult['color'], string> = {
+    emerald: 'text-emerald-300', amber: 'text-amber-300', rose: 'text-rose-300', blue: 'text-blue-300',
+  };
+
+  const reset = () => { setSAg('unknown'); setCAb('unknown'); setSAb('unknown'); setIgM('unknown'); setDna('unknown'); };
+
+  return (
+    <div>
+      <p className="text-[13px] text-slate-400 mb-6 leading-relaxed">
+        Enter the serologic results to interpret hepatitis B status and the recommended next step.
+        Built for <span className="text-slate-300 font-medium">HBV reactivation screening</span> before high-risk
+        immunosuppressive therapy. <span className="text-slate-300 font-medium">HBsAg</span> and{' '}
+        <span className="text-slate-300 font-medium">total anti-HBc</span> are required; the others refine the call.
+      </p>
+
+      {/* Inputs */}
+      <div className="grid sm:grid-cols-2 gap-5">
+        <SeroSelect label="HBsAg — Surface antigen" sub="Marker of active infection" value={sAg} onChange={setSAg} required />
+        <SeroSelect label="Anti-HBc total — Core antibody" sub="Marker of past or present exposure" value={cAb} onChange={setCAb} required />
+        <SeroSelect label="Anti-HBs — Surface antibody" sub="Marker of immunity (vaccine or recovery)" value={sAb} onChange={setSAb} />
+        <SeroSelect label="IgM anti-HBc — Core IgM" sub="Distinguishes acute (+) from chronic (−) when HBsAg+" value={igM} onChange={setIgM} />
+        <SeroSelect label="HBV DNA (PCR)" sub="Refines resolved / isolated-core patterns" value={dna} onChange={setDna} />
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={reset}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      {/* Verdict */}
+      {touched ? (
+        <div className={`mt-7 rounded-2xl border p-5 ${verdictCls[r.color]}`}>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <FlaskConical className={`w-5 h-5 ${verdictText[r.color]}`} />
+              <h3 className="text-lg font-bold text-white">{r.status}</h3>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-[12px] font-bold border ${verdictCls[r.color]} ${verdictText[r.color]}`}>
+              {r.riskLabel}
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Next step</p>
+            <ul className="space-y-1.5">
+              {r.next.map((n, i) => (
+                <li key={i} className="flex gap-2 text-[13.5px] text-slate-200 leading-relaxed">
+                  <Check className={`w-4 h-4 mt-0.5 shrink-0 ${verdictText[r.color]}`} />
+                  <span>{n}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {r.note && (
+            <p className="mt-3 text-[12px] text-slate-400 italic">{r.note}</p>
+          )}
+
+          {(sAg === 'pos' || cAb === 'pos') && (
+            <div className="mt-4 flex gap-2 items-start text-[12px] text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2.5">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-300" />
+              <span>Quantitative HBV DNA by PCR should be ordered when HBsAg or anti-HBc is positive (NCCN), and a pharmacist should counsel on reactivation risk at therapy initiation.</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-7 rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
+          <p className="text-sm text-slate-400">Set <span className="text-slate-200 font-medium">HBsAg</span> and <span className="text-slate-200 font-medium">anti-HBc</span> to see the interpretation.</p>
+        </div>
+      )}
+
+      {/* Reference chart */}
+      <div className="mt-6 border border-white/10 rounded-xl overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowRef(s => !s)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors"
+        >
+          <span className="text-[13px] font-semibold text-slate-200">Interpretation reference chart</span>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showRef ? 'rotate-180' : ''}`} />
+        </button>
+        {showRef && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-slate-400 border-b border-white/10">
+                  <th className="text-left font-semibold px-3 py-2">Interpretation</th>
+                  <th className="px-2 py-2 font-semibold">HBsAg</th>
+                  <th className="px-2 py-2 font-semibold">Anti-HBs</th>
+                  <th className="px-2 py-2 font-semibold">Anti-HBc</th>
+                  <th className="px-2 py-2 font-semibold">IgM</th>
+                  <th className="text-left px-3 py-2 font-semibold">Reactivation risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {HBV_REFERENCE.map((row, i) => (
+                  <tr key={i} className="border-b border-white/5 last:border-0">
+                    <td className="px-3 py-2 text-slate-200 font-medium">{row.status}</td>
+                    <td className="px-2 py-2 text-center font-mono text-slate-300">{row.sAg}</td>
+                    <td className="px-2 py-2 text-center font-mono text-slate-300">{row.sAb}</td>
+                    <td className="px-2 py-2 text-center font-mono text-slate-300">{row.cAb}</td>
+                    <td className="px-2 py-2 text-center font-mono text-slate-300">{row.igM}</td>
+                    <td className="px-3 py-2 text-slate-400">{row.risk}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* High-risk drugs + cadence */}
+      <div className="mt-3 border border-white/10 rounded-xl overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowDrugs(s => !s)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white/5 hover:bg-white/10 transition-colors"
+        >
+          <span className="text-[13px] font-semibold text-slate-200 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-300" /> High-risk drugs &amp; screening cadence
+          </span>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showDrugs ? 'rotate-180' : ''}`} />
+        </button>
+        {showDrugs && (
+          <div className="px-4 py-3 space-y-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">High reactivation-risk agents</p>
+              <div className="flex flex-wrap gap-1.5">
+                {HBV_HIGH_RISK_DRUGS.map(d => (
+                  <span key={d} className="px-2.5 py-1 rounded-lg text-[12px] font-medium bg-amber-500/10 border border-amber-500/25 text-amber-200">{d}</span>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1.5">…and other anti-CD20 / B-cell-depleting therapies (list not exhaustive).</p>
+            </div>
+            <ul className="text-[12.5px] text-slate-300 space-y-1 leading-relaxed">
+              <li>• Confirm HBV status within <span className="text-slate-100 font-medium">6 months</span> before starting a high-risk agent — <span className="text-slate-100 font-medium">HBsAg</span> and <span className="text-slate-100 font-medium">total anti-HBc</span> required.</li>
+              <li>• Retest high-risk patients on therapy at least <span className="text-slate-100 font-medium">every 6 months</span> (prescriber discretion).</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <p className="mt-5 text-[11px] text-slate-500 leading-relaxed">
+        Decision support only — not a substitute for clinical judgment. Interpretations verified against the CDC
+        serologic interpretation chart and CDC MMWR 2023 (RR-72-1) triple-panel screening guidance; reactivation
+        framing per institutional HBV reactivation chart (rev. 06/11/2019) and NCCN.
+      </p>
+    </div>
+  );
+}
+
 // ── Main export ────────────────────────────────────────────────────────────────
 export function ClinicalCalculators() {
   const [activeCalc, setActiveCalc] = useState('cadd');
@@ -1932,6 +2320,7 @@ export function ClinicalCalculators() {
         {activeCalc === 'iron'   && <IronDeficitCalculator />}
         {activeCalc === 'esa'    && <ESADosingCalculator />}
         {activeCalc === 'calcium'&& <CorrectedCalciumCalculator />}
+        {activeCalc === 'hbv'    && <HBVSerologyInterpreter />}
       </div>
     </div>
   );
