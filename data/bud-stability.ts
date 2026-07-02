@@ -425,3 +425,568 @@ export function getBudStability(genericName: string): DrugStability | null {
     null
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// McKesson SMARTeZ®/EPIC Medical elastomeric infusion pump stability
+// Source: McKesson Elastomeric Infusion Pump Drug Stability Data, AN-SM-24-04-001
+// (effective 2024-04-29). Chemical stability only (not sterility). FTIR equivalency
+// studies establish these values are reproducible in SMARTeZ®/EPIC Medical pumps.
+// Keyed by lowercased generic name (matches DrugReference genericName).
+// ─────────────────────────────────────────────────────────────────────────────
+export const MCK_ELASTOMERIC_SOURCE =
+  'McKesson SMARTeZ®/EPIC Medical Elastomeric Infusion Pump Drug Stability Data (AN-SM-24-04-001, eff. 2024-04-29)';
+
+export interface ElastomericRow {
+  concentration: string;
+  diluent: string;
+  refrigerated: string; // 2–8 °C; "—" if not tested
+  roomTemp: string;     // 20–25 °C; "—" if not tested
+}
+
+export interface ElastomericStability {
+  rows: ElastomericRow[];
+  note?: string;
+}
+
+export const MCK_ELASTOMERIC: Record<string, ElastomericStability> = {
+  'fluorouracil': {
+    rows: [
+      { concentration: '5 mg/mL', diluent: 'D5W or NS', refrigerated: '—', roomTemp: '45 d' },
+      { concentration: '50 mg/mL', diluent: 'RTU', refrigerated: '—', roomTemp: '45 d' },
+    ],
+    note: 'Potential for precipitation (concentration/pH/diluent dependent). With sodium folinate (leucovorin) 5+2 or 36+8.8 mg/mL in NS: room temp 7 days.',
+  },
+  'acyclovir': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '5 d' },
+    ],
+  },
+  'agalsidase beta': {
+    rows: [
+      { concentration: '0.05 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '24 h' },
+      { concentration: '0.7 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '24 h' },
+    ],
+  },
+  'amikacin': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '15 d', roomTemp: '48 h' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '15 d', roomTemp: '48 h' },
+    ],
+  },
+  'amoxicillin': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '6 h', roomTemp: '2 h' },
+      { concentration: '40 mg/mL', diluent: 'NS', refrigerated: '6 h', roomTemp: '2 h' },
+    ],
+  },
+  'amoxicillin-clavulanate': {
+    rows: [
+      { concentration: '10+2 mg/mL', diluent: 'NS', refrigerated: '6 h', roomTemp: '—' },
+      { concentration: '20+4 mg/mL', diluent: 'NS', refrigerated: '6 h', roomTemp: '—' },
+    ],
+  },
+  'ampicillin': {
+    rows: [
+      { concentration: '12 mg/mL', diluent: 'NS', refrigerated: '4 d', roomTemp: '6 h' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '3 d', roomTemp: '24 h' },
+    ],
+  },
+  'ampicillin-sulbactam': {
+    rows: [
+      { concentration: '30+15 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '6 h' },
+    ],
+  },
+  'amphotericin b': {
+    rows: [
+      { concentration: '0.1 mg/mL', diluent: 'D5W', refrigerated: '4 d', roomTemp: '24 h' },
+      { concentration: '0.5 mg/mL', diluent: 'D5W', refrigerated: '4 d', roomTemp: '24 h' },
+      { concentration: '2 mg/mL', diluent: 'D5W', refrigerated: '4 d', roomTemp: '24 h' },
+    ],
+    note: 'Conventional amphotericin B. Susceptible to crystallization when refrigerated.',
+  },
+  'azithromycin': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+    ],
+  },
+  'aztreonam': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+      { concentration: '30 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+    ],
+  },
+  'bupivacaine': {
+    rows: [
+      { concentration: '5 mg/mL (HCl)', diluent: 'RTU', refrigerated: '15 d', roomTemp: '2 d' },
+      { concentration: '0.125%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+      { concentration: '0.750%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+    ],
+  },
+  'bumetanide': {
+    rows: [
+      { concentration: '0.016 mg/mL', diluent: 'D5W', refrigerated: '—', roomTemp: '24 h' },
+      { concentration: '0.16 mg/mL', diluent: 'D5W', refrigerated: '—', roomTemp: '24 h' },
+    ],
+  },
+  'caspofungin': {
+    rows: [
+      { concentration: '0.2 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '60 h' },
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '60 h' },
+    ],
+  },
+  'cefazolin': {
+    rows: [
+      { concentration: '16.7 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+    ],
+  },
+  'cefepime': {
+    rows: [
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+    ],
+  },
+  'cefotaxime': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '15 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '16.66 mg/mL', diluent: 'NS', refrigerated: '3 d', roomTemp: '24 h' },
+    ],
+  },
+  'cefotiam': {
+    rows: [
+      { concentration: '20 mg/mL', diluent: 'NS/D5W', refrigerated: '24 h', roomTemp: '6 h' },
+    ],
+  },
+  'cefoxitin': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '48 h' },
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '48 h' },
+    ],
+  },
+  'ceftazidime': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '24 h' },
+      { concentration: '40 mg/mL (combined test)', diluent: 'NS', refrigerated: '2 d', roomTemp: '12 h' },
+      { concentration: '40 mg/mL (separate test)', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '9 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '—' },
+      { concentration: '60 mg/mL', diluent: 'NS', refrigerated: '5 d', roomTemp: '—' },
+    ],
+    note: 'Pyridine determination applies to 9 and 60 mg/mL rows.',
+  },
+  'ceftolozane-tazobactam': {
+    rows: [
+      { concentration: '1+0.5 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '2+1 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '30+15 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+    ],
+  },
+  'ceftriaxone': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '48 h' },
+      { concentration: '50 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '48 h' },
+      { concentration: '10 mg/mL', diluent: 'D5W', refrigerated: '6 d', roomTemp: '24 h' },
+    ],
+    note: 'Susceptible to crystallization when refrigerated. Never co-infuse with calcium-containing solutions.',
+  },
+  'cefuroxime': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '3 d', roomTemp: '24 h' },
+      { concentration: '30 mg/mL', diluent: 'NS', refrigerated: '3 d', roomTemp: '24 h' },
+      { concentration: '1 mg/mL', diluent: 'D5W', refrigerated: '3 d', roomTemp: '12 h' },
+      { concentration: '30 mg/mL', diluent: 'D5W', refrigerated: '3 d', roomTemp: '12 h' },
+    ],
+  },
+  'cimetidine': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '7 d' },
+      { concentration: '6 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '7 d' },
+    ],
+  },
+  'ciprofloxacin': {
+    rows: [
+      { concentration: '2 mg/mL', diluent: 'D5W', refrigerated: '30 d', roomTemp: '10 d' },
+    ],
+  },
+  'cisplatin': {
+    rows: [
+      { concentration: '0.2 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+      { concentration: '0.1 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '14 d' },
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '14 d' },
+    ],
+    note: 'Potential for precipitation (concentration/pH/diluent dependent).',
+  },
+  'clindamycin': {
+    rows: [
+      { concentration: '6 mg/mL', diluent: 'NS', refrigerated: '30 d', roomTemp: '3 d' },
+      { concentration: '12 mg/mL', diluent: 'NS', refrigerated: '30 d', roomTemp: '3 d' },
+    ],
+  },
+  'colistimethate': {
+    rows: [
+      { concentration: '3 mg/mL', diluent: 'NS', refrigerated: '24 h', roomTemp: '2 h' },
+    ],
+  },
+  'cloxacillin': {
+    rows: [
+      { concentration: '50 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+    ],
+  },
+  'cyclophosphamide': {
+    rows: [
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '2 d' },
+    ],
+  },
+  'daptomycin': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '10 d', roomTemp: '1 d' },
+      { concentration: '5 mg/mL', diluent: 'NS', refrigerated: '10 d', roomTemp: '1 d' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '10 d', roomTemp: '1 d' },
+    ],
+  },
+  'deferoxamine': {
+    rows: [
+      { concentration: '0.022 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '5 mg/mL (mesylate)', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '100 mg/mL (mesylate)', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+    ],
+  },
+  'doxorubicin': {
+    rows: [
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '22 d', roomTemp: '14 d' },
+    ],
+  },
+  'doxycycline': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS/D5W', refrigerated: '3 d', roomTemp: '12 h' },
+      { concentration: '1.5 mg/mL', diluent: 'NS/D5W', refrigerated: '3 d', roomTemp: '12 h' },
+    ],
+  },
+  'ertapenem': {
+    rows: [
+      { concentration: '5 mg/mL (combined test)', diluent: 'NS', refrigerated: '24 h', roomTemp: '6 h' },
+      { concentration: '20 mg/mL (combined test)', diluent: 'NS', refrigerated: '24 h', roomTemp: '6 h' },
+      { concentration: '5 mg/mL (separate test)', diluent: 'NS', refrigerated: '7 d', roomTemp: '—' },
+      { concentration: '10 mg/mL (separate test)', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+      { concentration: '20 mg/mL (separate test)', diluent: 'NS', refrigerated: '5 d', roomTemp: '24 h' },
+    ],
+    note: 'NS only — do not use dextrose.',
+  },
+  'etoposide': {
+    rows: [
+      { concentration: '0.2 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '4 d' },
+      { concentration: '0.4 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '24 h' },
+    ],
+  },
+  'ferric carboxymaltose': {
+    rows: [
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '3 d' },
+      { concentration: '5 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '3 d' },
+    ],
+    note: 'PDF lists as Ferinject (iron(III) sucrose complex).',
+  },
+  'flucloxacillin': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '24 h' },
+      { concentration: '70 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '24 h' },
+    ],
+  },
+  'fluconazole': {
+    rows: [
+      { concentration: '2 mg/mL', diluent: 'RTU', refrigerated: '7 d', roomTemp: '2 d' },
+    ],
+  },
+  'floxuridine': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '1 d' },
+    ],
+  },
+  'folinic acid': {
+    rows: [
+      { concentration: '4 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+    ],
+  },
+  'foscarnet': {
+    rows: [
+      { concentration: '12 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '7 d' },
+      { concentration: '24 mg/mL', diluent: 'RTU', refrigerated: '14 d', roomTemp: '7 d' },
+    ],
+  },
+  'fosfomycin': {
+    rows: [
+      { concentration: '16.6 mg/mL', diluent: 'D5W', refrigerated: '—', roomTemp: '2 d' },
+      { concentration: '40 mg/mL', diluent: 'D5W', refrigerated: '—', roomTemp: '2 d' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '24 h' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '1 h (37°C)' },
+    ],
+  },
+  'furosemide': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '4 d' },
+    ],
+  },
+  'ganciclovir': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '1 mg/mL', diluent: 'D5W', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '10 mg/mL', diluent: 'D5W', refrigerated: '14 d', roomTemp: '2 d' },
+    ],
+    note: 'Potential for precipitation (concentration/pH/diluent dependent).',
+  },
+  'gentamicin': {
+    rows: [
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '7 d' },
+      { concentration: '5 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '7 d' },
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '28 d', roomTemp: '48 h' },
+    ],
+  },
+  'ifosfamide': {
+    rows: [
+      { concentration: '0.6 mg/mL (combined test)', diluent: 'NS/D5W', refrigerated: '3 d', roomTemp: '24 h' },
+      { concentration: '40 mg/mL (combined test)', diluent: 'NS/D5W', refrigerated: '3 d', roomTemp: '24 h' },
+      { concentration: '0.6 mg/mL (separate test)', diluent: 'D5W', refrigerated: '—', roomTemp: '7 d' },
+      { concentration: '40 mg/mL (separate test)', diluent: 'D5W', refrigerated: '—', roomTemp: '3 d' },
+    ],
+  },
+  'imipenem': {
+    rows: [
+      { concentration: '5+5 mg/mL', diluent: 'NS', refrigerated: '3 d', roomTemp: '24 h' },
+    ],
+    note: 'PDF: imipenem + cilastatin (Primaxin).',
+  },
+  'ketamine': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '2 d' },
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '2 d' },
+    ],
+  },
+  'levobupivacaine': {
+    rows: [
+      { concentration: '0.125%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+      { concentration: '0.750%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+    ],
+  },
+  'levofloxacin': {
+    rows: [
+      { concentration: '0.5 mg/mL', diluent: 'NS/D5W', refrigerated: '14 d', roomTemp: '7 d' },
+      { concentration: '5 mg/mL', diluent: 'NS/D5W', refrigerated: '14 d', roomTemp: '7 d' },
+    ],
+  },
+  'lincomycin': {
+    rows: [
+      { concentration: '1.2 mg/mL', diluent: 'NS', refrigerated: '1 d', roomTemp: '1 d' },
+      { concentration: '10 mg/mL', diluent: 'NS/D5W', refrigerated: '1 d', roomTemp: '1 d' },
+    ],
+  },
+  'lidocaine': {
+    rows: [
+      { concentration: '0.50%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+      { concentration: '2%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+    ],
+  },
+  'linezolid': {
+    rows: [
+      { concentration: '0.15 mg/mL', diluent: 'NS', refrigerated: '13 d', roomTemp: '24 h' },
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '13 d', roomTemp: '24 h' },
+    ],
+  },
+  'magnesium sulfate': {
+    rows: [
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '29 d', roomTemp: '24 h' },
+    ],
+  },
+  'meropenem': {
+    rows: [
+      { concentration: '5 mg/mL (separate test)', diluent: 'NS', refrigerated: '10 d', roomTemp: '24 h' },
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '5 d', roomTemp: '21 h' },
+      { concentration: '20 mg/mL (separate test)', diluent: 'NS', refrigerated: '4 d', roomTemp: '24 h' },
+      { concentration: '2.5 mg/mL (combined test)', diluent: 'NS', refrigerated: '24 h', roomTemp: '6 h' },
+      { concentration: '20 mg/mL (combined test)', diluent: 'NS', refrigerated: '24 h', roomTemp: '6 h' },
+    ],
+  },
+  'methotrexate': {
+    rows: [
+      { concentration: '0.3 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '7 d' },
+      { concentration: '25 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '7 d' },
+    ],
+  },
+  'methylprednisolone': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '2 h' },
+    ],
+  },
+  'metoclopramide': {
+    rows: [
+      { concentration: '5 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '2 d' },
+    ],
+  },
+  'metronidazole': {
+    rows: [
+      { concentration: '5 mg/mL', diluent: 'RTU', refrigerated: '10 d', roomTemp: '24 h' },
+    ],
+  },
+  'micafungin': {
+    rows: [
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '4 d', roomTemp: '24 h' },
+      { concentration: '1.5 mg/mL', diluent: 'NS', refrigerated: '9 d', roomTemp: '—' },
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '4 d', roomTemp: '24 h' },
+    ],
+  },
+  'morphine': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '7 d' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '7 d' },
+    ],
+  },
+  'nafcillin': {
+    rows: [
+      { concentration: '5 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '30 h' },
+      { concentration: '50 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '48 h' },
+    ],
+  },
+  'nefopam': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '1 d', roomTemp: '1 d' },
+    ],
+  },
+  'ofloxacin': {
+    rows: [
+      { concentration: '0.4 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '7 d' },
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '7 d' },
+    ],
+  },
+  'ondansetron': {
+    rows: [
+      { concentration: '0.03 mg/mL', diluent: 'NS/D5W', refrigerated: '21 d', roomTemp: '7 d' },
+      { concentration: '0.7 mg/mL', diluent: 'NS/D5W', refrigerated: '10 d', roomTemp: '4 d' },
+    ],
+  },
+  'oxacillin': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '8 d', roomTemp: '4 d' },
+      { concentration: '100 mg/mL', diluent: 'NS', refrigerated: '8 d', roomTemp: '4 d' },
+    ],
+  },
+  'paclitaxel': {
+    rows: [
+      { concentration: '0.3 mg/mL', diluent: 'NS/D5W', refrigerated: '7 d', roomTemp: '24 h' },
+      { concentration: '1.2 mg/mL', diluent: 'NS/D5W', refrigerated: '7 d', roomTemp: '24 h' },
+    ],
+  },
+  'pamidronate': {
+    rows: [
+      { concentration: '30 µg/mL', diluent: 'NS', refrigerated: '27 d', roomTemp: '2 d' },
+      { concentration: '0.4 mg/mL', diluent: 'NS', refrigerated: '27 d', roomTemp: '2 d' },
+      { concentration: '30 µg/mL', diluent: 'D5W', refrigerated: '27 d', roomTemp: '2 d' },
+      { concentration: '30 µg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '29 d' },
+    ],
+  },
+  'penicillin g': {
+    rows: [
+      { concentration: '20,000 units/mL (K)', diluent: 'NS', refrigerated: '4 d', roomTemp: '24 h' },
+      { concentration: '2,000 units/mL (Na)', diluent: 'NS', refrigerated: '3 d', roomTemp: '2 h' },
+      { concentration: '100,000 units/mL (Na, combined test)', diluent: 'NS', refrigerated: '1 d', roomTemp: '2 h' },
+      { concentration: '100,000 units/mL (Na, separate test)', diluent: 'NS', refrigerated: '—', roomTemp: '6 h' },
+    ],
+  },
+  'piperacillin': {
+    rows: [
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '3 d' },
+      { concentration: '80 mg/mL', diluent: 'NS', refrigerated: '5 d', roomTemp: '24 h' },
+    ],
+  },
+  'piperacillin/tazobactam': {
+    rows: [
+      { concentration: '10+1.25 mg/mL (combined test)', diluent: 'NS', refrigerated: '21 d', roomTemp: '48 h' },
+      { concentration: '80+10 mg/mL (combined test)', diluent: 'NS', refrigerated: '21 d', roomTemp: '48 h' },
+      { concentration: '10+1.25 mg/mL (separate test)', diluent: 'NS', refrigerated: '28 d', roomTemp: '24 h' },
+      { concentration: '80+10 mg/mL (separate test)', diluent: 'NS', refrigerated: '28 d', roomTemp: '24 h' },
+    ],
+  },
+  'ranitidine': {
+    rows: [
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '21 d', roomTemp: '2 d' },
+      { concentration: '2 mg/mL', diluent: 'NS', refrigerated: '21 d', roomTemp: '7 d' },
+      { concentration: '0.5 mg/mL', diluent: 'D5W', refrigerated: '21 d', roomTemp: '2 d' },
+      { concentration: '2 mg/mL', diluent: 'D5W', refrigerated: '21 d', roomTemp: '7 d' },
+    ],
+  },
+  'rifampin': {
+    rows: [
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '6 d', roomTemp: '24 h' },
+      { concentration: '3 mg/mL', diluent: 'NS', refrigerated: '6 d', roomTemp: '24 h' },
+    ],
+    note: 'PDF lists as rifampicin.',
+  },
+  'ropivacaine': {
+    rows: [
+      { concentration: '0.2 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '5 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '0.10%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+      { concentration: '0.75%', diluent: 'NS', refrigerated: '—', roomTemp: '30 d' },
+    ],
+  },
+  'teicoplanin': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+      { concentration: '20 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '24 h' },
+    ],
+  },
+  'temocillin': {
+    rows: [
+      { concentration: '10 mg/mL (combined test)', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '20 mg/mL (combined test)', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '10 mg/mL (separate test)', diluent: 'NS', refrigerated: '—', roomTemp: '24 h' },
+      { concentration: '80 mg/mL (separate test)', diluent: 'NS', refrigerated: '—', roomTemp: '24 h' },
+    ],
+  },
+  'ticarcillin-clavulanate': {
+    rows: [
+      { concentration: '31 mg/mL', diluent: 'NS', refrigerated: '7 d', roomTemp: '1 d' },
+    ],
+  },
+  'tigecycline': {
+    rows: [
+      { concentration: '0.5 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '24 h' },
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '2 d', roomTemp: '24 h' },
+    ],
+  },
+  'tobramycin': {
+    rows: [
+      { concentration: '0.2 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+      { concentration: '10 mg/mL', diluent: 'NS', refrigerated: '14 d', roomTemp: '24 h' },
+    ],
+  },
+  'vancomycin': {
+    rows: [
+      { concentration: '4 mg/mL (combined test)', diluent: 'NS/D5W', refrigerated: '21 d', roomTemp: '4 d' },
+      { concentration: '15 mg/mL (combined test)', diluent: 'NS/D5W', refrigerated: '14 d', roomTemp: '2 d' },
+      { concentration: '15 mg/mL (separate test)', diluent: 'NS', refrigerated: '30 d', roomTemp: '2 d' },
+    ],
+  },
+  'vincristine': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '—', roomTemp: '21 d' },
+    ],
+  },
+  'iron sucrose': {
+    rows: [
+      { concentration: '1 mg/mL', diluent: 'NS', refrigerated: '24 h', roomTemp: '24 h' },
+    ],
+    note: 'PDF lists as Venofer (iron(III) hydroxide sucrose).',
+  },
+};
+
+// Resolve elastomeric (SMARTeZ/EPIC) stability by generic name (case-insensitive;
+// tolerates "/" vs "-" in combination names).
+export function getElastomericStability(genericName: string): ElastomericStability | null {
+  if (!genericName) return null;
+  const k = genericName.trim().toLowerCase();
+  return (
+    MCK_ELASTOMERIC[k] ||
+    MCK_ELASTOMERIC[k.replace(/\s*\/\s*/g, '-')] ||
+    MCK_ELASTOMERIC[k.replace(/\s*-\s*/g, '/')] ||
+    null
+  );
+}

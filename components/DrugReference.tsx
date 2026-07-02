@@ -10,7 +10,8 @@ import type { Drug } from '@/lib/iv-reference-types';
 import { getAntimicrobialDetails, type AntimicrobialDetails, type SpectrumCoverage } from '@/data/antimicrobial-details';
 import {
   getBudStability, USP797_BUD, USP797_LIMIT_HOURS, effectiveBud,
-  type DrugStability, type EffectiveBud,
+  getElastomericStability, MCK_ELASTOMERIC_SOURCE,
+  type DrugStability, type EffectiveBud, type ElastomericStability,
 } from '@/data/bud-stability';
 import { emitAskCopilot } from '@/lib/cross-tab-events';
 
@@ -213,6 +214,44 @@ function ContainerStabilityTable({ stability }: { stability: DrugStability }) {
   );
 }
 
+/* ── Elastomeric pump stability (McKesson SMARTeZ®/EPIC Medical) ── */
+function ElastomericStabilityTable({ stability }: { stability: ElastomericStability }) {
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded-xl border border-white/10">
+        <table className="w-full text-[12px] min-w-[380px]">
+          <thead>
+            <tr className="bg-white/5 text-left">
+              <th className="px-2.5 py-2 font-semibold text-slate-200">Concentration</th>
+              <th className="px-2.5 py-2 font-semibold text-slate-200">Diluent</th>
+              <th className="px-2.5 py-2 font-semibold text-blue-300 text-center whitespace-nowrap">Room</th>
+              <th className="px-2.5 py-2 font-semibold text-emerald-300 text-center whitespace-nowrap">Fridge</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stability.rows.map((r, i) => (
+              <tr key={i} className={`border-t border-white/5 ${i % 2 ? 'bg-white/[0.02]' : ''} align-top`}>
+                <td className="px-2.5 py-2 text-slate-200 font-medium">{r.concentration}</td>
+                <td className="px-2.5 py-2 text-slate-400 whitespace-nowrap">{r.diluent}</td>
+                <td className="px-2.5 py-2 text-center text-blue-200 tabular-nums whitespace-nowrap">{r.roomTemp}</td>
+                <td className="px-2.5 py-2 text-center text-emerald-200 tabular-nums whitespace-nowrap">{r.refrigerated}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {stability.note && (
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          <span className="font-semibold text-slate-300">Note:</span> {stability.note}
+        </p>
+      )}
+      <p className="text-[10px] text-slate-600">
+        Chemical stability (not sterility) in SMARTeZ<span className="align-super text-[7px]">®</span>/EPIC Medical elastomeric pumps. Source: {MCK_ELASTOMERIC_SOURCE}. d = days, h = hours.
+      </p>
+    </div>
+  );
+}
+
 /* ── BUD: USP <797> microbiological cross-check ───────────────── */
 function USP797CrossCheck({ category, chemRoom, chemRefrig }: {
   category: string; chemRoom?: string; chemRefrig?: string;
@@ -355,6 +394,9 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
   // Container-specific BUD stability (ASHP ESPD 6th ed.) — present for the top
   // IV antibiotics; drives the per-container table and USP <797> cross-check.
   const budStab = useMemo(() => getBudStability(drug.genericName), [drug.genericName]);
+
+  // McKesson SMARTeZ®/EPIC Medical elastomeric-pump stability (AN-SM-24-04-001, 2024).
+  const elastomeric = useMemo(() => getElastomericStability(drug.genericName), [drug.genericName]);
 
   const showSpectrum = useMemo(() => {
     if (!amDetails) return false;
@@ -502,6 +544,16 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
                     Stability by container type
                   </p>
                   <ContainerStabilityTable stability={budStab} />
+                </div>
+              )}
+
+              {/* Elastomeric pump — McKesson SMARTeZ®/EPIC Medical */}
+              {elastomeric && (
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    Elastomeric pump — SMARTeZ<span className="align-super text-[8px]">®</span> / EPIC Medical
+                  </p>
+                  <ElastomericStabilityTable stability={elastomeric} />
                 </div>
               )}
 
