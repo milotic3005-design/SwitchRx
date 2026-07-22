@@ -990,3 +990,122 @@ export function getElastomericStability(genericName: string): ElastomericStabili
     null
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPAT container stability — consolidated view across the container types that
+// matter for home infusion (elastomeric pump, syringe, IV bag) at room temp and
+// refrigerated. Elastomeric values prefer the McKesson SMARTeZ/EPIC dataset;
+// syringe and bag values come from the ASHP per-container tables. Used by the
+// IDSA OPAT Advisor to attach an authoritative stability panel to each answer.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface OpatStabilityRow {
+  container: string;
+  concentration: string;
+  diluent: string;
+  roomTemp: string;
+  refrigerated: string;
+  source: 'McKesson SMARTeZ/EPIC' | 'ASHP ESPD 6th ed.';
+}
+
+export function getOpatStabilityRows(genericName: string): OpatStabilityRow[] {
+  const rows: OpatStabilityRow[] = [];
+  const elasto = getElastomericStability(genericName);
+  const bud = getBudStability(genericName);
+
+  // Elastomeric pump — McKesson SMARTeZ/EPIC preferred; fall back to ASHP row.
+  if (elasto) {
+    for (const r of elasto.rows) {
+      rows.push({
+        container: 'Elastomeric pump (SMARTeZ/EPIC)',
+        concentration: r.concentration, diluent: r.diluent,
+        roomTemp: r.roomTemp, refrigerated: r.refrigerated,
+        source: 'McKesson SMARTeZ/EPIC',
+      });
+    }
+  } else if (bud) {
+    for (const c of bud.containers.filter(c => /elastomeric/i.test(c.container))) {
+      rows.push({
+        container: c.container, concentration: c.concentration, diluent: c.diluent,
+        roomTemp: c.roomTemp, refrigerated: c.refrigerated, source: 'ASHP ESPD 6th ed.',
+      });
+    }
+  }
+  // Syringe and IV bag — ASHP per-container tables.
+  if (bud) {
+    for (const c of bud.containers.filter(c => /syringe/i.test(c.container))) {
+      rows.push({
+        container: c.container, concentration: c.concentration, diluent: c.diluent,
+        roomTemp: c.roomTemp, refrigerated: c.refrigerated, source: 'ASHP ESPD 6th ed.',
+      });
+    }
+    for (const c of bud.containers.filter(c => /bag/i.test(c.container))) {
+      rows.push({
+        container: c.container, concentration: c.concentration, diluent: c.diluent,
+        roomTemp: c.roomTemp, refrigerated: c.refrigerated, source: 'ASHP ESPD 6th ed.',
+      });
+    }
+  }
+  return rows;
+}
+
+// Shorthand / brand aliases → canonical stability key, for detecting drugs named
+// in the advisor's free-text recommendation.
+const OPAT_ALIASES: Record<string, string> = {
+  'pip-tazo': 'piperacillin/tazobactam', 'pip/tazo': 'piperacillin/tazobactam',
+  'pip tazo': 'piperacillin/tazobactam', 'zosyn': 'piperacillin/tazobactam',
+  'tazocin': 'piperacillin/tazobactam',
+  'unasyn': 'ampicillin-sulbactam',
+  'zerbaxa': 'ceftolozane-tazobactam',
+  'augmentin': 'amoxicillin-clavulanate', 'co-amoxiclav': 'amoxicillin-clavulanate',
+  'co amoxiclav': 'amoxicillin-clavulanate',
+  'pen g': 'penicillin g', 'benzylpenicillin': 'penicillin g',
+  'leucovorin': 'folinic acid',
+  'rifampicin': 'rifampin',
+};
+
+export interface OpatDrugStability {
+  name: string;
+  rows: OpatStabilityRow[];
+}
+
+function opatDisplayName(key: string): string {
+  return key.replace(/(^|[\/\- ])([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
+}
+
+// Detect drugs named in free text that have OPAT stability data, in order of
+// first appearance. Longer names are matched (and masked) first so a combination
+// like "piperacillin/tazobactam" is not also double-counted as "piperacillin".
+export function detectOpatStability(text: string, max = 4): OpatDrugStability[] {
+  if (!text) return [];
+  let mask = text.toLowerCase();
+
+  const keys = new Set<string>([...Object.keys(BUD_STABILITY), ...Object.keys(MCK_ELASTOMERIC)]);
+  const patterns: { pat: string; key: string }[] = [];
+  for (const k of keys) {
+    patterns.push({ pat: k, key: k });
+    const dash = k.replace(/\//g, '-'); if (dash !== k) patterns.push({ pat: dash, key: k });
+    const slash = k.replace(/-/g, '/'); if (slash !== k) patterns.push({ pat: slash, key: k });
+  }
+  for (const [alias, key] of Object.entries(OPAT_ALIASES)) patterns.push({ pat: alias, key });
+  patterns.sort((a, b) => b.pat.length - a.pat.length);
+
+  const seen = new Set<string>();
+  const found: { key: string; idx: number }[] = [];
+  for (const { pat, key } of patterns) {
+    let i = mask.indexOf(pat);
+    while (i !== -1) {
+      if (!seen.has(key)) { seen.add(key); found.push({ key, idx: i }); }
+      mask = mask.slice(0, i) + ' '.repeat(pat.length) + mask.slice(i + pat.length);
+      i = mask.indexOf(pat);
+    }
+  }
+  found.sort((a, b) => a.idx - b.idx);
+
+  const out: OpatDrugStability[] = [];
+  for (const h of found) {
+    const rows = getOpatStabilityRows(h.key);
+    if (rows.length) out.push({ name: opatDisplayName(h.key), rows });
+    if (out.length >= max) break;
+  }
+  return out;
+}

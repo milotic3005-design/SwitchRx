@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { streamAI, type ChatMessage } from '@/lib/ai';
+import { detectOpatStability, type OpatDrugStability } from '@/data/bud-stability';
+import { Thermometer } from 'lucide-react';
 import {
   Stethoscope, Send, Loader2, AlertTriangle, ShieldAlert, ExternalLink,
   Link as LinkIcon, ChevronDown, ChevronUp, Network, Pill, FlaskConical,
@@ -85,6 +87,7 @@ The URL MUST be a real, verifiable IDSA-controlled link retrieved via web search
 - If input data is missing (e.g., no culture, no renal function), flag it AT THE TOP in a warning callout and adjust confidence language ("empiric recommendation pending sensitivities")
 - Outpatient regimens only — flag if the case requires inpatient management
 - If IDSA guidance doesn't cover the input condition, say so explicitly and provide the closest IDSA reference + fallback to ASHP/CDC/etc.
+- Do NOT fabricate drug beyond-use/stability figures. An authoritative OPAT container-stability panel (elastomeric pump, syringe, IV bag; room temp + refrigerated) is automatically appended below your recommendation from the tool's curated dataset. You may note that home-infusion stability governs feasibility, but do not invent specific hours/days.
 
 ## EVALUATION
 Your output is successful when:
@@ -306,6 +309,64 @@ function buildClinicalPrompt(p: PatientInput): string {
 }
 
 // ─── Main component ──────────────────────────────────────────────
+// ─── OPAT container-stability panel ──────────────────────────────
+// Renders elastomeric-pump / syringe / IV-bag beyond-use stability (room +
+// refrigerated) for each drug named in the recommendation, from curated data.
+function OpatStabilityPanel({ drugs }: { drugs: OpatDrugStability[] }) {
+  return (
+    <div className="mt-6 pt-5 border-t border-white/10">
+      <div className="flex items-center gap-2 mb-1">
+        <Thermometer size={15} className="text-emerald-400" />
+        <h4 className="text-[13px] font-bold uppercase tracking-wider text-emerald-300">
+          OPAT Container Stability — Room &amp; Refrigerated
+        </h4>
+      </div>
+      <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+        Beyond-use chemical stability by container for home infusion. The assignable BUD is the{' '}
+        <span className="text-slate-400 font-medium">lesser</span> of the chemical stability below and the
+        USP &lt;797&gt; microbiological limit. Values are curated (not AI-generated).
+      </p>
+
+      <div className="space-y-5">
+        {drugs.map(drug => (
+          <div key={drug.name}>
+            <p className="text-[13px] font-semibold text-white mb-2">{drug.name}</p>
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-[12px] min-w-[440px]">
+                <thead>
+                  <tr className="bg-white/5 text-left">
+                    <th className="px-2.5 py-2 font-semibold text-slate-200">Container</th>
+                    <th className="px-2.5 py-2 font-semibold text-slate-200">Conc · Diluent</th>
+                    <th className="px-2.5 py-2 font-semibold text-blue-300 text-center whitespace-nowrap">Room</th>
+                    <th className="px-2.5 py-2 font-semibold text-emerald-300 text-center whitespace-nowrap">Fridge</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drug.rows.map((r, i) => (
+                    <tr key={i} className={`border-t border-white/5 ${i % 2 ? 'bg-white/[0.02]' : ''} align-top`}>
+                      <td className="px-2.5 py-2 text-slate-200 font-medium whitespace-nowrap">{r.container}</td>
+                      <td className="px-2.5 py-2 text-slate-400">
+                        {r.concentration}<span className="text-slate-600"> · </span>{r.diluent}
+                      </td>
+                      <td className="px-2.5 py-2 text-center text-blue-200 tabular-nums whitespace-nowrap">{r.roomTemp}</td>
+                      <td className="px-2.5 py-2 text-center text-emerald-200 tabular-nums whitespace-nowrap">{r.refrigerated}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-slate-600 mt-3 leading-relaxed">
+        Chemical/physical stability (≥90% potency). Elastomeric values: McKesson SMARTeZ®/EPIC Medical pump data (AN-SM-24-04-001, 2024).
+        Syringe / IV-bag values: ASHP Extended Stability for Parenteral Drugs, 6th ed. d = days, h = hours, w = weeks, mo = months.
+      </p>
+    </div>
+  );
+}
+
 export function IDSAAntibioticAdvisor() {
   const [input, setInput] = useState<PatientInput>(emptyInput);
   const [output, setOutput] = useState('');
@@ -325,6 +386,11 @@ export function IDSAAntibioticAdvisor() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat, isChatLoading]);
+
+  // Authoritative OPAT container-stability panel, keyed to the drug(s) named in
+  // the recommendation. Rendered from curated data (McKesson SMARTeZ/EPIC +
+  // ASHP), never the model, so the figures are exact.
+  const opatStability = useMemo<OpatDrugStability[]>(() => detectOpatStability(output), [output]);
 
   const setField = <K extends keyof PatientInput>(field: K, value: PatientInput[K]) =>
     setInput(prev => ({ ...prev, [field]: value }));
@@ -759,6 +825,11 @@ export function IDSAAntibioticAdvisor() {
                     {repairLLMMarkdown(output)}
                   </Markdown>
                 </div>
+
+                {/* Authoritative OPAT container-stability panel (curated data) */}
+                {!isLoading && opatStability.length > 0 && (
+                  <OpatStabilityPanel drugs={opatStability} />
+                )}
 
                 {sources.length > 0 && (
                   <div className="mt-6 pt-4 border-t border-white/10">
