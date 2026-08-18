@@ -18,7 +18,6 @@ const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wide
 const TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/25',   text: 'text-amber-300',   dot: 'bg-amber-400' },
   emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/25', text: 'text-emerald-300', dot: 'bg-emerald-400' },
-  blue:    { bg: 'bg-blue-500/10',    border: 'border-blue-500/25',    text: 'text-blue-300',    dot: 'bg-blue-400' },
   violet:  { bg: 'bg-violet-500/10',  border: 'border-violet-500/25',  text: 'text-violet-300',  dot: 'bg-violet-400' },
   slate:   { bg: 'bg-white/5',        border: 'border-white/10',       text: 'text-slate-300',   dot: 'bg-slate-400' },
 };
@@ -217,16 +216,27 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
         <>Final volume is <strong className="text-slate-200">{math ? `${fmt(math.finalVolume)} mL` : `${fmt(bagVolume)} mL + the drug volume`}</strong>.</>,
       );
     } else {
+      const rangeText = entry.concentrationRange
+        ? `${fmt(entry.concentrationRange.min, 2)} and ${fmt(entry.concentrationRange.max, 2)} ${concUnit}`
+        : 'the label limits';
       steps.push(
         <>
-          Add the drug to a bag sized so the final concentration lands between{' '}
-          <strong className="text-slate-200">
-            {entry.concentrationRange
-              ? `${fmt(entry.concentrationRange.min, 2)} and ${fmt(entry.concentrationRange.max, 2)} ${concUnit}`
-              : 'the label limits'}
-          </strong>
-          . Withdrawing an equal volume first is optional — it shifts the concentration slightly, not the acceptability.
+          Add the drug to the {fmt(bagVolume)} mL bag of {diluent}, sized so the final concentration lands
+          between <strong className="text-slate-200">{rangeText}</strong>.{' '}
+          <strong className={tone.text}>No withdrawal step is needed</strong> — the concentration window is
+          what governs, not the bag volume.
         </>,
+      );
+      if (entry.labelDirectsWithdrawal) {
+        steps.push(
+          <>
+            The label does describe withdrawing an equal volume first. That is equally acceptable; it shifts
+            the concentration slightly, not whether the preparation is in spec.
+          </>,
+        );
+      }
+      steps.push(
+        <>Final volume is <strong className="text-slate-200">{math ? `${fmt(math.finalVolume)} mL` : `${fmt(bagVolume)} mL + the drug volume`}</strong>.</>,
       );
     }
     steps.push(<>Invert gently to mix. Do not shake.</>);
@@ -239,11 +249,12 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
       {/* Reference facts */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Fact label="Standard bag" value={entry.bagSizes.length ? entry.bagSizes.map(b => `${b} mL`).join(' / ') : 'n/a'} />
+        {/* Concentration-driven drugs are prepared additively too — the range, not the
+            bag volume, is the constraint — so they report the same final volume rule. */}
         <Fact label="Final volume" value={
           entry.method === 'remove-from-bag' ? 'Fixed = bag size'
-          : entry.method === 'add-to-bag' ? 'Bag + drug volume'
-          : entry.method === 'concentration-driven' ? 'Set by concentration'
-          : 'See note'
+          : entry.method === 'special' ? 'See note'
+          : 'Bag + drug volume'
         } />
         <Fact label="Diluent" value={entry.diluents[0].replace(/ Injection.*$/, '')} />
         <Fact

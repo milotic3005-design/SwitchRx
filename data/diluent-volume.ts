@@ -8,10 +8,12 @@
 // Two different things drive the answer, and conflating them is the usual source
 // of error:
 //
-//   1. The label fixes a FINAL VOLUME ("dilute to a final volume of 100 mL").
-//      The only way to land on that number is to withdraw a volume of diluent
-//      equal to the drug volume before adding the drug. Actemra, Simponi Aria,
-//      Orencia, Benlysta, Stelara IV and Saphnelo all read this way.
+//   1. The label fixes a FINAL VOLUME ("dilute to a final volume of 100 mL") and
+//      states no acceptable concentration window. The only way to land on that
+//      number is to withdraw a volume of diluent equal to the drug volume before
+//      adding the drug, and overfilling puts the bag out of spec. Actemra,
+//      Simponi Aria, Orencia, Benlysta, Stelara IV, Saphnelo and Darzalex read
+//      this way.
 //
 //   2. The label fixes a FINAL CONCENTRATION RANGE ("dilute to 1–4 mg/mL"), or
 //      simply says to inject the drug into an N mL bag. Final volume is then
@@ -19,11 +21,15 @@
 //      concentration stays in range. Tysabri, Krystexxa, Herceptin, Ocrevus and
 //      Keytruda read this way.
 //
-// A label can carry BOTH: Remicade directs withdrawal of an equal volume from
-// the 250 mL bag *and* states an acceptable 0.4–4 mg/mL range. Those entries are
-// classified by the directed technique (`remove-from-bag`) with the range
-// recorded separately, so the UI can show that adding directly still lands in
-// range even though it departs from the printed instruction.
+// A label can carry BOTH, and then the RANGE governs: Remicade directs
+// withdrawal of an equal volume from the 250 mL bag *and* states an acceptable
+// 0.4–4 mg/mL range. Adding directly to a full bag holds that range across the
+// adult dose span (1200 mg still only reaches 3.2 mg/mL), so it is acceptable
+// practice and the entry is classified `concentration-driven`. What separates it
+// from Actemra is not the imperative sentence — both say "withdraw" — but
+// whether the label gives a window that direct addition stays inside.
+// `labelDirectsWithdrawal` records the wording so the UI never contradicts the
+// label silently.
 //
 // Every entry quotes the preparation sentence verbatim from the manufacturer's
 // US prescribing information so the technique can be checked at a glance rather
@@ -65,6 +71,13 @@ export interface DiluentVolumeEntry {
   /** True when the drug is supplied as a lyophilised powder needing reconstitution first. */
   reconstituted?: boolean;
   concentrationRange?: ConcentrationRange;
+  /**
+   * Set on `concentration-driven` entries whose label *also* describes withdrawing
+   * an equal volume. The concentration range is what governs acceptability, so
+   * direct addition is fine, but the UI still surfaces the label's own wording
+   * rather than quietly contradicting it.
+   */
+  labelDirectsWithdrawal?: boolean;
   /** Verbatim preparation sentence from the US PI. */
   labelQuote: string;
   /** Why this one trips people up. */
@@ -99,24 +112,6 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
       'Patients under 30 kg use a 50 mL bag; at or above 30 kg use 100 mL. The withdraw-first step applies to both.',
     sourceLabel: 'ACTEMRA US PI, §2.4 Preparation for IV infusion',
     sourceUrl: dailyMed('2e5365ff-cb2a-4b16-b2c7-e35c6bf2de13'),
-  },
-  {
-    id: 'infliximab',
-    generic: 'Infliximab',
-    brand: 'Remicade',
-    biosimilars: ['Inflectra', 'Renflexis', 'Avsola', 'Ixifi'],
-    method: 'remove-from-bag',
-    bagSizes: [250],
-    diluents: ['0.9% Sodium Chloride Injection, USP'],
-    vialConcentration: 10,
-    reconstituted: true,
-    concentrationRange: { min: 0.4, max: 4, unit: 'mg/mL' },
-    labelQuote:
-      'Dilute the total volume of the reconstituted REMICADE solution dose to 250 mL with sterile 0.9% Sodium Chloride Injection, USP, by withdrawing a volume from the 0.9% Sodium Chloride Injection, USP, 250 mL bottle or bag equal to the total volume of reconstituted REMICADE required for a dose.',
-    practicePoint:
-      'Commonly prepared by adding the drug straight to a full 250 mL bag. That is a deviation from the printed technique, but the resulting concentration still falls inside the label\'s own 0.4–4 mg/mL window, which is why it rarely causes a problem in practice. Follow your institution\'s standard.',
-    sourceLabel: 'REMICADE US PI, §2.7 Preparation and administration',
-    sourceUrl: dailyMed('a0a046c1-056d-45a9-bfd9-13b47c24f257'),
   },
   {
     id: 'golimumab-iv',
@@ -300,6 +295,27 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
 
   // ═══════════ Concentration-driven — either technique is acceptable ═══════════
   {
+    id: 'infliximab',
+    generic: 'Infliximab',
+    brand: 'Remicade',
+    biosimilars: ['Inflectra', 'Renflexis', 'Avsola', 'Ixifi'],
+    method: 'concentration-driven',
+    labelDirectsWithdrawal: true,
+    bagSizes: [250],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 10,
+    reconstituted: true,
+    concentrationRange: { min: 0.4, max: 4, unit: 'mg/mL' },
+    labelQuote:
+      'Dilute the total volume of the reconstituted REMICADE solution dose to 250 mL with sterile 0.9% Sodium Chloride Injection, USP, by withdrawing a volume from the 0.9% Sodium Chloride Injection, USP, 250 mL bottle or bag equal to the total volume of reconstituted REMICADE required for a dose. The resulting infusion concentration should range between 0.4 mg/mL and 4 mg/mL.',
+    practicePoint:
+      'Acceptability is set by the 0.4–4 mg/mL window, not by the 250 mL figure. Adding the drug straight to a full 250 mL bag holds that window across the whole adult dose range — a 1200 mg dose still only reaches 3.2 mg/mL — so direct addition is fine and is what most sites do.',
+    pediatricNote:
+      'The floor is the one to watch: below roughly 105 mg, adding to a full 250 mL bag drops under 0.4 mg/mL. Small paediatric doses need a smaller bag. The volume check flags this automatically.',
+    sourceLabel: 'REMICADE US PI, §2.7 Preparation and administration',
+    sourceUrl: dailyMed('a0a046c1-056d-45a9-bfd9-13b47c24f257'),
+  },
+  {
     id: 'rituximab',
     generic: 'Rituximab',
     brand: 'Rituxan',
@@ -380,7 +396,15 @@ export interface MethodMeta {
   verdict: string;
   /** One-line plain-English answer. */
   answer: string;
-  tone: 'amber' | 'emerald' | 'blue' | 'violet';
+  /**
+   * Colour encodes the ACTION, not the reasoning: amber = draw the bag down
+   * first, emerald = add it in, violet = neither model applies. So
+   * `concentration-driven` shares emerald with `add-to-bag` — the pharmacist does
+   * the same thing at the bench, and the headline carries the difference in why.
+   * Blue is deliberately unused: globals.css retones blue to gold app-wide, which
+   * would render it near-identical to the amber warning tone.
+   */
+  tone: 'amber' | 'emerald' | 'violet';
 }
 
 export const METHOD_META: Record<PrepMethod, MethodMeta> = {
@@ -397,10 +421,10 @@ export const METHOD_META: Record<PrepMethod, MethodMeta> = {
     tone: 'emerald',
   },
   'concentration-driven': {
-    verdict: 'Concentration-driven — either technique',
+    verdict: 'Add to the bag — concentration is the constraint',
     answer:
-      'The label targets a final concentration rather than a fixed volume. Choose the bag size that lands in range; the added volume is not itself the constraint.',
-    tone: 'blue',
+      'The label sets an acceptable final concentration rather than a fixed volume. Add the drug to a bag sized to land in range — no withdrawal step is needed, because the added volume is not itself the constraint.',
+    tone: 'emerald',
   },
   special: {
     verdict: 'Special handling',
