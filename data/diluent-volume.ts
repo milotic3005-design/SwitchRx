@@ -31,6 +31,27 @@
 // `labelDirectsWithdrawal` records the wording so the UI never contradicts the
 // label silently.
 //
+// WHEN A LABEL STATES A SINGLE FINAL CONCENTRATION, IT SETTLES THE TECHNIQUE.
+// Preparation prose is often loose ("add to an infusion bag containing 250 mL"),
+// but a stated concentration is arithmetic and can only be reached one way. Divide
+// the dose by each candidate final volume and see which reproduces the label's
+// number:
+//
+//   Ocrevus 300 mg, label says 1.2 mg/mL
+//     withdraw first -> 300/250 = 1.2000  EXACT
+//     add to full bag -> 300/260 = 1.1538  3.8% low
+//   Tysabri 300 mg, label says 2.6 mg/mL
+//     add to full bag -> 300/115 = 2.6087  EXACT
+//     withdraw first -> 300/100 = 3.0000   15% high
+//
+// The same test resolves the two drugs in opposite directions, which is what makes
+// it trustworthy rather than a rationalisation. Both labels read as a straight
+// addition; only Tysabri's arithmetic agrees. Run this check before classifying any
+// drug whose label names a concentration, and prefer it over the prose.
+//
+// A concentration RANGE cannot do this — both techniques land inside it — which is
+// why range drugs are `concentration-driven` instead.
+//
 // Every entry quotes the preparation sentence verbatim from the manufacturer's
 // US prescribing information so the technique can be checked at a glance rather
 // than taken on trust. Labels are revised — `sourceUrl` points at the current
@@ -247,8 +268,12 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     bagSizes: [100],
     diluents: ['0.9% Sodium Chloride Injection, USP'],
     vialConcentration: 20,
+    // Encoded because it is the evidence for the classification, not decoration:
+    // 300/115 = 2.61 matches the label, 300/100 = 3.00 does not. Same test that
+    // puts Ocrevus in the opposite bucket.
+    concentrationRange: { min: 2.6, max: 2.6, unit: 'mg/mL' },
     labelQuote:
-      'Inject TYSABRI into 100 mL of 0.9% Sodium Chloride Injection, USP. No other intravenous diluents may be used to prepare the TYSABRI diluted solution.',
+      'Inject TYSABRI into 100 mL of 0.9% Sodium Chloride Injection, USP. The final concentration of the diluted solution is 2.6 mg/mL. No other intravenous diluents may be used to prepare the TYSABRI diluted solution.',
     practicePoint:
       'The label\'s own stated final concentration of 2.6 mg/mL confirms the drug volume is additive: 300 mg ÷ 115 mL = 2.6 mg/mL. Withdrawing 15 mL first would give 3.0 mg/mL.',
     sourceLabel: 'TYSABRI US PI, §2.3 Dilution instructions',
@@ -258,11 +283,14 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     id: 'ocrelizumab',
     generic: 'Ocrelizumab',
     brand: 'Ocrevus',
-    method: 'add-to-bag',
+    // The label names a final concentration, and that number is only reached at a
+    // final volume equal to the bag — so the drug volume comes out first. See the
+    // header note on back-calculating the technique from a stated concentration.
+    method: 'remove-from-bag',
     bagSizes: [250, 500],
     // Bag follows the dose, not the drug volume — 10 mL and 20 mL are both far
     // below the volume step-up threshold, so without this pairing a 600 mg dose
-    // would default to 250 mL and land at 2.2 mg/mL instead of 1.2.
+    // would default to 250 mL and land at 2.4 mg/mL instead of 1.2.
     bagByDose: [
       { doseMg: 300, bag: 250 },
       { doseMg: 600, bag: 500 },
@@ -271,9 +299,9 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     vialConcentration: 30,
     concentrationRange: { min: 1.2, max: 1.2, unit: 'mg/mL' },
     labelQuote:
-      'Withdraw 10 mL (300 mg) of OCREVUS and inject into 250 mL of 0.9% sodium chloride injection to achieve the final concentration of 1.2 mg/mL. To prepare a 600 mg dose, withdraw 20 mL of injection concentrate and add to an infusion bag containing 500 mL of 0.9% sodium chloride injection. Do not use other diluents to dilute OCREVUS since their use has not been tested.',
+      'Withdraw 10 mL (300 mg) of OCREVUS and inject into 250 mL of 0.9% sodium chloride injection to achieve the final concentration of 1.2 mg/mL. To prepare a 600 mg dose, withdraw 20 mL and add to an infusion bag containing 500 mL of 0.9% sodium chloride injection. OCREVUS must be diluted to a final drug concentration of approximately 1.2 mg/mL. Do not use other diluents to dilute OCREVUS since their use has not been tested.',
     practicePoint:
-      'The bag is set by the dose: 300 mg into 250 mL, 600 mg into 500 mL. Both hold ~1.2 mg/mL — putting a 600 mg dose in a 250 mL bag would give 2.2 mg/mL, roughly double. Administer through a 0.2 or 0.22 micron in-line filter. Ocrevus Zunovo (SC, with hyaluronidase) is a different product and is not diluted.',
+      'The stated 1.2 mg/mL is the specification, and it only comes out at a final volume equal to the bag: 300 mg ÷ 250 mL = 1.2 exactly. Adding to a full bag instead gives 260 mL and 1.15 mg/mL — off the label number. So withdraw the drug volume from the bag first, even though the preparation sentence reads as a straight addition. Bag is set by the dose: 300 mg → 250 mL, 600 mg → 500 mL. Administer through a 0.2 or 0.22 micron in-line filter. Ocrevus Zunovo (SC, with hyaluronidase) is a different product and is not diluted.',
     sourceLabel: 'OCREVUS US PI, §2.4 Dilution and administration',
     sourceUrl: 'https://www.gene.com/download/pdf/ocrevus_prescribing.pdf',
   },
@@ -523,10 +551,16 @@ export interface PrepMath {
   alternateInRange: boolean | null;
 }
 
+// A single-value range is a stated target, not a window. It is hit exactly by
+// construction — choose the technique and the number falls out — so the tolerance
+// is tight: ±2% accepts the intended preparation and rejects the other technique.
+// Ocrevus is the case that sets it: withdrawing first gives exactly 1.2 mg/mL,
+// adding to a full bag gives 1.15 (3.8% low), and those must not both read "in range".
+const TARGET_TOLERANCE = 0.02;
+
 const within = (v: number | null, r?: ConcentrationRange): boolean | null => {
   if (v === null || !r) return null;
-  // A single-value range (min === max) is a target, not a window — allow ±5%.
-  if (r.min === r.max) return Math.abs(v - r.min) <= r.min * 0.05;
+  if (r.min === r.max) return Math.abs(v - r.min) <= r.min * TARGET_TOLERANCE;
   return v >= r.min && v <= r.max;
 };
 
