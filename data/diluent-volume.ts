@@ -64,6 +64,15 @@ export interface DiluentVolumeEntry {
   method: PrepMethod;
   /** Bag volumes the label names, mL. First entry is the adult default. */
   bagSizes: number[];
+  /**
+   * Labels that pair a specific dose with a specific bag, so the bag tracks the
+   * dose rather than the drug volume. Ocrevus is the case: 300 mg into 250 mL and
+   * 600 mg into 500 mL, both landing on ~1.2 mg/mL off only 10–20 mL of drug.
+   * The volume step-up rule cannot see this — the volumes are far too small to
+   * trigger it — so the pairing has to be stated. Bands are matched on the
+   * smallest listed dose at or above the entered dose.
+   */
+  bagByDose?: { doseMg: number; bag: number }[];
   /** Acceptable diluents, in label order. */
   diluents: string[];
   /** Concentration of the solution actually drawn into the syringe (after reconstitution, if applicable), mg/mL. */
@@ -251,12 +260,20 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     brand: 'Ocrevus',
     method: 'add-to-bag',
     bagSizes: [250, 500],
+    // Bag follows the dose, not the drug volume — 10 mL and 20 mL are both far
+    // below the volume step-up threshold, so without this pairing a 600 mg dose
+    // would default to 250 mL and land at 2.2 mg/mL instead of 1.2.
+    bagByDose: [
+      { doseMg: 300, bag: 250 },
+      { doseMg: 600, bag: 500 },
+    ],
     diluents: ['0.9% Sodium Chloride Injection, USP'],
     vialConcentration: 30,
+    concentrationRange: { min: 1.2, max: 1.2, unit: 'mg/mL' },
     labelQuote:
-      'Withdraw 10 mL (300 mg) of OCREVUS and inject into 250 mL of 0.9% sodium chloride injection to achieve the final concentration of 1.2 mg/mL. Do not use other diluents to dilute OCREVUS since their use has not been tested.',
+      'Withdraw 10 mL (300 mg) of OCREVUS and inject into 250 mL of 0.9% sodium chloride injection to achieve the final concentration of 1.2 mg/mL. To prepare a 600 mg dose, withdraw 20 mL of injection concentrate and add to an infusion bag containing 500 mL of 0.9% sodium chloride injection. Do not use other diluents to dilute OCREVUS since their use has not been tested.',
     practicePoint:
-      'The 600 mg dose goes into 500 mL (20 mL of drug), keeping the same ~1.2 mg/mL. Ocrevus Zunovo (SC, with hyaluronidase) is a different product and is not diluted.',
+      'The bag is set by the dose: 300 mg into 250 mL, 600 mg into 500 mL. Both hold ~1.2 mg/mL — putting a 600 mg dose in a 250 mL bag would give 2.2 mg/mL, roughly double. Administer through a 0.2 or 0.22 micron in-line filter. Ocrevus Zunovo (SC, with hyaluronidase) is a different product and is not diluted.',
     sourceLabel: 'OCREVUS US PI, §2.4 Dilution and administration',
     sourceUrl: 'https://www.gene.com/download/pdf/ocrevus_prescribing.pdf',
   },
@@ -561,34 +578,61 @@ export function computePrep(
 export const BAG_STEP_UP_THRESHOLD_ML = 100;
 export const BAG_STEP_UP_TARGET_ML = 500;
 
+/** What drove the bag choice. */
+export type BagBasis =
+  /** The drug's default bag. */
+  | 'default'
+  /** The label pairs this dose with this bag (`bagByDose`). */
+  | 'dose'
+  /** The drug volume reached the step-up threshold. */
+  | 'volume';
+
 export interface BagRecommendation {
   /** Bag volume to use, mL. */
   bag: number;
-  /** True when the threshold pushed this above the default bag. */
+  basis: BagBasis;
+  /** True when the recommendation differs from the drug's default bag. */
   steppedUp: boolean;
-  /** Set when the rule fired but no large-enough bag is listed for the drug. */
+  /** Set when the volume rule fired but no large-enough bag is listed. */
   unavailable?: boolean;
 }
 
 /**
- * Choose the bag for a given drug volume. Returns the drug's default bag until
- * the added volume reaches the threshold, then the smallest listed bag at or
- * above the step-up target.
+ * Choose the bag for a given dose and drug volume.
+ *
+ * Two independent things can move the bag off the drug's default, and they are
+ * checked in that order:
+ *   1. A label dose→bag pairing (`bagByDose`). Ocrevus 600 mg belongs in 500 mL
+ *      off only 20 mL of drug, which no volume-based rule could infer.
+ *   2. The volume step-up, which can only raise the bag further, never lower it —
+ *      so a dose-paired bag is never shrunk by a large volume.
  */
 export function recommendBagSize(
-  method: PrepMethod,
-  bagSizes: number[],
+  entry: Pick<DiluentVolumeEntry, 'method' | 'bagSizes' | 'bagByDose'>,
   drugVolume: number | null,
+  doseMg: number | null,
 ): BagRecommendation {
-  const fallback = bagSizes[0] ?? 0;
-  if (method === 'remove-from-bag' || drugVolume === null) return { bag: fallback, steppedUp: false };
-  if (drugVolume < BAG_STEP_UP_THRESHOLD_ML) return { bag: fallback, steppedUp: false };
-  // Already on a bag big enough to absorb the volume — nothing to advise.
-  if (fallback >= BAG_STEP_UP_TARGET_ML) return { bag: fallback, steppedUp: false };
+  const fallback = entry.bagSizes[0] ?? 0;
 
-  const larger = bagSizes.filter(b => b >= BAG_STEP_UP_TARGET_ML).sort((a, b) => a - b);
-  if (!larger.length) return { bag: fallback, steppedUp: false, unavailable: true };
-  return { bag: larger[0], steppedUp: true };
+  let bag = fallback;
+  let basis: BagBasis = 'default';
+  if (entry.bagByDose?.length && doseMg !== null) {
+    const bands = [...entry.bagByDose].sort((a, b) => a.doseMg - b.doseMg);
+    // Smallest band at or above the dose; anything larger than every band takes
+    // the biggest one rather than falling back to the default.
+    const band = bands.find(b => doseMg <= b.doseMg) ?? bands[bands.length - 1];
+    bag = band.bag;
+    basis = 'dose';
+  }
+
+  const additive = entry.method !== 'remove-from-bag';
+  if (additive && drugVolume !== null && drugVolume >= BAG_STEP_UP_THRESHOLD_ML && bag < BAG_STEP_UP_TARGET_ML) {
+    const larger = entry.bagSizes.filter(b => b >= BAG_STEP_UP_TARGET_ML).sort((a, b) => a - b);
+    if (larger.length) return { bag: larger[0], basis: 'volume', steppedUp: larger[0] !== fallback };
+    return { bag, basis, steppedUp: bag !== fallback, unavailable: true };
+  }
+
+  return { bag, basis, steppedUp: bag !== fallback };
 }
 
 // ── openFDA label scan (fallback for drugs not in the curated set) ────────────
