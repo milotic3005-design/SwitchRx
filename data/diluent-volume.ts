@@ -101,6 +101,8 @@ export interface DiluentVolumeEntry {
   /** True when the drug is supplied as a lyophilised powder needing reconstitution first. */
   reconstituted?: boolean;
   concentrationRange?: ConcentrationRange;
+  /** Hard cap on the volume that may be infused, mL, where the label sets one (Opdivo: 160 mL). */
+  maxFinalVolumeMl?: number;
   /**
    * Set on `concentration-driven` entries whose label *also* describes withdrawing
    * an equal volume. The concentration range is what governs acceptability, so
@@ -242,7 +244,89 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     sourceUrl: dailyMed('a4d0efe9-5e54-467e-9eb4-56fa7d53b60b'),
   },
 
+  {
+    id: 'bevacizumab',
+    generic: 'Bevacizumab',
+    brand: 'Avastin',
+    biosimilars: ['Mvasi', 'Zirabev', 'Alymsys', 'Vegzelma', 'Avzivi'],
+    method: 'remove-from-bag',
+    bagSizes: [100],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 25,
+    labelQuote:
+      'Withdraw necessary amount of AVASTIN and dilute in a total volume of 100 mL of 0.9% Sodium Chloride Injection, USP. DO NOT ADMINISTER OR MIX WITH DEXTROSE SOLUTION.',
+    practicePoint:
+      '"A total volume of 100 mL" is a final-volume instruction — the bag reads 100 mL when finished, so the drug volume comes out first. Dextrose is incompatible; NS only.',
+    sourceLabel: 'AVASTIN US PI, §2.7 Preparation for administration',
+    sourceUrl: dailyMed('939b5d1f-9fb2-4499-80ef-0607aa6b114e'),
+  },
+  {
+    id: 'isatuximab',
+    generic: 'Isatuximab-irfc',
+    brand: 'Sarclisa',
+    method: 'remove-from-bag',
+    bagSizes: [250],
+    diluents: ['0.9% Sodium Chloride Injection, USP', '5% Dextrose Injection, USP'],
+    vialConcentration: 20,
+    labelQuote:
+      'Remove the volume of diluent from the 250 mL 0.9% Sodium Chloride Injection, or 5% Dextrose Injection, diluent bag that is equal to the required volume of SARCLISA injection. Withdraw the necessary volume of SARCLISA injection from the vial and dilute by adding to the infusion bag.',
+    practicePoint:
+      'One of the few labels that states the withdrawal step outright rather than leaving it to be inferred from a final volume or concentration. Do not shake; use a 0.22 micron in-line filter.',
+    sourceLabel: 'SARCLISA US PI, §2.4 Preparation and administration',
+    sourceUrl: dailyMed('a0473462-6f9d-4eca-a5bf-8620aea68e8a'),
+  },
+  {
+    id: 'ramucirumab',
+    generic: 'Ramucirumab',
+    brand: 'Cyramza',
+    method: 'remove-from-bag',
+    bagSizes: [250],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 10,
+    labelQuote:
+      'Withdraw the required volume of CYRAMZA and further dilute with only 0.9% Sodium Chloride Injection in an intravenous infusion container to a final volume of 250 mL. Do not use dextrose containing solutions.',
+    practicePoint:
+      '"To a final volume of 250 mL" fixes the bag, so withdraw first. Dextrose is not permitted, and it must not be co-infused with other drugs or electrolytes. Do not shake — invert gently.',
+    sourceLabel: 'CYRAMZA US PI, §2.5 Preparation and administration',
+    sourceUrl: dailyMed('c6080942-dee6-423e-b688-1272c2ae90d4'),
+  },
+  {
+    id: 'panitumumab',
+    generic: 'Panitumumab',
+    brand: 'Vectibix',
+    method: 'remove-from-bag',
+    // Dose-driven, like Ocrevus: the label steps the total volume up above 1000 mg.
+    bagSizes: [100, 150],
+    bagByDose: [
+      { doseMg: 1000, bag: 100 },
+      { doseMg: 1500, bag: 150 },
+    ],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 20,
+    labelQuote:
+      'Dilute to a total volume of 100 mL with 0.9% sodium chloride injection, USP. Doses higher than 1000 mg should be diluted to 150 mL with 0.9% sodium chloride injection, USP. Do not exceed a final concentration of 10 mg/mL.',
+    practicePoint:
+      'Total volume is fixed and steps with the dose — 100 mL up to 1000 mg, 150 mL above it. Must go through an infusion pump with a low-protein-binding 0.2 or 0.22 micron in-line filter.',
+    sourceLabel: 'VECTIBIX US PI, §2.3 Preparation and administration',
+    sourceUrl: dailyMedSearch('VECTIBIX panitumumab'),
+  },
+
   // ═══════════ Drug added to a full bag ═══════════
+  {
+    id: 'pertuzumab',
+    generic: 'Pertuzumab',
+    brand: 'Perjeta',
+    method: 'add-to-bag',
+    bagSizes: [250],
+    diluents: ['0.9% Sodium Chloride Injection, USP', '0.45% Sodium Chloride Injection, USP'],
+    vialConcentration: 30,
+    labelQuote:
+      'Withdraw 14 mL of PERJETA and dilute into a 250 mL 0.9% Sodium Chloride Injection PVC or non-PVC polyolefin infusion bag. After dilution, one mL of solution contains approximately 1.59 mg of pertuzumab (420 mg/264 mL) for the maintenance dose and approximately 3.02 mg (840 mg/278 mL) for the initial dose. Do not use 5% Dextrose Injection.',
+    practicePoint:
+      'The label settles the technique by writing out its own denominators: 264 mL is 250 + 14, and 278 mL is 250 + 28. The drug volume is additive, so nothing comes out of the bag first. Dextrose is not permitted.',
+    sourceLabel: 'PERJETA US PI, §2.4 Preparation for administration',
+    sourceUrl: dailyMed('17f85d17-ab71-4f5b-9fe3-0b8c822f69ff'),
+  },
   {
     id: 'vedolizumab',
     generic: 'Vedolizumab',
@@ -339,6 +423,47 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
   },
 
   // ═══════════ Concentration-driven — either technique is acceptable ═══════════
+  {
+    id: 'obinutuzumab',
+    generic: 'Obinutuzumab',
+    brand: 'Gazyva',
+    method: 'concentration-driven',
+    // Cycle 1 splits the first 1000 mg across two days from one vial, and the
+    // 100 mg day-1 dose goes into a smaller bag than the 900 mg day-2 dose.
+    bagSizes: [100, 250],
+    bagByDose: [
+      { doseMg: 100, bag: 100 },
+      { doseMg: 1000, bag: 250 },
+    ],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 25,
+    concentrationRange: { min: 0.4, max: 4, unit: 'mg/mL' },
+    labelQuote:
+      'Dilute GAZYVA into a 0.9% Sodium Chloride Injection, USP PVC or non-PVC polyolefin infusion bag to a final concentration of 0.4 mg/mL to 4 mg/mL. Dilute 40 mL (1,000 mg) into a 250 mL bag. For Cycle 1, dilute 4 mL (100 mg) into a 100 mL bag for immediate administration and the remaining 36 mL (900 mg) into a 250 mL bag for use on day 2. Do not use dextrose (5%).',
+    practicePoint:
+      'A range, so either technique lands in spec — but the bag still tracks the dose, and the split first cycle is where errors happen: the 100 mg day-1 dose goes into 100 mL, the 900 mg day-2 dose into 250 mL. Both bags are drawn from the same vial and may be prepared together. NS only.',
+    sourceLabel: 'GAZYVA US PI, §2.4 Preparation and administration',
+    sourceUrl: dailyMed('df12ceb2-5b4b-4ab5-a317-2a36bf2a3cda'),
+  },
+  {
+    id: 'nivolumab',
+    generic: 'Nivolumab',
+    brand: 'Opdivo',
+    method: 'concentration-driven',
+    bagSizes: [100, 50],
+    diluents: ['0.9% Sodium Chloride Injection, USP', '5% Dextrose Injection, USP'],
+    vialConcentration: 10,
+    concentrationRange: { min: 1, max: 10, unit: 'mg/mL' },
+    maxFinalVolumeMl: 160,
+    labelQuote:
+      'Dilute OPDIVO with either 0.9% Sodium Chloride Injection, USP or 5% Dextrose Injection, USP to prepare an infusion with a final concentration ranging from 1 mg/mL to 10 mg/mL. The total volume of infusion must not exceed 160 mL.',
+    practicePoint:
+      'Two limits apply, not one: the 1–10 mg/mL range and a hard 160 mL cap on total infusion volume. A large dose in a 100 mL bag can satisfy the concentration and still breach the cap, so check the final volume as well.',
+    pediatricNote:
+      'For patients under 40 kg the total infusion volume must not exceed 4 mL/kg, which is tighter than the 160 mL adult cap.',
+    sourceLabel: 'OPDIVO US PI, §2.9 Preparation and administration',
+    sourceUrl: dailyMed('f570b9c4-6846-4de2-abfa-4d0a4ae4e394'),
+  },
   {
     id: 'infliximab',
     generic: 'Infliximab',

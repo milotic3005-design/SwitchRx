@@ -431,6 +431,21 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
                 </p>
               </div>
 
+              {/* A label volume cap is independent of the concentration window:
+                  a big dose in a small bag can satisfy 1-10 mg/mL and still
+                  breach Opdivo's 160 mL ceiling. */}
+              {entry.maxFinalVolumeMl !== undefined && math.finalVolume > entry.maxFinalVolumeMl && (
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-amber-200 leading-relaxed">
+                    <span className="font-semibold">
+                      {fmt(math.finalVolume)} mL exceeds the {fmt(entry.maxFinalVolumeMl)} mL limit
+                    </span>{' '}
+                    the label sets on total infusion volume. Use a smaller bag.
+                  </p>
+                </div>
+              )}
+
               {math.inRange === false && (
                 <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
