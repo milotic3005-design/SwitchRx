@@ -5,6 +5,7 @@ import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, Alert
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
+import { DiluentVolumeAdvisor } from './DiluentVolumeAdvisor';
 
 // ── CADD drug presets ──────────────────────────────────────────────────────────
 // Concentration, KVO, concentration range, unit, and stability notes are sourced
@@ -39,6 +40,7 @@ const DAYS = [1, 2, 3, 4, 5];
 const CALCULATORS = [
   { id: 'idsa-abx', label: 'IDSA Antibiotic Advisor' },
   { id: 'cadd',    label: 'CADD Bag Calculator' },
+  { id: 'diluent', label: 'Diluent Volume / Bag Prep' },
   { id: 'ivig',   label: 'IVIG Infusion Rate' },
   { id: 'biolrate', label: 'Biologic Rate Titration' },
   { id: 'vanco',  label: 'Vancomycin AUC Dosing' },
@@ -2312,6 +2314,7 @@ export function ClinicalCalculators() {
 
         {activeCalc === 'idsa-abx' && <IDSAAntibioticAdvisor />}
         {activeCalc === 'cadd'    && <CADDCalculator />}
+        {activeCalc === 'diluent' && <DiluentVolumeAdvisor />}
         {activeCalc === 'ivig'   && <IVIGRateCalculator />}
         {activeCalc === 'biolrate' && <InfusionRateCalculator />}
         {activeCalc === 'vanco'  && <VancomycinAUCCalculator />}
