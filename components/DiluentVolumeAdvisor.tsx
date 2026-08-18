@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import {
   DILUENT_VOLUME_DB, METHOD_META, resolveDiluentEntry, searchDiluentEntries,
-  computePrep, scanFdaLabelForPrep,
+  computePrep, scanFdaLabelForPrep, recommendBagSize,
+  BAG_STEP_UP_THRESHOLD_ML, BAG_STEP_UP_TARGET_ML,
   type DiluentVolumeEntry, type PrepMethod, type LabelScan,
 } from '@/data/diluent-volume';
 
@@ -151,7 +152,7 @@ function LabelQuote({ quote, source, url }: { quote: string; source: string; url
 // discards the previous drug's bag size, dose and volume — the React-recommended
 // way to reset state on identity change, rather than resetting inside an effect.
 function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
-  const [bagVolume, setBagVolume] = useState(entry.bagSizes[0] ?? 0);
+  const [bag, setBag] = useState<number | null>(null);
   const [dose, setDose] = useState('');
   const [volume, setVolume] = useState('');
   // Once the user edits the volume directly, stop deriving it from the dose.
@@ -166,6 +167,20 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
   const shownVolume = volumeTouched || derivedVolume === null ? volume : fmt(derivedVolume, 2);
   const volNum = parseFloat(shownVolume);
   const validVolume = isFinite(volNum) && volNum > 0 ? volNum : null;
+
+  // Bag follows the step-up rule until the user picks one explicitly (`bag` stays
+  // null while unpicked, so the recommendation keeps tracking the drug volume).
+  const recommendation = useMemo(
+    () => recommendBagSize(entry.method, entry.bagSizes, validVolume),
+    [entry.method, entry.bagSizes, validVolume],
+  );
+  const bagVolume = bag ?? recommendation.bag;
+  // Advise whenever the rule fires and the chosen bag is still the small one.
+  const stepUpAdvised =
+    validVolume !== null &&
+    validVolume >= BAG_STEP_UP_THRESHOLD_ML &&
+    entry.method !== 'remove-from-bag' &&
+    bagVolume < BAG_STEP_UP_TARGET_ML;
 
   const math = useMemo(
     () =>
@@ -294,7 +309,7 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
                 <select
                   id="dv-bag"
                   value={bagVolume}
-                  onChange={e => setBagVolume(parseFloat(e.target.value))}
+                  onChange={e => setBag(parseFloat(e.target.value))}
                   className={inputCls}
                 >
                   {entry.bagSizes.map(b => (
@@ -303,6 +318,11 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
                 </select>
               ) : (
                 <input id="dv-bag" readOnly value={`${fmt(bagVolume)} mL`} className={`${inputCls} opacity-70`} />
+              )}
+              {recommendation.steppedUp && bag === null && (
+                <p className="text-[11px] text-amber-400/90 mt-1">
+                  Stepped up from {fmt(entry.bagSizes[0])} mL — {fmt(validVolume!, 2)} mL of drug
+                </p>
               )}
             </div>
             <div>
@@ -350,6 +370,33 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
                 finalConcentration={math.finalConcentration}
                 unitLabel={concUnit}
               />
+
+              {/* Bag step-up. Fires on added volume, not on concentration, so it
+                  catches the case the range check cannot: both bag sizes sit
+                  inside the label window, but 100 mL into 250 mL is 40% of the bag. */}
+              {stepUpAdvised && (
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-[13px] text-amber-200 leading-relaxed">
+                    <span className="font-semibold">
+                      {fmt(validVolume!, 2)} mL of drug is too much for a {fmt(bagVolume)} mL bag.
+                    </span>{' '}
+                    At {BAG_STEP_UP_THRESHOLD_ML} mL and above, use a {BAG_STEP_UP_TARGET_ML} mL bag —
+                    here the drug would be {Math.round((validVolume! / bagVolume) * 100)}% of the bag.
+                    {recommendation.unavailable
+                      ? ' No larger bag is listed for this drug; check the label before proceeding.'
+                      : null}
+                    {!recommendation.unavailable && (
+                      <button
+                        onClick={() => setBag(null)}
+                        className="ml-2 underline underline-offset-2 font-semibold hover:text-amber-100 transition-colors"
+                      >
+                        Use {fmt(recommendBagSize(entry.method, entry.bagSizes, validVolume).bag)} mL
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* What the other technique would give */}
               <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
@@ -557,6 +604,8 @@ export function DiluentVolumeAdvisor() {
           (final volume fixed by the label) or the drug volume can simply be added on top (final volume = bag +
           drug). <span className="text-slate-300 font-semibold">{DILUENT_VOLUME_DB.length} drugs</span> are
           verified against their prescribing information; anything else is read live from the FDA label.
+          Where the drug volume reaches {BAG_STEP_UP_THRESHOLD_ML} mL, the bag steps up to{' '}
+          {BAG_STEP_UP_TARGET_ML} mL automatically.
         </p>
       </div>
 

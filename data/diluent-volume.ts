@@ -301,7 +301,10 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     biosimilars: ['Inflectra', 'Renflexis', 'Avsola', 'Ixifi'],
     method: 'concentration-driven',
     labelDirectsWithdrawal: true,
-    bagSizes: [250],
+    // 250 mL is the label figure; 500 mL is the practice bag for large doses,
+    // where 100 mL+ of drug would otherwise be 40% of a 250 mL bag. Both land
+    // inside the label's 0.4–4 mg/mL window. See BAG_STEP_UP_THRESHOLD_ML.
+    bagSizes: [250, 500],
     diluents: ['0.9% Sodium Chloride Injection, USP'],
     vialConcentration: 10,
     reconstituted: true,
@@ -309,7 +312,7 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     labelQuote:
       'Dilute the total volume of the reconstituted REMICADE solution dose to 250 mL with sterile 0.9% Sodium Chloride Injection, USP, by withdrawing a volume from the 0.9% Sodium Chloride Injection, USP, 250 mL bottle or bag equal to the total volume of reconstituted REMICADE required for a dose. The resulting infusion concentration should range between 0.4 mg/mL and 4 mg/mL.',
     practicePoint:
-      'Acceptability is set by the 0.4–4 mg/mL window, not by the 250 mL figure. Adding the drug straight to a full 250 mL bag holds that window across the whole adult dose range — a 1200 mg dose still only reaches 3.2 mg/mL — so direct addition is fine and is what most sites do.',
+      'Acceptability is set by the 0.4–4 mg/mL window, not by the 250 mL figure. Adding the drug straight to a full bag holds that window across the whole adult dose range — a 1200 mg dose still only reaches 3.2 mg/mL — so direct addition is fine and is what most sites do. At 1000 mg and above the drug volume itself reaches 100 mL, and the bag steps up to 500 mL so it is not 40% of the bag.',
     pediatricNote:
       'The floor is the one to watch: below roughly 105 mg, adding to a full 250 mL bag drops under 0.4 mg/mL. Small paediatric doses need a smaller bag. The volume check flags this automatically.',
     sourceLabel: 'REMICADE US PI, §2.7 Preparation and administration',
@@ -541,6 +544,51 @@ export function computePrep(
     inRange: within(conc, range),
     alternateInRange: within(altConc, range),
   };
+}
+
+// ── Bag step-up rule ──────────────────────────────────────────────────────────
+// Practice standard, not label text: once the drug volume reaches 100 mL it is
+// 40% of a 250 mL bag. That is too much to add on top — headroom gets tight and
+// mixing is poor — so the bag steps up to 500 mL, where the same 100 mL is 20%.
+// Infliximab 1000 mg is the case that drives it: 100 mL of reconstituted drug,
+// which belongs in 500 mL (600 mL final, 1.67 mg/mL) rather than 250 mL
+// (350 mL final, 2.86 mg/mL). Both sit inside the label's concentration window,
+// so the range check alone will not catch this — it needs its own rule.
+//
+// Applies to additive preparation only. A `remove-from-bag` drug takes an equal
+// volume out first, so the bag never carries more than its labeled volume no
+// matter how large the dose.
+export const BAG_STEP_UP_THRESHOLD_ML = 100;
+export const BAG_STEP_UP_TARGET_ML = 500;
+
+export interface BagRecommendation {
+  /** Bag volume to use, mL. */
+  bag: number;
+  /** True when the threshold pushed this above the default bag. */
+  steppedUp: boolean;
+  /** Set when the rule fired but no large-enough bag is listed for the drug. */
+  unavailable?: boolean;
+}
+
+/**
+ * Choose the bag for a given drug volume. Returns the drug's default bag until
+ * the added volume reaches the threshold, then the smallest listed bag at or
+ * above the step-up target.
+ */
+export function recommendBagSize(
+  method: PrepMethod,
+  bagSizes: number[],
+  drugVolume: number | null,
+): BagRecommendation {
+  const fallback = bagSizes[0] ?? 0;
+  if (method === 'remove-from-bag' || drugVolume === null) return { bag: fallback, steppedUp: false };
+  if (drugVolume < BAG_STEP_UP_THRESHOLD_ML) return { bag: fallback, steppedUp: false };
+  // Already on a bag big enough to absorb the volume — nothing to advise.
+  if (fallback >= BAG_STEP_UP_TARGET_ML) return { bag: fallback, steppedUp: false };
+
+  const larger = bagSizes.filter(b => b >= BAG_STEP_UP_TARGET_ML).sort((a, b) => a - b);
+  if (!larger.length) return { bag: fallback, steppedUp: false, unavailable: true };
+  return { bag: larger[0], steppedUp: true };
 }
 
 // ── openFDA label scan (fallback for drugs not in the curated set) ────────────
