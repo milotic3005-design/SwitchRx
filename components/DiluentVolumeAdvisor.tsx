@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   DILUENT_VOLUME_DB, METHOD_META, resolveDiluentEntry, searchDiluentEntries,
-  computePrep, scanFdaLabelForPrep, recommendBagSize,
+  computePrep, scanFdaLabelForPrep, recommendBagSize, formatConcentration,
   BAG_STEP_UP_THRESHOLD_ML, BAG_STEP_UP_TARGET_ML,
   type DiluentVolumeEntry, type PrepMethod, type LabelScan,
 } from '@/data/diluent-volume';
@@ -120,11 +120,13 @@ function VolumeLedger({
 }
 
 /* ── Label quote block ────────────────────────────────────────── */
-function LabelQuote({ quote, source, url }: { quote: string; source: string; url?: string }) {
+function LabelQuote({ quote, source, url, provenance = 'label' }: {
+  quote: string; source: string; url?: string; provenance?: 'label' | 'institutional';
+}) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-        What the label says
+        {provenance === 'institutional' ? 'Institutional standard' : 'What the label says'}
       </p>
       <blockquote className="border-l-2 border-white/20 pl-3 text-[13px] text-slate-300 leading-relaxed italic">
         &ldquo;{quote}&rdquo;
@@ -193,7 +195,8 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
   const tone = TONE[meta.tone];
   const diluent = entry.diluents[0];
   const v = validVolume === null ? null : fmt(validVolume, 2);
-  const isIron = entry.id === 'ferric-carboxymaltose';
+  // IV irons are dosed and limited in mg of elemental iron, not mg of salt.
+  const isIron = /^(ferric-|iron-)/.test(entry.id);
   const concUnit = isIron ? 'mg iron/mL' : 'mg/mL';
 
   // Preparation steps, worded per technique.
@@ -231,12 +234,12 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
       );
     } else {
       const rangeText = entry.concentrationRange
-        ? `${fmt(entry.concentrationRange.min, 2)} and ${fmt(entry.concentrationRange.max, 2)} ${concUnit}`
+        ? formatConcentration(entry.concentrationRange, concUnit)
         : 'the label limits';
       steps.push(
         <>
-          Add the drug to the {fmt(bagVolume)} mL bag of {diluent}, sized so the final concentration lands
-          between <strong className="text-slate-200">{rangeText}</strong>.{' '}
+          Add the drug to the {fmt(bagVolume)} mL bag of {diluent}, sized so the final concentration stays
+          within <strong className="text-slate-200">{rangeText}</strong>.{' '}
           <strong className={tone.text}>No withdrawal step is needed</strong> — the concentration window is
           what governs, not the bag volume.
         </>,
@@ -272,16 +275,8 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
         } />
         <Fact label="Diluent" value={entry.diluents[0].replace(/ Injection.*$/, '')} />
         <Fact
-          label="Label concentration"
-          value={
-            entry.concentrationRange
-              ? entry.concentrationRange.min === entry.concentrationRange.max
-                ? `${fmt(entry.concentrationRange.min, 2)} ${concUnit}`
-                : entry.concentrationRange.min === 0
-                  ? `≤ ${fmt(entry.concentrationRange.max, 2)} ${concUnit}`
-                  : `${fmt(entry.concentrationRange.min, 2)}–${fmt(entry.concentrationRange.max, 2)} ${concUnit}`
-              : 'Not specified'
-          }
+          label={entry.provenance === 'institutional' ? 'Concentration limit' : 'Label concentration'}
+          value={entry.concentrationRange ? formatConcentration(entry.concentrationRange, concUnit) : 'Not specified'}
         />
       </div>
 
@@ -493,7 +488,7 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
         </div>
       )}
 
-      <LabelQuote quote={entry.labelQuote} source={entry.sourceLabel} url={entry.sourceUrl} />
+      <LabelQuote quote={entry.labelQuote} source={entry.sourceLabel} url={entry.sourceUrl} provenance={entry.provenance} />
 
       {entry.biosimilars?.length && (
         <p className="text-[12px] text-slate-500 leading-relaxed">

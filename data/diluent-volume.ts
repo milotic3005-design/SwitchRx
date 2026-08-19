@@ -71,9 +71,23 @@ export type PrepMethod =
   | 'special';
 
 export interface ConcentrationRange {
+  /** 0 means the label sets a ceiling only. */
   min: number;
+  /** Infinity means the label sets a floor only (Injectafer, Monoferric, Venofer). */
   max: number;
   unit: 'mg/mL';
+}
+
+/**
+ * Human-readable range, handling floor-only, ceiling-only and single-target forms.
+ * `unit` is a display label, not the typed unit — IV irons render "mg iron/mL".
+ */
+export function formatConcentration(r: ConcentrationRange, unit: string = r.unit): string {
+  const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''));
+  if (r.min === r.max) return `${n(r.min)} ${unit}`;
+  if (!isFinite(r.max)) return `≥ ${n(r.min)} ${unit}`;
+  if (r.min === 0) return `≤ ${n(r.max)} ${unit}`;
+  return `${n(r.min)}–${n(r.max)} ${unit}`;
 }
 
 export interface DiluentVolumeEntry {
@@ -110,7 +124,16 @@ export interface DiluentVolumeEntry {
    * rather than quietly contradicting it.
    */
   labelDirectsWithdrawal?: boolean;
-  /** Verbatim preparation sentence from the US PI. */
+  /**
+   * Where the classification comes from. 'label' (default) means it was read off
+   * the US prescribing information and `labelQuote` is verbatim from it.
+   * 'institutional' means it comes from a validated site IV formulary — the bag
+   * ladders for vancomycin and the iron products are built that way, and the
+   * quote is the formulary's own wording, not the PI's. Kept explicit so the UI
+   * never presents a local standard as if it were label text.
+   */
+  provenance?: 'label' | 'institutional';
+  /** Verbatim preparation sentence from the US PI, or the formulary entry when provenance is institutional. */
   labelQuote: string;
   /** Why this one trips people up. */
   practicePoint?: string;
@@ -529,13 +552,191 @@ export const DILUENT_VOLUME_DB: DiluentVolumeEntry[] = [
     bagSizes: [100, 250],
     diluents: ['0.9% Sodium Chloride Injection, USP'],
     vialConcentration: 50,
-    concentrationRange: { min: 2, max: 4, unit: 'mg/mL' },
+    // Floor only. The PI states "not less than 2 mg iron/mL" and sets no ceiling —
+    // the 250 mL cap bounds volume, not concentration.
+    concentrationRange: { min: 2, max: Infinity, unit: 'mg/mL' },
     labelQuote:
       'When administered via infusion, dilute up to 1,000 mg of iron in no more than 250 mL of sterile 0.9% Sodium Chloride Injection, USP, such that the concentration of the infusion is not less than 2 mg of iron per mL.',
     practicePoint:
-      'The floor is a stability limit, not a tolerance target — below 2 mg iron/mL the product is no longer supported. May also be given undiluted as a slow IV push.',
+      'The floor is a stability limit, not a tolerance target — below 2 mg iron/mL the product is no longer supported. Over-dilution is the failure mode here, not over-concentration. May also be given undiluted as a slow IV push.',
     sourceLabel: 'INJECTAFER US PI, §2.3 Preparation and administration',
     sourceUrl: dailyMed('517b4a19-45b3-4286-9f6a-ced4e10447de'),
+  },
+
+  // ── Anti-infectives and IV iron. Bag ladders come from a validated site IV
+  //    formulary rather than the PI, which states only the concentration limit
+  //    and leaves bag selection to the pharmacy. Marked `institutional` so the
+  //    UI does not present them as label text.
+  {
+    id: 'vancomycin',
+    generic: 'Vancomycin',
+    brand: 'Vancocin',
+    provenance: 'institutional',
+    method: 'concentration-driven',
+    // The ladder exists to hold ≤5 mg/mL: 500/100, 750/150 and 1250/250 all sit
+    // exactly at the ceiling before the drug volume is even counted.
+    bagSizes: [100, 150, 250, 500],
+    bagByDose: [
+      { doseMg: 500, bag: 100 },
+      { doseMg: 750, bag: 150 },
+      { doseMg: 1250, bag: 250 },
+      { doseMg: 2000, bag: 500 },
+    ],
+    diluents: ['0.9% Sodium Chloride Injection, USP', '5% Dextrose Injection, USP'],
+    vialConcentration: 50,
+    reconstituted: true,
+    concentrationRange: { min: 0, max: 5, unit: 'mg/mL' },
+    labelQuote:
+      'Dilute to a final concentration no greater than 5 mg/mL. Bag ladder: up to 500 mg in 100 mL, 501–750 mg in 150 mL, 751–1250 mg in 250 mL, and above 1250 mg in 500 mL to stay at or below the maximum concentration.',
+    practicePoint:
+      'A ceiling, not a window — the risk is being too concentrated, which drives infusion reactions and phlebitis. The ladder is built so each band sits at 5 mg/mL before the drug volume is added, so adding on top only ever dilutes further.',
+    sourceLabel: 'Institutional IV formulary; concentration limit per vancomycin PI',
+    sourceUrl: dailyMedSearch('vancomycin injection'),
+  },
+  {
+    id: 'dalbavancin',
+    generic: 'Dalbavancin',
+    brand: 'Dalvance',
+    provenance: 'institutional',
+    method: 'concentration-driven',
+    bagSizes: [250, 500],
+    bagByDose: [
+      { doseMg: 1500, bag: 250 },
+      { doseMg: 2000, bag: 500 },
+    ],
+    diluents: ['5% Dextrose Injection, USP'],
+    vialConcentration: 20,
+    reconstituted: true,
+    concentrationRange: { min: 1, max: 5, unit: 'mg/mL' },
+    labelQuote:
+      'Dilute only with 5% Dextrose Injection, USP to a final concentration of 1 mg/mL to 5 mg/mL. Do NOT use Normal Saline for dilution or for flushing the IV line — it is incompatible with DALVANCE and may cause precipitation.',
+    practicePoint:
+      'D5W ONLY. Saline precipitates it, and that applies to the line flush as well — flush with D5W before and after if the line is shared. Doses above 1500 mg need a 500 mL bag to stay under 5 mg/mL.',
+    sourceLabel: 'DALVANCE US PI, §2.4 Preparation; bag ladder per institutional formulary',
+    sourceUrl: dailyMedSearch('DALVANCE dalbavancin'),
+  },
+  {
+    id: 'daptomycin',
+    generic: 'Daptomycin',
+    brand: 'Cubicin',
+    provenance: 'institutional',
+    method: 'add-to-bag',
+    bagSizes: [100, 50],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 50,
+    reconstituted: true,
+    labelQuote:
+      'Reconstitute and add the required volume to a 50 mL or 100 mL bag of 0.9% Sodium Chloride Injection, USP. Do not use dextrose-containing diluents.',
+    practicePoint:
+      'Dextrose is incompatible. May also be given as an IV push over 2 minutes undiluted, in which case no bag is involved at all — confirm which route the order specifies.',
+    sourceLabel: 'Institutional IV formulary; CUBICIN US PI §2.5',
+    sourceUrl: dailyMedSearch('CUBICIN daptomycin'),
+  },
+  {
+    id: 'ertapenem',
+    generic: 'Ertapenem',
+    brand: 'Invanz',
+    provenance: 'institutional',
+    method: 'add-to-bag',
+    bagSizes: [50],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 100,
+    reconstituted: true,
+    concentrationRange: { min: 0, max: 20, unit: 'mg/mL' },
+    labelQuote:
+      'Reconstitute the 1 g vial and immediately transfer the contents to a 50 mL bag of 0.9% Sodium Chloride Injection, USP. Do not exceed a final concentration of 20 mg/mL. Do not use diluents containing dextrose.',
+    practicePoint:
+      'Dextrose is incompatible. Reconstituted drug must be diluted and infused within 6 hours at room temperature.',
+    sourceLabel: 'Institutional IV formulary; INVANZ US PI §2.4',
+    sourceUrl: dailyMedSearch('INVANZ ertapenem'),
+  },
+  {
+    id: 'ferric-derisomaltose',
+    generic: 'Ferric derisomaltose',
+    brand: 'Monoferric',
+    provenance: 'institutional',
+    method: 'concentration-driven',
+    bagSizes: [100, 250],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 100,
+    concentrationRange: { min: 1, max: Infinity, unit: 'mg/mL' },
+    labelQuote:
+      'Dilute in 0.9% Sodium Chloride Injection, USP to a final concentration of not less than 1 mg of iron per mL. Doses are weight-banded: 1000 mg for patients 50 kg and over, 20 mg/kg for patients under 50 kg.',
+    practicePoint:
+      'A floor, not a ceiling — over-diluting is the failure mode, so a large bag with a small dose is what to watch. Weight decides the dose, not the bag.',
+    sourceLabel: 'Institutional IV formulary; MONOFERRIC US PI §2.2',
+    sourceUrl: dailyMedSearch('MONOFERRIC ferric derisomaltose'),
+  },
+  {
+    id: 'iron-sucrose',
+    generic: 'Iron sucrose',
+    brand: 'Venofer',
+    provenance: 'institutional',
+    // No concentration range: the label constrains the MAXIMUM diluent volume,
+    // not a minimum concentration. Applying Monoferric's ≥1 mg/mL floor here would
+    // wrongly flag the standard 100 mg/100 mL order, which lands at 0.95 mg/mL.
+    method: 'add-to-bag',
+    bagSizes: [100, 250],
+    bagByDose: [
+      { doseMg: 200, bag: 100 },
+      { doseMg: 400, bag: 250 },
+    ],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 20,
+    labelQuote:
+      'Dilute in a maximum of 100 mL of 0.9% Sodium Chloride Injection, USP for doses up to 200 mg, or a maximum of 250 mL for doses of 300 mg to 400 mg. Do not dilute to concentrations below the recommended volumes.',
+    practicePoint:
+      'The limit here is a maximum diluent volume tied to the dose, not a concentration window — unlike Injectafer and Monoferric, which set concentration floors. 100 mg in 100 mL is the standard order and is correct at 0.95 mg iron/mL once the drug volume is counted.',
+    sourceLabel: 'Institutional IV formulary; VENOFER US PI §2.6',
+    sourceUrl: dailyMedSearch('VENOFER iron sucrose'),
+  },
+  {
+    id: 'ferric-gluconate',
+    generic: 'Sodium ferric gluconate',
+    brand: 'Ferrlecit',
+    provenance: 'institutional',
+    method: 'add-to-bag',
+    bagSizes: [100],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 12.5,
+    labelQuote:
+      'Dilute the dose in 100 mL of 0.9% Sodium Chloride Injection, USP and infuse over at least 1 hour. Doses above 125 mg are diluted in proportionally larger volumes.',
+    practicePoint:
+      'The standard 125 mg dose is 10 mL of drug into 100 mL. May also be given undiluted as a slow IV push at no more than 12.5 mg/min.',
+    sourceLabel: 'Institutional IV formulary; FERRLECIT US PI §2.3',
+    sourceUrl: dailyMedSearch('FERRLECIT sodium ferric gluconate'),
+  },
+  {
+    id: 'iron-dextran',
+    generic: 'Iron dextran',
+    brand: 'INFeD',
+    provenance: 'institutional',
+    method: 'add-to-bag',
+    bagSizes: [250, 100],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 50,
+    labelQuote:
+      'Dilute the dose in 0.9% Sodium Chloride Injection, USP for infusion. A 25 mg test dose is given first and the patient observed for at least 1 hour before the balance of the dose is infused.',
+    practicePoint:
+      'The test dose is the point of the product, not a formality — anaphylaxis risk is why iron dextran sits behind the newer irons. Have resuscitation drugs at hand; observe an hour before proceeding.',
+    sourceLabel: 'Institutional IV formulary; INFeD US PI §2.2 (boxed warning applies)',
+    sourceUrl: dailyMedSearch('INFED iron dextran'),
+  },
+  {
+    id: 'lecanemab',
+    generic: 'Lecanemab-irmb',
+    brand: 'Leqembi',
+    provenance: 'institutional',
+    method: 'add-to-bag',
+    bagSizes: [250],
+    diluents: ['0.9% Sodium Chloride Injection, USP'],
+    vialConcentration: 100,
+    labelQuote:
+      'Withdraw the calculated volume and add to an infusion bag containing 250 mL of 0.9% Sodium Chloride Injection, USP. Infuse over approximately one hour through a 0.2 micron in-line filter.',
+    practicePoint:
+      'Weight-based at 10 mg/kg every two weeks, so the drug volume moves with the patient. Requires a 0.2 micron in-line filter, and ARIA monitoring MRIs are scheduled around the dosing series.',
+    sourceLabel: 'Institutional IV formulary; LEQEMBI US PI §2.3',
+    sourceUrl: dailyMedSearch('LEQEMBI lecanemab'),
   },
 
   // ═══════════ Special handling ═══════════
