@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Wind, Zap, Sparkles, ArrowLeft, Play, RotateCcw, Trophy, Target,
-  Heart, Coffee,
+  Heart, Coffee, Spade,
 } from 'lucide-react';
 
 /**
@@ -15,11 +15,13 @@ import {
  *   • Box Breathing  — guided 4-4-4-4 breathing (calming, clinically used)
  *   • Reflex Test    — tap-when-green reaction timer
  *   • Pill Pop       — 30-second tap-to-pop stress reliever (canvas)
+ *   • Solitaire      — Klondike, click-to-move. The long game of the set: no
+ *                      timer pressure, undo, and an auto-finish payoff.
  * Everything is local, themed to the Celestial Codex aesthetic, and light/dark
  * aware via the app's CSS variables. High scores persist in localStorage.
  */
 
-type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'pop';
+type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'pop' | 'solitaire';
 
 const GAMES: Array<{
   id: GameId; title: string; blurb: string; tag: string; Icon: any; accent: string;
@@ -28,6 +30,7 @@ const GAMES: Array<{
   { id: 'breathing', title: 'Box Breathing', blurb: 'Guided 4-4-4-4 breaths to slow the heart rate and reset focus.', tag: '60 sec', Icon: Wind, accent: 'var(--cc-teal)' },
   { id: 'reflex', title: 'Reflex Test', blurb: 'Tap the instant it turns green. Chase your fastest reaction time.', tag: '20 sec', Icon: Zap, accent: 'var(--cc-gold)' },
 { id: 'pop', title: 'Pill Pop', blurb: 'Pop the rising capsules for 30 seconds. Pure, satisfying catharsis.', tag: '30 sec', Icon: Sparkles, accent: 'var(--cc-gold)' },
+  { id: 'solitaire', title: 'Solitaire', blurb: 'Klondike, tap to move. No clock pressure — undo freely and let it auto-finish.', tag: 'Unhurried', Icon: Spade, accent: 'var(--cc-violet-light)' },
 ];
 
 export function BreakRoom() {
@@ -83,6 +86,7 @@ export function BreakRoom() {
           {game === 'breathing' && <BoxBreathing />}
           {game === 'reflex' && <ReflexTest />}
 {game === 'pop' && <PillPop />}
+          {game === 'solitaire' && <Solitaire />}
         </div>
       )}
 
@@ -680,6 +684,479 @@ function PillPop() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Solitaire (Klondike)
+//
+// Click-to-move rather than drag-and-drop. Dragging is fiddly on a phone and on
+// a trackpad, and the point of this tab is a low-friction reset — so: click a
+// card to pick it up (with every card stacked below it), click a destination to
+// drop it. Clicking an already-picked card sends it to a foundation if it will
+// go, which makes the most common move a single extra tap.
+//
+// Board geometry hangs off one CSS variable (--cw). Every width, height and
+// stack offset is a calc() from it, so the board scales from a 360px phone to
+// the desktop panel with no resize listener and no layout measurement.
+// ─────────────────────────────────────────────────────────────────────────
+type Suit = 'S' | 'H' | 'D' | 'C';
+export type SCard = { id: string; suit: Suit; rank: number; up: boolean };
+type SPile = SCard[];
+export type SolState = { stock: SPile; waste: SPile; found: SPile[]; tab: SPile[] };
+/** What the player has picked up. `idx` is the position within its pile. */
+type Sel = { zone: 'waste' | 'tab'; pile: number; idx: number } | null;
+
+const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
+const GLYPH: Record<Suit, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
+const RANKS = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const isRed = (s: Suit) => s === 'H' || s === 'D';
+
+const SOL_TIME = 'br-solitaire-best-time';
+const SOL_MOVES = 'br-solitaire-best-moves';
+const SOL_WINS = 'br-solitaire-wins';
+
+// Read on first render rather than in an effect. Safe because the game only
+// mounts after the player clicks into it, so this never runs during SSR.
+const readNum = (key: string): number | null => {
+  if (typeof window === 'undefined') return null;
+  try { const v = localStorage.getItem(key); return v ? parseInt(v, 10) : null; } catch { return null; }
+};
+const writeNum = (key: string, v: number) => { try { localStorage.setItem(key, String(v)); } catch {} };
+
+export function freshDeal(): SolState {
+  const deck: SCard[] = [];
+  for (const s of SUITS) for (let r = 1; r <= 13; r++) deck.push({ id: `${s}${r}`, suit: s, rank: r, up: false });
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  const tab: SPile[] = [];
+  let k = 0;
+  for (let c = 0; c < 7; c++) {
+    const pile: SPile = [];
+    for (let n = 0; n <= c; n++) { const card = deck[k++]; card.up = n === c; pile.push(card); }
+    tab.push(pile);
+  }
+  return { stock: deck.slice(k), waste: [], found: [[], [], [], []], tab };
+}
+
+export const cloneState = (s: SolState): SolState => ({
+  stock: s.stock.map(c => ({ ...c })),
+  waste: s.waste.map(c => ({ ...c })),
+  found: s.found.map(p => p.map(c => ({ ...c }))),
+  tab: s.tab.map(p => p.map(c => ({ ...c }))),
+});
+
+export const isWon = (s: SolState) => s.found.reduce((n, p) => n + p.length, 0) === 52;
+const top = (p: SPile): SCard | undefined => p[p.length - 1];
+/** Tableau accepts a King on an empty pile, else one rank down in the other colour. */
+export const fitsTab = (card: SCard, dest: SPile) => {
+  const t = top(dest);
+  return t ? t.up && t.rank === card.rank + 1 && isRed(t.suit) !== isRed(card.suit) : card.rank === 13;
+};
+/** Foundations build up by suit from the ace. */
+export const fitsFound = (card: SCard, f: SPile) => {
+  const t = top(f);
+  return t ? t.suit === card.suit && t.rank === card.rank - 1 : card.rank === 1;
+};
+/** A tableau pile's exposed card is turned over once whatever covered it leaves. */
+const flipExposed = (pile: SPile) => { const t = top(pile); if (t && !t.up) t.up = true; };
+
+/**
+ * One step of the auto-finish walk, mutating `s`.
+ *   'found' — a card went to a foundation (real progress)
+ *   'cycle' — only drew or recycled the stock (no progress)
+ *   'none'  — nothing left to do
+ */
+function autoStep(s: SolState): 'found' | 'cycle' | 'none' {
+  const send = (card: SCard, take: () => void) => {
+    const fi = SUITS.indexOf(card.suit);
+    if (!fitsFound(card, s.found[fi])) return false;
+    take(); s.found[fi].push(card); return true;
+  };
+  const w = top(s.waste);
+  if (w && send(w, () => s.waste.pop())) return 'found';
+  for (const pile of s.tab) {
+    const t = top(pile);
+    if (t && t.up && send(t, () => { pile.pop(); flipExposed(pile); })) return 'found';
+  }
+  if (s.stock.length) { const c = s.stock.pop()!; c.up = true; s.waste.push(c); return 'cycle'; }
+  if (s.waste.length) { s.stock = s.waste.reverse().map(c => ({ ...c, up: false })); s.waste = []; return 'cycle'; }
+  return 'none';
+}
+
+/**
+ * Advance auto-finish by one step, or return null to stop.
+ *
+ * The stall guard is the whole point: drawing and recycling always "succeed",
+ * so a board where nothing is playable would alternate draw/recycle forever and
+ * spin the move counter. `idle` counts steps since the last foundation move; one
+ * full pass through the stock without progress means there is nothing to find.
+ * Exported so that guard can be tested directly — it is the part that would hang.
+ */
+export function autoAdvance(state: SolState, idle: number): { next: SolState; idle: number } | null {
+  const next = cloneState(state);
+  const result = autoStep(next);
+  if (result === 'none') return null;
+  if (result === 'found') return { next, idle: 0 };
+  if (idle + 1 > next.stock.length + next.waste.length + 1) return null;
+  return { next, idle: idle + 1 };
+}
+
+const fmtClock = (ms: number) => {
+  const t = Math.floor(ms / 1000);
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
+
+function Solitaire() {
+  const [state, setState] = useState<SolState>(freshDeal);
+  // Each entry carries the move count too, so undo restores the counter exactly
+  // rather than assuming every undo is worth one move (auto-finish moves are
+  // deliberately not recorded, so a blind decrement would drift).
+  const [history, setHistory] = useState<{ s: SolState; moves: number }[]>([]);
+  const [sel, setSel] = useState<Sel>(null);
+  const [moves, setMoves] = useState(0);
+  const [drawThree, setDrawThree] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(0);
+  const [auto, setAuto] = useState(false);
+  const [bestTime, setBestTime] = useState<number | null>(() => readNum(SOL_TIME));
+  const [bestMoves, setBestMoves] = useState<number | null>(() => readNum(SOL_MOVES));
+  const [wins, setWins] = useState<number>(() => readNum(SOL_WINS) ?? 0);
+
+  const won = isWon(state);
+  const elapsed = startedAt == null ? 0 : (won ? now : Math.max(now, startedAt)) - startedAt;
+
+  // Clock ticks off an interval, so setState happens in the callback, not in the
+  // effect body — no cascading render on every tick.
+  useEffect(() => {
+    if (startedAt == null || won) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [startedAt, won]);
+
+  // Banked at the moment the winning move lands, not from an effect watching
+  // `won` — deriving it in an effect would re-render just to record a score.
+  const bankedRef = useRef(false);
+  const bankWin = useCallback((finalMoves: number, startMs: number | null) => {
+    if (bankedRef.current) return;
+    bankedRef.current = true;
+    setAuto(false);
+    const secs = Math.floor((startMs ? Date.now() - startMs : 0) / 1000);
+    setBestTime(p => { const n = p == null ? secs : Math.min(p, secs); writeNum(SOL_TIME, n); return n; });
+    setBestMoves(p => { const n = p == null ? finalMoves : Math.min(p, finalMoves); writeNum(SOL_MOVES, n); return n; });
+    setWins(p => { const n = p + 1; writeNum(SOL_WINS, n); return n; });
+  }, []);
+
+  // Auto-finish walks one card per tick so the payoff is visible rather than instant.
+  const idleRef = useRef(0);
+  useEffect(() => {
+    if (!auto || won) return;
+    const id = window.setTimeout(() => {
+      const step = autoAdvance(state, idleRef.current);
+      if (!step) { setAuto(false); return; }
+      idleRef.current = step.idle;
+      setState(step.next);
+      setMoves(m => m + 1);
+      setNow(Date.now());
+      if (isWon(step.next)) bankWin(moves + 1, startedAt);
+    }, 55);
+    return () => window.clearTimeout(id);
+  }, [auto, state, won, moves, startedAt, bankWin]);
+
+  /** Apply a mutation, recording it for undo. No-ops if the move is illegal. */
+  const commit = useCallback((mutate: (s: SolState) => boolean) => {
+    const next = cloneState(state);
+    if (!mutate(next)) { setSel(null); return; }
+    setHistory(h => [...h.slice(-79), { s: state, moves }]);
+    setState(next);
+    setSel(null);
+    setMoves(m => m + 1);
+    const startMs = startedAt ?? Date.now();
+    setStartedAt(startMs);
+    setNow(Date.now());
+    if (isWon(next)) bankWin(moves + 1, startMs);
+  }, [state, startedAt, moves, bankWin]);
+
+  const newGame = useCallback(() => {
+    bankedRef.current = false;
+    setState(freshDeal()); setHistory([]); setSel(null);
+    setMoves(0); setStartedAt(null); setNow(0); setAuto(false); idleRef.current = 0;
+  }, []);
+
+  // Read history directly rather than nesting setState calls inside a setHistory
+  // updater — updaters must stay pure, since React may invoke them twice.
+  const undo = useCallback(() => {
+    if (!history.length) return;
+    const prev = history[history.length - 1];
+    setState(prev.s);
+    setMoves(prev.moves);
+    setHistory(h => h.slice(0, -1));
+    setSel(null);
+    setAuto(false);
+  }, [history]);
+
+  const drawStock = () => commit(s => {
+    if (s.stock.length) {
+      for (let i = 0; i < (drawThree ? 3 : 1) && s.stock.length; i++) {
+        const c = s.stock.pop()!; c.up = true; s.waste.push(c);
+      }
+      return true;
+    }
+    if (!s.waste.length) return false;
+    s.stock = s.waste.reverse().map(c => ({ ...c, up: false }));
+    s.waste = [];
+    return true;
+  });
+
+  /** Lift the selected run out of its pile. */
+  const lift = (s: SolState, sl: Sel): SPile => {
+    if (!sl) return [];
+    if (sl.zone === 'waste') return s.waste.splice(sl.idx, 1);
+    const moved = s.tab[sl.pile].splice(sl.idx);
+    flipExposed(s.tab[sl.pile]);
+    return moved;
+  };
+
+  const selectedCard = (s: SolState, sl: Sel): SCard | undefined =>
+    !sl ? undefined : sl.zone === 'waste' ? s.waste[sl.idx] : s.tab[sl.pile][sl.idx];
+
+  const sendToFoundation = (sl: Sel) => commit(s => {
+    const card = selectedCard(s, sl);
+    if (!card) return false;
+    // Only a lone top card can go to a foundation, never a run.
+    const isTop = sl!.zone === 'waste' ? sl!.idx === s.waste.length - 1 : sl!.idx === s.tab[sl!.pile].length - 1;
+    if (!isTop) return false;
+    const fi = SUITS.indexOf(card.suit);
+    if (!fitsFound(card, s.found[fi])) return false;
+    s.found[fi].push(lift(s, sl)[0]);
+    return true;
+  });
+
+  const clickCard = (zone: 'waste' | 'tab', pile: number, idx: number) => {
+    const card = zone === 'waste' ? state.waste[idx] : state.tab[pile][idx];
+    if (!card?.up) return;
+    // Tapping the picked-up card again is the shortcut to its foundation.
+    if (sel && sel.zone === zone && sel.pile === pile && sel.idx === idx) { sendToFoundation(sel); return; }
+    if (sel) {
+      // A pick-up already in hand + a click on a tableau card means "drop onto that pile".
+      if (zone === 'tab') { dropOnTab(pile); return; }
+      setSel({ zone, pile, idx });
+      return;
+    }
+    setSel({ zone, pile, idx });
+  };
+
+  const dropOnTab = (pile: number) => {
+    if (!sel) return;
+    commit(s => {
+      const card = selectedCard(s, sel);
+      if (!card || !card.up) return false;
+      if (sel.zone === 'tab' && sel.pile === pile) return false;
+      if (!fitsTab(card, s.tab[pile])) return false;
+      s.tab[pile].push(...lift(s, sel));
+      return true;
+    });
+  };
+
+  const dropOnFoundation = (fi: number) => {
+    if (!sel) { return; }
+    commit(s => {
+      const card = selectedCard(s, sel);
+      if (!card) return false;
+      const isTop = sel.zone === 'waste' ? sel.idx === s.waste.length - 1 : sel.idx === s.tab[sel.pile].length - 1;
+      if (!isTop || SUITS.indexOf(card.suit) !== fi || !fitsFound(card, s.found[fi])) return false;
+      s.found[fi].push(lift(s, sel)[0]);
+      return true;
+    });
+  };
+
+  const canAuto = !won && !auto && state.tab.every(p => p.every(c => c.up));
+
+  // ── presentation ──────────────────────────────────────────────────────
+  const CW = 'var(--cw)';
+  const H = `calc(${CW} * 1.42)`;
+  const slotBase: React.CSSProperties = {
+    width: CW, height: H, borderRadius: `calc(${CW} * 0.11)`, boxSizing: 'border-box',
+  };
+  const cardBase: React.CSSProperties = { ...slotBase, position: 'absolute', left: 0, cursor: 'pointer' };
+
+  const faceStyle = (c: SCard, picked: boolean): React.CSSProperties => ({
+    ...cardBase,
+    background: '#f5f0e5',
+    border: picked ? '2px solid var(--cc-gold)' : '1px solid rgba(20,16,32,0.28)',
+    boxShadow: picked ? '0 0 0 3px rgba(227,194,126,0.25), 0 6px 16px rgba(0,0,0,0.35)' : '0 1px 3px rgba(0,0,0,0.28)',
+    color: isRed(c.suit) ? '#b3384a' : '#1b1526',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    lineHeight: 1,
+  });
+  const backStyle: React.CSSProperties = {
+    ...cardBase,
+    background: 'linear-gradient(145deg, rgba(154,108,255,0.55), rgba(52,36,96,0.85))',
+    border: '1px solid rgba(227,194,126,0.3)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+  };
+  const emptyStyle: React.CSSProperties = {
+    ...slotBase, border: '1px dashed var(--cc-hairline)', background: 'rgba(255,255,255,0.02)',
+  };
+
+  const Face = ({ c, picked }: { c: SCard; picked: boolean }) => (
+    <>
+      <span style={{ fontSize: `calc(${CW} * 0.34)`, fontWeight: 700 }}>{RANKS[c.rank]}</span>
+      <span style={{ fontSize: `calc(${CW} * 0.36)`, marginTop: `calc(${CW} * 0.04)` }}>{GLYPH[c.suit]}</span>
+      {picked && null}
+    </>
+  );
+
+  const grid: React.CSSProperties = {
+    display: 'grid', gridTemplateColumns: `repeat(7, ${CW})`,
+    gap: `calc(${CW} * 0.11)`, justifyContent: 'center',
+  };
+
+  const isPicked = (zone: 'waste' | 'tab', pile: number, idx: number) =>
+    !!sel && sel.zone === zone && sel.pile === pile && (zone === 'waste' ? sel.idx === idx : idx >= sel.idx);
+
+  // Fan the last few waste cards; only the top one is playable.
+  const wasteShown = state.waste.slice(Math.max(0, state.waste.length - (drawThree ? 3 : 1)));
+
+  return (
+    <div
+      className="flex flex-col items-center"
+      style={{ ['--cw' as string]: 'clamp(30px, 9.4vw, 78px)' } as React.CSSProperties}
+    >
+      <h3 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--cc-gold-warm)' }}>Solitaire</h3>
+      <p className="text-[12px] text-slate-400 mb-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        <span className="tabular-nums">{fmtClock(elapsed)}</span>
+        <span className="text-slate-600">·</span>
+        <span className="tabular-nums">{moves} moves</span>
+        <span className="text-slate-600">·</span>
+        <span className="inline-flex items-center gap-1.5">
+          <Trophy size={12} className="text-amber-300/80" />
+          <span className="tabular-nums text-slate-300">
+            {bestTime != null ? fmtClock(bestTime * 1000) : '—'}
+          </span>
+          {wins > 0 && <span className="text-slate-500">({wins}W)</span>}
+        </span>
+      </p>
+
+      <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+        <button onClick={newGame} className="px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors hover:bg-white/5"
+          style={{ borderColor: 'var(--cc-hairline)', color: 'var(--cc-body)' }}>
+          <RotateCcw size={12} className="inline mr-1.5 -mt-0.5" />New game
+        </button>
+        <button onClick={undo} disabled={!history.length}
+          className="px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors hover:bg-white/5 disabled:opacity-35 disabled:cursor-not-allowed"
+          style={{ borderColor: 'var(--cc-hairline)', color: 'var(--cc-body)' }}>
+          Undo
+        </button>
+        <button onClick={() => { setDrawThree(d => !d); newGame(); }}
+          className="px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors hover:bg-white/5"
+          style={{ borderColor: 'var(--cc-hairline)', color: 'var(--cc-body)' }}>
+          Draw {drawThree ? 3 : 1}
+        </button>
+        {canAuto && (
+          <button onClick={() => { idleRef.current = 0; setAuto(true); }} className="btn-premium px-4 py-1.5 rounded-full text-[12px]">
+            Auto-finish
+          </button>
+        )}
+      </div>
+
+      {/* Stock · waste · foundations, aligned to the same 7 columns as the tableau */}
+      <div style={{ ...grid, marginBottom: `calc(${CW} * 0.28)` }}>
+        <div onClick={drawStock} style={{ position: 'relative', ...slotBase, cursor: 'pointer' }}>
+          {state.stock.length
+            ? <div style={backStyle} />
+            : <div style={{ ...emptyStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <RotateCcw size={14} style={{ color: 'var(--cc-faint)' }} />
+              </div>}
+        </div>
+
+        <div style={{ position: 'relative', ...slotBase, overflow: 'visible' }}>
+          {wasteShown.length === 0 && <div style={emptyStyle} />}
+          {wasteShown.map((c, i) => {
+            const realIdx = state.waste.length - wasteShown.length + i;
+            const isTopCard = i === wasteShown.length - 1;
+            return (
+              <div key={c.id}
+                onClick={isTopCard ? () => clickCard('waste', 0, realIdx) : undefined}
+                style={{
+                  ...faceStyle(c, isPicked('waste', 0, realIdx)),
+                  left: `calc(${CW} * ${(i * 0.24).toFixed(2)})`,
+                  zIndex: i,
+                  cursor: isTopCard ? 'pointer' : 'default',
+                }}>
+                <Face c={c} picked={false} />
+              </div>
+            );
+          })}
+        </div>
+
+        <div />
+
+        {state.found.map((f, fi) => {
+          const t = top(f);
+          return (
+            <div key={fi} onClick={() => dropOnFoundation(fi)} style={{ position: 'relative', ...slotBase, cursor: 'pointer' }}>
+              {t ? <div style={faceStyle(t, false)}><Face c={t} picked={false} /></div>
+                 : <div style={{ ...emptyStyle, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                 color: 'var(--cc-faint)', fontSize: `calc(${CW} * 0.36)` }}>
+                     {GLYPH[SUITS[fi]]}
+                   </div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tableau */}
+      <div style={grid}>
+        {state.tab.map((pile, pi) => {
+          // Offsets accumulate in units of card width: face-down cards sit tighter.
+          let acc = 0;
+          const tops = pile.map(c => { const t = acc; acc += c.up ? 0.38 : 0.16; return t; });
+          const heightUnits = (pile.length ? tops[tops.length - 1] : 0) + 1.42;
+          return (
+            <div key={pi} onClick={() => { if (sel) dropOnTab(pi); }}
+              style={{ position: 'relative', width: CW, minHeight: `calc(${CW} * ${Math.max(heightUnits, 1.42).toFixed(2)})`, cursor: sel ? 'pointer' : 'default' }}>
+              {pile.length === 0 && <div style={emptyStyle} />}
+              {pile.map((c, ci) => (
+                <div key={c.id}
+                  onClick={e => { if (c.up) { e.stopPropagation(); clickCard('tab', pi, ci); } }}
+                  style={{
+                    ...(c.up ? faceStyle(c, isPicked('tab', pi, ci)) : backStyle),
+                    top: `calc(${CW} * ${tops[ci].toFixed(2)})`,
+                    zIndex: ci,
+                    cursor: c.up ? 'pointer' : 'default',
+                  }}>
+                  {c.up && <Face c={c} picked={isPicked('tab', pi, ci)} />}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      {won && (
+        <div className="mt-5 text-center rounded-2xl px-6 py-4"
+          style={{ background: 'rgba(227,194,126,0.1)', border: '1px solid rgba(227,194,126,0.4)' }}>
+          <div className="text-[20px] font-semibold" style={{ color: 'var(--cc-gold-warm)', fontFamily: 'var(--font-heading)' }}>
+            Solved
+          </div>
+          <div className="text-[13px] text-slate-300 mt-1 tabular-nums">
+            {fmtClock(elapsed)} · {moves} moves
+          </div>
+          <button onClick={newGame} className="btn-premium px-5 py-2 rounded-full inline-flex items-center gap-2 mt-3">
+            <Play size={14} /> Deal again
+          </button>
+        </div>
+      )}
+
+      {!won && (
+        <p className="text-[11px] text-slate-500 mt-4 text-center max-w-sm">
+          Tap a card to pick it up, tap where it goes. Tap it again to send it to a foundation.
+        </p>
+      )}
     </div>
   );
 }
