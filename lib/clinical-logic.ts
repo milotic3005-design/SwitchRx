@@ -1,6 +1,9 @@
 import { getDrugProfile, drugClasses, biologicIndications } from './drug-db';
 import { monographs } from './drug-monographs';
 
+// Cache for precompiled contraindication regular expressions
+const contraindicationRegexCache = new Map<string, { contra: string; pattern: RegExp }[]>();
+
 export type SwitchRequest = {
   fromDrug: string;
   currentDose: string;
@@ -818,19 +821,28 @@ export function suggestReplacements(req: {
       if (monograph && monograph.contraindications) {
         const contextText = `${patientContext.comorbidities} ${patientContext.otherMedications}`.toLowerCase();
         
-        // Simple keyword matching for contraindications
-        monograph.contraindications.forEach(contra => {
-          const contraLower = contra.toLowerCase();
-          // Extract key terms from contraindication (e.g., "MAOI", "Pimozide", "Seizure")
-          const keyTerms = contraLower.split(/[\s,()]+/).filter(t => t.length > 3 && !['concurrent', 'use', 'with', 'history', 'prior', 'current', 'diagnosis'].includes(t));
+        // Simple keyword matching for contraindications using precompiled regex for performance
+        if (!contraindicationRegexCache.has(candidateKey)) {
+          const compiledPatterns = monograph.contraindications.map(contra => {
+            const contraLower = contra.toLowerCase();
+            const keyTerms = contraLower.split(/[\s,()]+/).filter(t => t.length > 3 && !['concurrent', 'use', 'with', 'history', 'prior', 'current', 'diagnosis'].includes(t));
+
+            if (keyTerms.length === 0) return null;
+
+            // Escape special regex characters in terms and join with OR
+            const patternString = keyTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+            return { contra, pattern: new RegExp(patternString) };
+          }).filter(p => p !== null) as { contra: string; pattern: RegExp }[];
           
-          for (const term of keyTerms) {
-            if (contextText.includes(term)) {
-              warnings.push(`Contraindication match: ${contra}`);
-              break; // Only add the warning once per contraindication
-            }
+          contraindicationRegexCache.set(candidateKey, compiledPatterns);
+        }
+
+        const cachedPatterns = contraindicationRegexCache.get(candidateKey) || [];
+        for (const { contra, pattern } of cachedPatterns) {
+          if (pattern.test(contextText)) {
+            warnings.push(`Contraindication match: ${contra}`);
           }
-        });
+        }
       }
     }
 
