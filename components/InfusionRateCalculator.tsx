@@ -14,7 +14,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // ─────────────────────────────────────────────────────────────────────────────
 type PresetCategory = 'Step-up Titration' | 'Fixed Rate';
 
-type Preset = {
+export type Preset = {
   id: string;
   label: string;
   category: PresetCategory;
@@ -27,7 +27,7 @@ type Preset = {
   notes: string;
 };
 
-const PRESETS: Preset[] = [
+export const PRESETS: Preset[] = [
   // ═══════════════ STEP-UP TITRATION (per FDA PI) ═══════════════
   {
     id: 'rituximab-1',
@@ -389,7 +389,7 @@ const PRESETS: Preset[] = [
     category: 'Fixed Rate',
     startRate: 175, stepIncrement: 0, intervalMin: 0, maxRate: 175,
     defaultDose: 350, defaultVolume: 250,
-    notes: 'Standard 5 mg/kg over ≥2 hr (Remicade PI). Use Step ↑ for IRR-history titration.',
+    notes: 'Standard 5 mg/kg over ≥2 hr (Remicade PI). Patients with prior infusion reactions may need a slower step-up titration.',
   },
 ];
 

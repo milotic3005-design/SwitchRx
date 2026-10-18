@@ -363,3 +363,8 @@ html.light .bg-blue-600, html.light .hover\:bg-blue-700:hover, html.light .bg-bl
 html.light .bg-emerald-500\/10, html.light .bg-emerald-500\/15, html.light .bg-emerald-500\/20,
 html.light .bg-emerald-500\/5, html.light .bg-emerald-500\/25, html.light .bg-emerald-500\/30 { background-color: rgba(47, 125, 118, 0.12); }
 html.light .bg-violet-500\/10, html.light .bg-violet-500\/15, html.light .bg-violet-500\/20 { background-color: rgba(109, 63, 209, 0.12); }
+
+/* Mixing Guide — keep the clinical amber / rose signals (never remapped to the
+   palette) but use deeper shades of the SAME hues on parchment for contrast. */
+html.light .mixing-guide .text-amber-400 { color: #b45309; }
+html.light .mixing-guide .text-rose-400 { color: #be123c; }
