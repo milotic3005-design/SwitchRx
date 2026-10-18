@@ -9,13 +9,14 @@ import { GEMINI_MODEL, type GroundingSource, type ChatMessage } from './ai';
 
 // Build the server-side SDK client. Reads the key from the server environment
 // only — GEMINI_API_KEY (preferred), with fallbacks for the common alternate
-// names so existing project config keeps working. Never exposed to the browser.
+// SERVER-SIDE names so existing project config keeps working. Never a
+// NEXT_PUBLIC_ var: those are inlined into the client bundle by Next.js, which
+// would leak the key to every visitor (see .env.example).
 export function makeGeminiClient(): GoogleGenAI {
   const apiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!apiKey) {
     throw new Error(
       'GEMINI_API_KEY is not set on the server. Add it to the Vercel project (and .env.local for local dev).',
