@@ -15,6 +15,9 @@ export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 // A normalized source the UI renders in its "Verified Sources" list.
 export type GroundingSource = { uri: string; title: string };
 
+// A span of answer text and the indices (into the sources array) that support it.
+export type CitationSupport = { text: string; sourceIndices: number[] };
+
 // Provider-neutral chat message shape (mirrors the structure components already
 // build). Content is either a plain string or an array of typed blocks so
 // images / PDFs can be attached. The server translates this to Gemini `contents`.
