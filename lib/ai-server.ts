@@ -5,7 +5,8 @@
 
 import 'server-only';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { GEMINI_MODEL, type GroundingSource, type ChatMessage } from './ai';
+import { GEMINI_MODEL, type GroundingSource, type CitationSupport, type ChatMessage } from './ai';
+import { SourceCollector, SupportCollector, chunkSource, mapSupports } from './grounding';
 
 // Build the server-side SDK client. Reads the key from the server environment
 // only — GEMINI_API_KEY (preferred), with fallbacks for the common alternate
@@ -46,50 +47,26 @@ function toGeminiContents(messages: ChatMessage[]): GeminiContent[] {
   });
 }
 
-// Dedup-and-accumulate sources by URI + normalized title.
-class SourceCollector {
-  private map = new Map<string, GroundingSource>();
-  private lastEmitted = 0;
-
-  add(uri?: string | null, title?: string | null) {
-    if (!uri) return;
-    const t = (title || '').trim() || uri;
-    const key = `${uri}::${t.toLowerCase()}`;
-    if (!this.map.has(key)) this.map.set(key, { uri, title: t });
-  }
-
-  /** True if new sources were added since the last time this returned true. */
-  changed(): boolean {
-    if (this.map.size > this.lastEmitted) {
-      this.lastEmitted = this.map.size;
-      return true;
-    }
-    return false;
-  }
-
-  list(): GroundingSource[] {
-    return Array.from(this.map.values());
-  }
-}
-
 // Newline-delimited events the stream route forwards to the browser.
 export type StreamEvent =
   | { type: 'text'; delta: string }
   | { type: 'thinking'; delta: string }
   | { type: 'sources'; sources: GroundingSource[] }
+  | { type: 'supports'; supports: CitationSupport[] }
   | { type: 'error'; message: string }
   | { type: 'done' };
 
-// Run a single-turn streaming Gemini request with HIGH thinking and (optionally)
-// Google Search grounding, invoking `onEvent` for each semantic event. Used by
-// the /api/ai/stream route to pipe events back to the browser.
+// Run a single-turn streaming Gemini request with HIGH thinking (LOW when asked)
+// and (optionally) Google Search grounding, invoking `onEvent` for each semantic
+// event. Used by the /api/ai/stream route to pipe events back to the browser.
 export async function runAIStream(opts: {
   system: string;
   messages: ChatMessage[];
   webSearch?: boolean;
+  thinkingLevel?: 'low' | 'high';
   onEvent: (e: StreamEvent) => void;
 }): Promise<void> {
-  const { system, messages, webSearch = false, onEvent } = opts;
+  const { system, messages, webSearch = false, thinkingLevel, onEvent } = opts;
 
   const ai = makeGeminiClient();
   const response = await ai.models.generateContentStream({
@@ -97,7 +74,9 @@ export async function runAIStream(opts: {
     contents: toGeminiContents(messages),
     config: {
       systemInstruction: system,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+      thinkingConfig: {
+        thinkingLevel: thinkingLevel === 'low' ? ThinkingLevel.LOW : ThinkingLevel.HIGH,
+      },
       // Google Search grounding so answers cite real FDA labels, PubMed
       // articles, and society guidelines with verifiable URLs.
       ...(webSearch ? { tools: [{ googleSearch: {} }] } : {}),
@@ -105,6 +84,7 @@ export async function runAIStream(opts: {
   });
 
   const sources = new SourceCollector();
+  const supports = new SupportCollector();
 
   for await (const chunk of response) {
     const parts = chunk.candidates?.[0]?.content?.parts;
@@ -119,13 +99,18 @@ export async function runAIStream(opts: {
         }
       }
     }
-    // Collect grounding chunks for verifiable, clickable sources.
-    const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-    for (const gc of groundingChunks) {
-      const web = (gc as any).web ?? (gc as any).retrievedContext;
-      sources.add(web?.uri, web?.title);
+    // Collect grounding chunks for verifiable, clickable sources, then the
+    // supports (which sentence is backed by which sources) against that list.
+    const metadata = chunk.candidates?.[0]?.groundingMetadata;
+    for (const gc of metadata?.groundingChunks ?? []) {
+      const src = chunkSource(gc);
+      sources.add(src?.uri, src?.title);
     }
+    // Sources go out before the supports that index into them.
     if (sources.changed()) onEvent({ type: 'sources', sources: sources.list() });
+    if (metadata && supports.add(mapSupports(metadata, sources))) {
+      onEvent({ type: 'supports', supports: supports.list() });
+    }
   }
 
   // Final flush in case the very last chunk added new sources.

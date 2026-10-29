@@ -37,24 +37,33 @@ export type StreamCallbacks = {
   onText?: (full: string, delta: string) => void;
   onThinking?: (full: string, delta: string) => void;
   onSources?: (sources: GroundingSource[]) => void;
+  onSupports?: (supports: CitationSupport[]) => void;
 };
 
-// Run a single-turn streaming AI request with HIGH thinking and (optionally)
-// Google Search grounding — via the server route. Streams text, thinking, and
-// verified sources to the provided callbacks. Returns the final assembled text.
+// Run a single-turn streaming AI request with HIGH thinking (or LOW via
+// `thinkingLevel`) and (optionally) Google Search grounding — via the server
+// route. Streams text, thinking, verified sources, and citation supports (which
+// sentence each source backs, as indices into `sources`) to the provided
+// callbacks. Returns the final assembled text.
 //
 // The server route emits newline-delimited JSON events; we reconstruct the
 // running text/thinking here so the callback contract is (onText(full, delta),
-// onThinking(full, delta), onSources(list)).
+// onThinking(full, delta), onSources(list), onSupports(list)).
 export async function streamAI(opts: {
   system: string;
   prompt: string | ChatMessage[];
   maxTokens?: number;
   webSearch?: boolean;
+  thinkingLevel?: 'low' | 'high';
   cb?: StreamCallbacks;
   signal?: AbortSignal;
-}): Promise<{ text: string; thinking: string; sources: GroundingSource[] }> {
-  const { system, prompt, maxTokens = 8000, webSearch = false, cb, signal } = opts;
+}): Promise<{
+  text: string;
+  thinking: string;
+  sources: GroundingSource[];
+  supports: CitationSupport[];
+}> {
+  const { system, prompt, maxTokens = 8000, webSearch = false, thinkingLevel, cb, signal } = opts;
 
   const messages: ChatMessage[] =
     typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt;
@@ -62,7 +71,14 @@ export async function streamAI(opts: {
   const res = await fetch('/api/ai/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system, messages, maxTokens, webSearch }),
+    // thinkingLevel is only sent when the caller chose one (server defaults to high).
+    body: JSON.stringify({
+      system,
+      messages,
+      maxTokens,
+      webSearch,
+      ...(thinkingLevel ? { thinkingLevel } : {}),
+    }),
     signal,
   });
 
@@ -79,6 +95,7 @@ export async function streamAI(opts: {
   let fullText = '';
   let fullThinking = '';
   let sources: GroundingSource[] = [];
+  let supports: CitationSupport[] = [];
   let errorMsg = '';
 
   const handleLine = (line: string) => {
@@ -102,6 +119,10 @@ export async function streamAI(opts: {
         sources = Array.isArray(evt.sources) ? evt.sources : [];
         cb?.onSources?.(sources);
         break;
+      case 'supports':
+        supports = Array.isArray(evt.supports) ? evt.supports : [];
+        cb?.onSupports?.(supports);
+        break;
       case 'error':
         errorMsg = evt.message || 'AI stream error';
         break;
@@ -124,5 +145,5 @@ export async function streamAI(opts: {
 
   if (errorMsg) throw new Error(errorMsg);
 
-  return { text: fullText, thinking: fullThinking, sources };
+  return { text: fullText, thinking: fullThinking, sources, supports };
 }

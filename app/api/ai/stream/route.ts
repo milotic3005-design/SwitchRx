@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return new Response('Invalid JSON body', { status: 400 });
   }
 
-  const { system, messages, webSearch } = body ?? {};
+  const { system, messages, webSearch, thinkingLevel } = body ?? {};
   if (typeof system !== 'string' || !Array.isArray(messages)) {
     return new Response('Expected { system: string, messages: ChatMessage[] }', {
       status: 400,
@@ -31,6 +31,8 @@ export async function POST(req: Request) {
           system,
           messages,
           webSearch: !!webSearch,
+          // Anything but 'low' / 'high' falls back to the server default (high).
+          thinkingLevel: thinkingLevel === 'low' || thinkingLevel === 'high' ? thinkingLevel : undefined,
           onEvent: send,
         });
         send({ type: 'done' });
