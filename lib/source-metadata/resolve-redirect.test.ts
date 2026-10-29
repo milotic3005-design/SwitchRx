@@ -113,6 +113,29 @@ describe('resolveRedirect', () => {
     },
   );
 
+  // The result becomes a rendered href, so only http(s) destinations may come back.
+  it.each([
+    ['javascript:alert(1)'],
+    ['JavaScript:alert(1)'],
+    ['data:text/html,x'],
+    ['ftp://x/y'],
+    ['file:///etc/passwd'],
+    ['blob:https://pubmed.ncbi.nlm.nih.gov/1'],
+  ])('returns null when the Location has a non-http(s) scheme: %s', async (location) => {
+    const f = vi.fn<FetchLike>(async () => redirect(location));
+    expect(await resolveRedirect(R, f)).toBeNull();
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['http://pubmed.ncbi.nlm.nih.gov/1/', 'http://pubmed.ncbi.nlm.nih.gov/1/'],
+    ['https://pubmed.ncbi.nlm.nih.gov/1/', 'https://pubmed.ncbi.nlm.nih.gov/1/'],
+    ['HTTPS://pubmed.ncbi.nlm.nih.gov/1/', 'https://pubmed.ncbi.nlm.nih.gov/1/'],
+  ])('still resolves an http(s) Location: %s', async (location, expected) => {
+    const f = vi.fn<FetchLike>(async () => redirect(location));
+    expect(await resolveRedirect(R, f)).toBe(expected);
+  });
+
   it('returns null for a redirect without a Location (missing or empty)', async () => {
     expect(await resolveRedirect(R, vi.fn<FetchLike>(async () => redirect(null)))).toBeNull();
     expect(await resolveRedirect(R, vi.fn<FetchLike>(async () => redirect('')))).toBeNull();

@@ -61,7 +61,10 @@ export async function resolveRedirect(
     if (!REDIRECT_STATUSES.has(res.status)) return null;
     const location = res.headers.get('location');
     if (!location) return null;
-    return new URL(location, target).toString();
+    const resolved = new URL(location, target);
+    // The result is rendered as an href downstream: refuse javascript:, data:, ftp:, etc.
+    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return null;
+    return resolved.toString();
   } catch {
     return null;
   } finally {
