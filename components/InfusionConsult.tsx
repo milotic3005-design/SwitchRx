@@ -48,6 +48,27 @@ export function InfusionConsult({
     newQuestion();
   }, [prefillToken, newQuestion]);
 
+  // The docked box sits over the bottom of the window while the thread scrolls. Reserving its height as the
+  // page's bottom scroll padding makes anything the browser brings into view (keyboard focus, scrollIntoView,
+  // find in page) stop above the box instead of underneath it. While the tab is hidden the box measures 0.
+  const dockRef = useRef<HTMLDivElement>(null);
+  const threadOpen = activeThread !== null;
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!threadOpen || !dock || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const reserve = () => {
+      root.style.scrollPaddingBottom = `${dock.offsetHeight}px`;
+    };
+    reserve();
+    const observer = new ResizeObserver(reserve);
+    observer.observe(dock);
+    return () => {
+      observer.disconnect();
+      root.style.scrollPaddingBottom = '';
+    };
+  }, [threadOpen]);
+
   const submit = () => {
     ask(draft, depth);
     setDraft('');
@@ -101,9 +122,11 @@ export function InfusionConsult({
       {activeThread ? (
         <>
           <ThreadView thread={activeThread} drugMatcher={drugMatcher} onFollowUp={followUp} onRetry={retry} />
-          {/* Pinned to the bottom of the window while the thread scrolls under it; the fade uses the page
-              colour of the current theme so text passing beneath does not show through. */}
+          {/* Pinned to the bottom of the window while the thread scrolls under it. It stays in the flow, so at
+              the end of the page the thread finishes above it at any box height. The fade uses the page colour
+              of the current theme so text passing beneath does not show through. */}
           <div
+            ref={dockRef}
             className="sticky bottom-0 z-10 pb-4 pt-6"
             style={{ background: 'linear-gradient(to bottom, transparent, var(--cc-ink) 1.5rem)' }}
           >

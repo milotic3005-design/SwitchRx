@@ -163,15 +163,6 @@ export const TurnView = memo(function TurnView({
         </div>
       )}
 
-      {!running && hasAnswer && (
-        <div>
-          <button type="button" onClick={copyAnswer} className={SMALL_BUTTON}>
-            {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
-            {copied ? 'Copied' : 'Copy answer'}
-          </button>
-        </div>
-      )}
-
       {view.listed.length > 0 &&
         (view.cited ? (
           <ReferenceList id={referencesId} refs={view.listed} sources={turn.sources} heading="References" />
@@ -184,6 +175,16 @@ export const TurnView = memo(function TurnView({
             note={NO_SOURCES_NOTE}
           />
         ))}
+
+      {/* The next actions come last, so at the end of a thread they sit just above the docked box. */}
+      {!running && hasAnswer && (
+        <div>
+          <button type="button" onClick={copyAnswer} className={SMALL_BUTTON}>
+            {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+            {copied ? 'Copied' : 'Copy answer'}
+          </button>
+        </div>
+      )}
 
       {isLatest && !running && turn.followUps.length > 0 && (
         <section aria-labelledby={`${referencesId}-followups`}>
