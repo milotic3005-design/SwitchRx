@@ -8,16 +8,27 @@ export interface CitationPlacement {
   refs: number[];
   /** How many supports could not be placed and were dropped. */
   unplaced: number;
+  /**
+   * Valid source indices named only by dropped supports (none of them is in `refs`), de-duplicated in
+   * first-seen order, so the renderer can still list those sources under References.
+   */
+  uncited: number[];
 }
 
 const isEmphasis = (ch: string): boolean => ch === '*' || ch === '_';
 
+interface Normalized {
+  text: string;
+  /** `origin[i]` is the index in the original string of `text[i]`. */
+  origin: number[];
+}
+
 /**
  * Removes `*` and `_` and collapses whitespace runs to one space, so a segment still matches when the
  * body's emphasis markers or line breaks differ from the segment text the model reports. Case and all
- * other characters are kept exactly. `origin[i]` is the index in `input` of `text[i]`.
+ * other characters are kept exactly.
  */
-function normalize(input: string): { text: string; origin: number[] } {
+function normalize(input: string): Normalized {
   const chars: string[] = [];
   const origin: number[] = [];
   for (let i = 0; i < input.length; i++) {
@@ -34,6 +45,63 @@ function normalize(input: string): { text: string; origin: number[] } {
   return { text: chars.join(''), origin };
 }
 
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/** Whether the code point that ends just before `end` in `text` is a letter or digit. */
+function wordBefore(text: string, end: number): boolean {
+  if (end <= 0) return false;
+  const low = text.charCodeAt(end - 1);
+  const high = end >= 2 ? text.charCodeAt(end - 2) : 0;
+  const paired = low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff;
+  return WORD_CHAR.test(text.slice(paired ? end - 2 : end - 1, end));
+}
+
+/** Whether the code point that starts at `start` in `text` is a letter or digit. */
+function wordAt(text: string, start: number): boolean {
+  const codePoint = text.codePointAt(start);
+  return codePoint !== undefined && WORD_CHAR.test(String.fromCodePoint(codePoint));
+}
+
+/** Whether index `i` falls between the two halves of a surrogate pair (a match must not start or end there). */
+function splitsPair(text: string, i: number): boolean {
+  if (i <= 0 || i >= text.length) return false;
+  const low = text.charCodeAt(i);
+  const high = text.charCodeAt(i - 1);
+  return low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff;
+}
+
+/**
+ * Whether a match of `needle` at `start` in the normalized body begins and ends on a word boundary:
+ * the characters on either side must not be letters or digits, so `filtered.` does not match inside
+ * `unfiltered.` and `Give 2.` does not match inside `Give 2.5`. Normalization deletes emphasis markers,
+ * which can glue a match to a neighbouring span (`filter.**Bar**`); such a run still separates the two
+ * when the needle itself ends in punctuation there, but never when it sits inside a word.
+ */
+function isWordBounded(flat: Normalized, body: string, start: number, needle: string): boolean {
+  const end = start + needle.length;
+  if (splitsPair(flat.text, start) || splitsPair(flat.text, end)) return false;
+  if (wordBefore(flat.text, start)) {
+    const separated = isEmphasis(body.charAt(flat.origin[start] - 1)) && !wordAt(needle, 0);
+    if (!separated) return false;
+  }
+  if (wordAt(flat.text, end)) {
+    const separated = isEmphasis(body.charAt(flat.origin[end - 1] + 1)) && !wordBefore(needle, needle.length);
+    if (!separated) return false;
+  }
+  return true;
+}
+
+/** The start of the one word-bounded occurrence of `needle`, or -1 if there is none or more than one. */
+function findUnique(flat: Normalized, body: string, needle: string): number {
+  let found = -1;
+  for (let at = flat.text.indexOf(needle); at >= 0; at = flat.text.indexOf(needle, at + 1)) {
+    if (!isWordBounded(flat, body, at, needle)) continue;
+    if (found >= 0) return -1;
+    found = at;
+  }
+  return found;
+}
+
 function validIndices(indices: number[], sourceCount: number): number[] {
   const valid: number[] = [];
   for (const i of indices) {
@@ -44,25 +112,31 @@ function validIndices(indices: number[], sourceCount: number): number[] {
 
 /**
  * Inserts a citation marker after each segment of `body` that the model says a source supports.
- * A support is dropped (counted in `unplaced`) rather than guessed at when it names no valid source
- * or its text cannot be found in the body.
+ * A support is dropped rather than guessed at (counted in `unplaced`, its sources reported in
+ * `uncited`) when it names no valid source, its text is not found on word boundaries, or that text
+ * occurs more than once so the sentence it supports is ambiguous.
  */
 export function placeCitations(body: string, supports: CitationSupport[], sourceCount: number): CitationPlacement {
   const flat = normalize(body);
   const sourcesAt = new Map<number, number[]>();
+  const dropped: number[] = [];
   let unplaced = 0;
 
   for (const support of supports) {
     const indices = validIndices(support.sourceIndices, sourceCount);
     const needle = normalize(support.text).text.trim();
-    const start = indices.length > 0 && needle.length > 0 ? flat.text.indexOf(needle) : -1;
+    const start = indices.length > 0 && needle.length > 0 ? findUnique(flat, body, needle) : -1;
     if (start < 0) {
       unplaced++;
+      dropped.push(...indices);
       continue;
     }
-    // Insert after the segment's last character, and past any emphasis markers that close it.
+    // Insert after the segment's last character, and past a run of emphasis markers that closes it
+    // (end of text, whitespace or punctuation follows) but not one that opens the next span.
     let at = flat.origin[start + needle.length - 1] + 1;
-    while (at < body.length && isEmphasis(body.charAt(at))) at++;
+    let afterRun = at;
+    while (afterRun < body.length && isEmphasis(body.charAt(afterRun))) afterRun++;
+    if (!wordAt(body, afterRun)) at = afterRun;
 
     const merged = sourcesAt.get(at) ?? [];
     for (const i of indices) if (!merged.includes(i)) merged.push(i);
@@ -83,7 +157,7 @@ export function placeCitations(body: string, supports: CitationSupport[], source
   }
   markdown += body.slice(cursor);
 
-  return { markdown, refs, unplaced };
+  return { markdown, refs, unplaced, uncited: [...new Set(dropped)].filter(i => !refs.includes(i)) };
 }
 
 const CITE_HREF = /^#cite:([1-9]\d*(?:,[1-9]\d*)*)$/;

@@ -13,7 +13,7 @@ describe('placeCitations', () => {
     ], 3);
     expect(p).toEqual({
       markdown: 'Infuse over **2 hours**. [cite](#cite:1) Use a 1.2 µm filter. [cite](#cite:2) Monitor vitals.',
-      refs: [0, 2], unplaced: 0,
+      refs: [0, 2], unplaced: 0, uncited: [],
     });
   });
 
@@ -28,35 +28,49 @@ describe('placeCitations', () => {
 
   it('keeps merged source indices in first-seen order, not sorted', () => {
     const p = placeCitations('Use a filter.', [{ text: 'Use a filter.', sourceIndices: [2] }, { text: 'a filter.', sourceIndices: [0] }], 3);
-    expect(p).toEqual({ markdown: 'Use a filter. [cite](#cite:1,2)', refs: [2, 0], unplaced: 0 });
+    expect(p).toEqual({ markdown: 'Use a filter. [cite](#cite:1,2)', refs: [2, 0], unplaced: 0, uncited: [] });
   });
 
-  it('places a repeated sentence only at its first occurrence', () => {
-    expect(placeCitations('Dose daily. Dose daily.', [{ text: 'Dose daily.', sourceIndices: [0] }], 1).markdown)
-      .toBe('Dose daily. [cite](#cite:1) Dose daily.');
+  it('drops a support whose text occurs more than once', () => {
+    expect(placeCitations('Dose daily. Dose daily.', [{ text: 'Dose daily.', sourceIndices: [0] }], 1))
+      .toEqual({ markdown: 'Dose daily. Dose daily.', refs: [], unplaced: 1, uncited: [0] });
+  });
+
+  it('drops a support whose text occurs more than once across lines and emphasis', () => {
+    expect(placeCitations('Adults: 15 mg/kg q12h.\n- Children: 15 mg/kg q6h', [{ text: '15 mg/kg', sourceIndices: [0] }], 1))
+      .toEqual({ markdown: 'Adults: 15 mg/kg q12h.\n- Children: 15 mg/kg q6h', refs: [], unplaced: 1, uncited: [0] });
+    expect(placeCitations('Use **a filter.** Then use a filter.', [{ text: 'a filter.', sourceIndices: [0] }], 1))
+      .toEqual({ markdown: 'Use **a filter.** Then use a filter.', refs: [], unplaced: 1, uncited: [0] });
+  });
+
+  it('drops both of two supports that share an ambiguous text', () => {
+    expect(placeCitations('Dose daily. Dose daily.', [
+      { text: 'Dose daily.', sourceIndices: [0] },
+      { text: 'Dose daily.', sourceIndices: [1] },
+    ], 2)).toEqual({ markdown: 'Dose daily. Dose daily.', refs: [], unplaced: 2, uncited: [0, 1] });
   });
 
   it('drops supports that are not in the answer and keeps their sources out of refs', () => {
     const p = placeCitations('Only this.', [{ text: 'Not present.', sourceIndices: [0] }, { text: 'Only this.', sourceIndices: [1] }], 2);
-    expect(p).toEqual({ markdown: 'Only this. [cite](#cite:1)', refs: [1], unplaced: 1 });
+    expect(p).toEqual({ markdown: 'Only this. [cite](#cite:1)', refs: [1], unplaced: 1, uncited: [0] });
   });
 
   it('ignores source indices outside the source list', () => {
-    expect(placeCitations('X.', [{ text: 'X.', sourceIndices: [5] }], 2)).toEqual({ markdown: 'X.', refs: [], unplaced: 1 });
+    expect(placeCitations('X.', [{ text: 'X.', sourceIndices: [5] }], 2)).toEqual({ markdown: 'X.', refs: [], unplaced: 1, uncited: [] });
   });
 
   it('keeps the valid indices when only some are outside the source list', () => {
     expect(placeCitations('X.', [{ text: 'X.', sourceIndices: [0, 5, -1, 1.5, NaN] }], 2))
-      .toEqual({ markdown: 'X. [cite](#cite:1)', refs: [0], unplaced: 0 });
+      .toEqual({ markdown: 'X. [cite](#cite:1)', refs: [0], unplaced: 0, uncited: [] });
   });
 
   it('counts a support with no source indices as unplaced', () => {
-    expect(placeCitations('X.', [{ text: 'X.', sourceIndices: [] }], 2)).toEqual({ markdown: 'X.', refs: [], unplaced: 1 });
+    expect(placeCitations('X.', [{ text: 'X.', sourceIndices: [] }], 2)).toEqual({ markdown: 'X.', refs: [], unplaced: 1, uncited: [] });
   });
 
   it('counts a support with empty text as unplaced instead of matching at the start', () => {
     expect(placeCitations('X.', [{ text: '', sourceIndices: [0] }, { text: '  \n ', sourceIndices: [0] }], 1))
-      .toEqual({ markdown: 'X.', refs: [], unplaced: 2 });
+      .toEqual({ markdown: 'X.', refs: [], unplaced: 2, uncited: [0] });
   });
 
   it('lists a repeated source once within a chip', () => {
@@ -71,7 +85,7 @@ describe('placeCitations', () => {
     ], 2);
     expect(p).toEqual({
       markdown: 'A. [cite](#cite:1) B. [cite](#cite:2) C. [cite](#cite:1)',
-      refs: [0, 1], unplaced: 0,
+      refs: [0, 1], unplaced: 0, uncited: [],
     });
   });
 
@@ -98,6 +112,100 @@ describe('placeCitations', () => {
 
   it('collapses whitespace left behind by removed emphasis markers', () => {
     expect(placeCitations('Dose * daily.', [{ text: 'Dose daily.', sourceIndices: [0] }], 1).markdown).toBe('Dose * daily. [cite](#cite:1)');
+  });
+
+  describe('word boundaries', () => {
+    it('skips an occurrence inside a longer word and places the chip on the real one', () => {
+      expect(placeCitations('Do not use unfiltered. Use filtered.', [{ text: 'filtered.', sourceIndices: [0] }], 1).markdown)
+        .toBe('Do not use unfiltered. Use filtered. [cite](#cite:1)');
+    });
+
+    it('drops a support that only occurs inside a longer word', () => {
+      expect(placeCitations('Overdose daily.', [{ text: 'dose daily.', sourceIndices: [0] }], 1))
+        .toEqual({ markdown: 'Overdose daily.', refs: [], unplaced: 1, uncited: [0] });
+    });
+
+    it('rejects a match that runs into a following letter or digit', () => {
+      expect(placeCitations('Give 2.5 mg daily. Give 2.', [{ text: 'Give 2.', sourceIndices: [0] }], 1).markdown)
+        .toBe('Give 2.5 mg daily. Give 2. [cite](#cite:1)');
+    });
+
+    it('treats a letter that is a surrogate pair as a letter', () => {
+      // U+1D431 (mathematical bold x) is a letter outside the BMP.
+      expect(placeCitations('\u{1D431}filtered. Use filtered.', [{ text: 'filtered.', sourceIndices: [0] }], 1).markdown)
+        .toBe('\u{1D431}filtered. Use filtered. [cite](#cite:1)');
+    });
+
+    it('never matches half of a surrogate pair', () => {
+      expect(placeCitations('A \u{1F600} B.', [{ text: '\uDE00 B.', sourceIndices: [0] }], 1))
+        .toEqual({ markdown: 'A \u{1F600} B.', refs: [], unplaced: 1, uncited: [0] });
+      expect(placeCitations('A \u{1F600} B.', [{ text: 'A \uD83D', sourceIndices: [0] }], 1))
+        .toEqual({ markdown: 'A \u{1F600} B.', refs: [], unplaced: 1, uncited: [0] });
+    });
+
+    it('does not treat emphasis inside a word as a boundary', () => {
+      expect(placeCitations('Use un**filtered** water. Fine.', [{ text: 'filtered water.', sourceIndices: [0] }], 1))
+        .toEqual({ markdown: 'Use un**filtered** water. Fine.', refs: [], unplaced: 1, uncited: [0] });
+    });
+  });
+
+  describe('trailing emphasis markers', () => {
+    it('does not consume an emphasis run that opens the next span', () => {
+      expect(placeCitations('Use a filter.**Bar** baz', [{ text: 'Use a filter.', sourceIndices: [0] }], 1).markdown)
+        .toBe('Use a filter. [cite](#cite:1)**Bar** baz');
+      expect(placeCitations('Use a filter._Bar_ baz', [{ text: 'Use a filter.', sourceIndices: [0] }], 1).markdown)
+        .toBe('Use a filter. [cite](#cite:1)_Bar_ baz');
+    });
+
+    it('moves past a closing run at the end of the answer', () => {
+      expect(placeCitations('**X.**', [{ text: 'X.', sourceIndices: [0] }], 1).markdown).toBe('**X.** [cite](#cite:1)');
+    });
+
+    it('moves past a closing run before punctuation', () => {
+      expect(placeCitations('**Use a filter**. Next.', [{ text: 'Use a filter', sourceIndices: [0] }], 1).markdown)
+        .toBe('**Use a filter** [cite](#cite:1). Next.');
+    });
+  });
+
+  describe('overlapping supports and surrogate pairs', () => {
+    it('places two overlapping supports with different end points', () => {
+      const p = placeCitations('Use a filter. Check the pump.', [
+        { text: 'Use a filter. Check the pump.', sourceIndices: [0] },
+        { text: 'Use a filter.', sourceIndices: [1] },
+      ], 2);
+      expect(p).toEqual({
+        markdown: 'Use a filter. [cite](#cite:1) Check the pump. [cite](#cite:2)',
+        refs: [1, 0], unplaced: 0, uncited: [],
+      });
+    });
+
+    it('maps positions correctly around emoji', () => {
+      const p = placeCitations('\u{1F48A} Use a filter. \u{1F600} Check the pump.', [
+        { text: 'Check the pump.', sourceIndices: [1] },
+        { text: 'Use a filter.', sourceIndices: [0] },
+      ], 2);
+      expect(p.markdown).toBe('\u{1F48A} Use a filter. [cite](#cite:1) \u{1F600} Check the pump. [cite](#cite:2)');
+    });
+
+    it('matches a segment that itself contains an emoji', () => {
+      expect(placeCitations('Give \u{1F48A} daily. Next.', [{ text: 'Give \u{1F48A} daily.', sourceIndices: [0] }], 1).markdown)
+        .toBe('Give \u{1F48A} daily. [cite](#cite:1) Next.');
+    });
+  });
+
+  describe('uncited sources', () => {
+    it('lists valid sources of dropped supports that are not cited anywhere, first-seen and de-duplicated', () => {
+      const p = placeCitations('A. B.', [
+        { text: 'Missing one.', sourceIndices: [2, 1, 2, 9] },
+        { text: 'A.', sourceIndices: [1] },
+        { text: 'Missing two.', sourceIndices: [0, 2] },
+      ], 3);
+      expect(p).toEqual({ markdown: 'A. [cite](#cite:1) B.', refs: [1], unplaced: 2, uncited: [2, 0] });
+    });
+
+    it('is empty when every support is placed', () => {
+      expect(placeCitations('A.', [{ text: 'A.', sourceIndices: [0] }], 1).uncited).toEqual([]);
+    });
   });
 });
 
