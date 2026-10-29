@@ -373,6 +373,65 @@ describe('enrichSources', () => {
       expect(cache.size).toBe(1);
     });
 
+    it('never serves one request\'s title to another for the same non-PubMed link', async () => {
+      const { fetchImpl, calls } = fakeFetch({ redirects: { [R1]: IDSA_URL } });
+      const cache: Cache = new Map();
+
+      const [first] = await enrichSources([{ uri: R1, title: 'First title' }], { fetchImpl, cache });
+      const [second] = await enrichSources([{ uri: R1, title: 'Second title' }], { fetchImpl, cache });
+
+      // The second call was a cache hit: the redirect was requested only once.
+      expect(calls).toEqual([R1]);
+      expect(first.title).toBe('First title');
+      expect(second).toEqual({ ...first, title: 'Second title' });
+      // Nothing from the request was stored.
+      expect(JSON.stringify([...cache.values()])).not.toContain('First title');
+    });
+
+    it('serves the NCBI title for a cached PubMed source whatever title the request carries', async () => {
+      const { fetchImpl, calls } = fakeFetch({ redirects: { [R1]: PUBMED_URL } });
+      const cache: Cache = new Map();
+
+      await enrichSources([{ uri: R1, title: 'First title' }], { fetchImpl, cache });
+      const callsAfterFirst = calls.length;
+      const [second] = await enrichSources([{ uri: R1, title: 'Second title' }], { fetchImpl, cache });
+
+      expect(calls).toHaveLength(callsAfterFirst);
+      expect(second.title).toBe(
+        'Daptomycin versus standard therapy for bacteremia and endocarditis caused by Staphylococcus aureus.',
+      );
+      expect(second).toMatchObject({ pmid: '16914701', shortName: 'N Engl J Med', type: 'trial' });
+      expect(JSON.stringify([...cache.values()])).not.toMatch(/First title|Second title/);
+    });
+
+    it('shares one cache entry between URIs that differ only in the fragment', async () => {
+      const token = `${GROUNDING}token`;
+      const { fetchImpl, calls } = fakeFetch({ redirects: { [token]: IDSA_URL } });
+      const cache: Cache = new Map();
+
+      const [a] = await enrichSources([{ uri: `${token}#a`, title: 't' }], { fetchImpl, cache });
+      const [b] = await enrichSources([{ uri: `${token}#b`, title: 't' }], { fetchImpl, cache });
+
+      // One request, made for the URL without its fragment, and one entry keyed by that URL.
+      expect(calls).toEqual([token]);
+      expect([...cache.keys()]).toEqual([token]);
+      // Each result still reports the uri that was sent, so the browser can match it up.
+      expect(a).toMatchObject({ uri: `${token}#a`, url: IDSA_URL });
+      expect(b).toMatchObject({ uri: `${token}#b`, url: IDSA_URL });
+    });
+
+    it('cannot be filled with copies of one link that differ only in the fragment', async () => {
+      const token = `${GROUNDING}token`;
+      const { fetchImpl } = fakeFetch({ redirects: { [token]: IDSA_URL } });
+      const cache: Cache = new Map();
+      const sources = Array.from({ length: 600 }, (_, i) => ({ uri: `${token}#${i}`, title: 'x'.repeat(5000) }));
+
+      await enrichSources(sources, { fetchImpl, cache });
+
+      expect(cache.size).toBe(1);
+      expect(JSON.stringify([...cache.values()]).length).toBeLessThan(1000);
+    });
+
     it('does not cache disallowed URIs', async () => {
       const { fetchImpl } = fakeFetch({});
       const cache: Cache = new Map();

@@ -59,6 +59,33 @@ describe('POST /api/sources/resolve', () => {
     expect(text.length).toBeLessThan(120);
   });
 
+  describe('length limits', () => {
+    const uriOfLength = (n: number) => 'https://evil.example/'.padEnd(n, 'a');
+
+    it.each([
+      ['a uri of 2049 characters', { uri: uriOfLength(2049), title: 't' }],
+      ['a title of 501 characters', { uri: 'https://evil.example/a', title: 't'.repeat(501) }],
+      ['a long uri in a later item', null],
+    ])('rejects %s with 400', async (_name, item) => {
+      const spy = blockNetwork();
+      const sources = item
+        ? [item]
+        : [{ uri: 'https://evil.example/a', title: 't' }, { uri: uriOfLength(5000), title: 't' }];
+      const res = await post(sourcesBody(sources));
+      expect(res.status).toBe(400);
+      expect(res.headers.get('content-type')).toMatch(/^text\/plain/);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('accepts a uri of exactly 2048 characters and a title of exactly 500', async () => {
+      const spy = blockNetwork();
+      const res = await post(sourcesBody([{ uri: uriOfLength(2048), title: 't'.repeat(500) }]));
+      expect(res.status).toBe(200);
+      expect((await res.json()).sources).toHaveLength(1);
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
   it('accepts exactly 40 sources', async () => {
     const spy = blockNetwork();
     const sources = Array.from({ length: 40 }, (_, i) => ({ uri: `https://evil.example/${i}`, title: 'cdc.gov' }));
