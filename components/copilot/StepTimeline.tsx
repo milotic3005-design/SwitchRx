@@ -56,7 +56,7 @@ function stepStates(turn: CopilotTurn): { running: boolean; drugs: StepState; fd
 }
 
 /**
- * What the app did for a question: Identified drugs → Checked FDA labels, shortages & safety lists →
+ * What the app did for a question: Identified drugs → Checked FDA labels & safety lists →
  * Searched literature & guidelines → Done. Collapsed to one line that updates live while the turn runs;
  * expanding it shows the identified drugs and the pharmacy lookup panel. A failed or timed-out lookup
  * reads "FDA lookup unavailable" in amber, collapsed or not.
@@ -76,7 +76,7 @@ export function StepTimeline({ turn }: { turn: CopilotTurn }) {
         states.fda === 'failed' ? (
           <span className={`font-medium ${AMBER}`}>FDA lookup unavailable</span>
         ) : (
-          'Checked FDA labels, shortages & safety lists'
+          'Checked FDA labels & safety lists'
         ),
     },
     { key: 'search', state: states.search, label: 'Searched literature & guidelines' },

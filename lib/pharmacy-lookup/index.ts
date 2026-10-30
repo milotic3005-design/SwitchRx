@@ -1,30 +1,29 @@
 // Pharmacy Lookup pipeline orchestrator. End-to-end flow:
 //   1. Classify scenario + extract drug names (Gemini Flash, JSON-mode)
-//   2. In parallel for every drug: openFDA label + openFDA shortage check
+//   2. In parallel for every drug: openFDA label lookup
 //   3. Local safety-flag pass (vesicant, ISMP, NIOSH, cross-drug rules)
 //   4. Bundle results into a LookupResult that the UI renders as panels
 //      and the consult-brief synthesizer consumes as ground-truth context.
+//
+// There is deliberately no drug-shortage or discontinuation check. openFDA's
+// shortage feed is per product (NDC / manufacturer), so one discontinued vial
+// from a single manufacturer marked the whole drug "DISCONTINUED".
 
 import { classifyAndExtract } from './extractor';
 import { fetchFdaLabel } from './openfda-label';
-import { checkShortage } from './shortage-monitor';
 import { generateSafetyFlags } from './safety-checker';
 import type { DrugLookup, LookupResult } from './types';
 
 const MAX_DRUGS = 6; // cap parallel API fan-out for performance
 
 const lookupOneDrug = async (drug: string): Promise<DrugLookup> => {
-  const [labelResult, shortage] = await Promise.all([
-    fetchFdaLabel(drug),
-    checkShortage(drug),
-  ]);
+  const labelResult = await fetchFdaLabel(drug);
 
   return {
     generic_name: drug,
     rxcui: labelResult.rxcui,
     manufacturer: labelResult.manufacturer,
     label_sections: labelResult.sections,
-    shortage,
     not_found: labelResult.not_found,
   };
 };
@@ -42,28 +41,8 @@ export const runPharmacyLookup = async (
 
   const safety_flags = generateSafetyFlags(classification);
 
-  // Append shortage flags for any drugs currently in shortage
-  for (const dl of drug_lookups) {
-    if (dl.shortage?.status === 'Currently in Shortage') {
-      safety_flags.push({
-        level: 'warning',
-        category: 'shortage',
-        drug: dl.generic_name,
-        message: `${dl.generic_name} is currently in shortage per openFDA${dl.shortage.reason ? ` (reason: ${dl.shortage.reason})` : ''}. Confirm institutional supply before initiating; review ASHP shortage substitution guidance.`,
-      });
-    } else if (dl.shortage?.status === 'Discontinued') {
-      safety_flags.push({
-        level: 'critical',
-        category: 'shortage',
-        drug: dl.generic_name,
-        message: `${dl.generic_name} is listed as DISCONTINUED per openFDA. Identify a clinically-equivalent alternative before proceeding.`,
-      });
-    }
-  }
-
   const data_sources_used: string[] = [];
   if (drug_lookups.some(d => d.label_sections.length)) data_sources_used.push('openfda_label');
-  if (drug_lookups.some(d => d.shortage)) data_sources_used.push('openfda_shortage');
   if (safety_flags.length) data_sources_used.push('niosh_ismp_vesicant');
 
   return {
@@ -97,9 +76,6 @@ export const formatLookupForPrompt = (result: LookupResult): string => {
     lines.push('');
     lines.push(`### ${d.generic_name}${d.manufacturer ? ` (${d.manufacturer})` : ''}`);
     if (d.rxcui) lines.push(`RxCUI: ${d.rxcui}`);
-    if (d.shortage) {
-      lines.push(`openFDA shortage status: **${d.shortage.status}**${d.shortage.reason ? ` — ${d.shortage.reason}` : ''}`);
-    }
     if (d.not_found) {
       lines.push('⚠️ openFDA label lookup returned no IV/parenteral match for this drug.');
       continue;
@@ -117,4 +93,4 @@ export const formatLookupForPrompt = (result: LookupResult): string => {
   return lines.join('\n');
 };
 
-export type { LookupResult, DrugLookup, SafetyFlag, ShortageStatus, LabelSection } from './types';
+export type { LookupResult, DrugLookup, SafetyFlag, LabelSection } from './types';

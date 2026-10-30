@@ -1,5 +1,5 @@
 // Pharmacy Lookup pipeline types — adapted from PharmOracle for SwitchRx.
-// Surfaces structured authoritative data (FDA labels, shortages, safety flags)
+// Surfaces structured authoritative data (FDA labels, safety flags)
 // alongside the AI-generated infusion consult brief.
 
 export type QueryDomain =
@@ -23,7 +23,6 @@ export type SafetyCategory =
   | 'high_alert'
   | 'usp797'
   | 'interaction'
-  | 'shortage'
   | 'monitoring'
   | 'hazardous_drug'
   | 'recall';
@@ -33,19 +32,6 @@ export interface SafetyFlag {
   category: SafetyCategory;
   message: string;
   drug?: string;
-}
-
-export interface ShortageStatus {
-  status:
-    | 'Currently in Shortage'
-    | 'Resolved Shortage'
-    | 'Discontinued'
-    | 'Not Found';
-  generic_name: string;
-  reason?: string;
-  update_date?: string;
-  source: 'openFDA';
-  verification_url: string;
 }
 
 export type LabelField =
@@ -73,7 +59,6 @@ export interface DrugLookup {
   generic_name: string;
   rxcui?: string;
   manufacturer?: string;
-  shortage?: ShortageStatus;
   label_sections: LabelSection[];
   not_found?: boolean;
 }

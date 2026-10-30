@@ -25,7 +25,7 @@ export function CopilotHome({ composer, onPickExample }: { composer: ReactNode; 
 
       <p className="mt-4 flex items-center justify-center gap-1.5 text-[12px] text-slate-400">
         <ShieldCheck size={13} className="shrink-0 text-emerald-400" aria-hidden="true" />
-        Verified FDA label &amp; shortage check on every question
+        Verified FDA label check on every question
       </p>
       <p className="mt-1 text-[12px] text-slate-500">Saved on this device · avoid patient identifiers</p>
 

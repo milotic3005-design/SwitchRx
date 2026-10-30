@@ -28,17 +28,9 @@ const CATEGORY_LABEL: Record<SafetyFlag['category'], string> = {
   high_alert: 'ISMP High-Alert',
   hazardous_drug: 'NIOSH Hazardous',
   interaction: 'Interaction',
-  shortage: 'Shortage',
   usp797: 'USP 797',
   monitoring: 'Monitoring',
   recall: 'Recall',
-};
-
-const SHORTAGE_STYLES: Record<string, string> = {
-  'Currently in Shortage': 'bg-amber-500/15 border-amber-500/30 text-amber-300',
-  'Discontinued': 'bg-red-500/15 border-red-500/30 text-red-300',
-  'Resolved Shortage': 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300',
-  'Not Found': 'bg-white/5 border-white/10 text-slate-400',
 };
 
 function SafetyFlagCard({ flag }: { flag: SafetyFlag }) {
@@ -94,16 +86,11 @@ function DrugLookupCard({ drug }: { drug: DrugLookup }) {
             </div>
           </div>
         </div>
-        {drug.shortage && drug.shortage.status !== 'Not Found' && (
-          <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full border ${SHORTAGE_STYLES[drug.shortage.status]}`}>
-            {drug.shortage.status}
-          </span>
-        )}
       </div>
 
       {drug.not_found ? (
         <div className="p-4 text-[12px] text-slate-500 italic">
-          openFDA returned no IV/parenteral label match for this drug. The brief below uses the AI's grounded search results.
+          openFDA returned no IV/parenteral label match for this drug. The brief below uses the AI&apos;s grounded search results.
         </div>
       ) : drug.label_sections.length === 0 ? (
         <div className="p-4 text-[12px] text-slate-500 italic">
@@ -254,7 +241,7 @@ export function PharmacyLookupPanel({
                     </div>
                   )}
 
-                  {/* Drug lookups (label sections + shortage) */}
+                  {/* Drug lookups (label sections) */}
                   {lookup.drug_lookups.length > 0 && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
@@ -284,15 +271,6 @@ export function PharmacyLookupPanel({
                       className="text-violet-400 hover:text-violet-300 underline inline-flex items-center gap-0.5"
                     >
                       openFDA labels <ExternalLink size={9} />
-                    </a>
-                    <span>·</span>
-                    <a
-                      href="https://www.ashp.org/drug-shortages"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-violet-400 hover:text-violet-300 underline inline-flex items-center gap-0.5"
-                    >
-                      ASHP shortages <ExternalLink size={9} />
                     </a>
                     <span>·</span>
                     <a

@@ -198,12 +198,6 @@ const LOOKUP: LookupResult = {
           rxcui: RXCUI,
         },
       ],
-      shortage: {
-        status: 'Not Found',
-        generic_name: 'infliximab',
-        source: 'openFDA',
-        verification_url: 'https://www.ashp.org/drug-shortages',
-      },
     },
   ],
   safety_flags: [
@@ -214,7 +208,7 @@ const LOOKUP: LookupResult = {
       message: 'Do not infuse infliximab in the same IV line with other agents.',
     },
   ],
-  data_sources_used: ['openfda_label', 'openfda_shortage', 'niosh_ismp_vesicant'],
+  data_sources_used: ['openfda_label', 'niosh_ismp_vesicant'],
 };
 
 /** The recorded turn: the question, the raw streamed answer, and what each backend call returns. */
