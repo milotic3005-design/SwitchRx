@@ -4,6 +4,7 @@ import { placeCitations } from './citations';
 import { DEMO_TURN, demoTransport, isDemoEnabled } from './demo';
 import { splitFollowUps } from './followups';
 import { titleFdaLabels } from './label-titles';
+import { titleWebSources } from './path-title';
 import { buildCopilotRequest } from './request';
 import { runTurn } from './run-turn';
 import { sourceMix } from './source-types';
@@ -215,8 +216,10 @@ describe('demoTransport', () => {
     expect(final.answer).toBe(body);
     expect(final.followUps).toEqual(followUps);
     expect(final.supports).toEqual(DEMO_TURN.supports);
-    expect(final.sources).toEqual(titleFdaLabels(DEMO_TURN.enriched, DEMO_TURN.lookup));
+    expect(final.sources).toEqual(titleWebSources(titleFdaLabels(DEMO_TURN.enriched, DEMO_TURN.lookup)));
     expect(final.sources?.find((s) => s.type === 'fda-label')?.title).toBe('Remicade (Infliximab) prescribing information');
+    // The NIDDK page's grounding title is just its domain, so it is titled from its path.
+    expect(final.sources?.find((s) => s.site === 'niddk.nih.gov')?.title).toBe('Crohns disease › Treatment');
     // While streaming, no part of the follow-up fence ever shows (the answer itself has no backticks).
     expect(body).not.toContain('`');
     expect(patches.filter((p) => p.answer !== undefined).every((p) => !p.answer?.includes('`'))).toBe(true);

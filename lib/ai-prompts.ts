@@ -43,7 +43,7 @@ When the message includes a verified lookup section (FDA label text, safety list
 
 ## Ending every answer
 
-End every answer with exactly one fenced block of three follow-up questions a clinician would plausibly ask next, written as complete questions that stand on their own. Write nothing after the block.
+End every answer with exactly one fenced block of three follow-up questions the clinician would ask you next. Write them in the clinician's own voice, as complete questions that stand on their own and that you could answer, for example "What premedications are recommended before re-challenge?". Never ask the clinician for information about the patient or the case, such as "Did the patient have…?"; if a detail is missing, say so in the answer instead. Write nothing after the block.
 
 \`\`\`followups
 - question one

@@ -1,19 +1,20 @@
 import { ExternalLink } from 'lucide-react';
 import { safeHttpUrl } from '@/lib/copilot/safe-url';
-import { isRecent, TYPE_LABEL } from '@/lib/copilot/source-types';
+import { isRecent, siteName, TYPE_LABEL } from '@/lib/copilot/source-types';
 import type { EnrichedSource } from '@/lib/copilot/types';
 
 const TAG = 'rounded-full border px-1.5 py-px text-[10px] font-medium leading-4';
 
 /**
  * One source as shown in the reference list and in the citation and source-mix cards: an optional
- * number, the title (a link only when its URL is a plain http(s) one), then journal or site · year ·
+ * number, the title (a link only when its URL is a plain http(s) one), then journal or site name · year ·
  * authors, then the type tag and a "Recent" tag. Built from `<span>`s so it is valid inside a paragraph.
  */
 export function SourceEntry({ source, number }: { source: EnrichedSource; number?: number }) {
   const href = safeHttpUrl(source.url);
   const title = source.title.trim() || source.site || 'Untitled source';
-  const meta = [source.journal || source.site, source.year, source.authors].filter(Boolean).join(' · ');
+  // The site is named as the citation chip names it (see siteName), so the two never disagree.
+  const meta = [siteName(source), source.year, source.authors].filter(Boolean).join(' · ');
 
   return (
     <span className="flex items-start gap-2">

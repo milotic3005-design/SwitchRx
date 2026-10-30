@@ -390,6 +390,40 @@ describe('runTurn', () => {
     expect(merge(patches).sources).toBeUndefined();
   });
 
+  it('titles bare-domain sources from their resolved links, after FDA-label titling', async () => {
+    const lookup = structuredClone(LOOKUP);
+    lookup.drug_lookups[0].application_number = 'BLA103772';
+    const grounding: GroundingSource[] = [
+      { uri: V('fda'), title: 'fda.gov' },
+      { uri: V('pfizer'), title: 'pfizermedical.com' },
+    ];
+    const resolved: EnrichedSource[] = [
+      {
+        ...fallbackSource(grounding[0]),
+        url: 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/103772s5412lbl.pdf',
+        site: 'accessdata.fda.gov',
+      },
+      {
+        ...fallbackSource(grounding[1]),
+        url: 'https://www.pfizermedical.com/inflectra/dosage-admin',
+      },
+    ];
+    const t = fakeTransport({
+      lookup: vi.fn(async () => lookup),
+      stream: vi.fn(async (_req: CopilotRequest, cb: StreamCallbacks) => {
+        cb.onText(ANSWER);
+        cb.onSources(grounding);
+      }),
+      resolve: vi.fn(async () => resolved),
+    });
+    const final = merge(await run(t));
+
+    expect(final.sources?.map((s) => s.title)).toEqual([
+      'Remicade (Infliximab) prescribing information',
+      'Inflectra › Dosage admin',
+    ]);
+  });
+
   it('ignores stream callbacks that arrive after the stream has finished', async () => {
     let streamCb: StreamCallbacks | undefined;
     const t = fakeTransport({
@@ -420,6 +454,113 @@ describe('runTurn', () => {
   });
 });
 
+const lookupNaming = (...names: string[]): LookupResult => ({
+  classification: { drug_names: names, query_domain: 'iv_drug_info', urgency: 'routine' },
+  drug_lookups: names.map((generic_name) => ({ generic_name, label_sections: [] })),
+  safety_flags: [],
+  data_sources_used: [],
+});
+
+/** An earlier, finished turn of the thread with the given lookup. */
+const earlier = (id: string, lookup: LookupResult | null): CopilotTurn => ({
+  id,
+  question: `Question ${id}?`,
+  depth: 'thorough',
+  askedAt: 1,
+  status: 'done',
+  answer: `Answer ${id}.`,
+  followUps: [],
+  supports: [],
+  sources: [],
+  lookup,
+  lookupState: lookup ? 'ok' : 'failed',
+});
+
+describe('runTurn lookup reuse in a thread', () => {
+  const FOLLOW_UP = 'What if they had an infusion reaction last time?';
+  const followUp = (history: CopilotTurn[]) => ({ history, question: FOLLOW_UP, depth: 'thorough' as const });
+
+  it('reuses the earlier lookup when a follow-up names no drug, without another lookup call', async () => {
+    const t = fakeTransport({ lookup: vi.fn(async () => lookupNaming()) });
+    const history = [earlier('t1', LOOKUP)];
+    const patches = await run(t, undefined, followUp(history));
+    const final = merge(patches);
+
+    expect(t.lookup).toHaveBeenCalledTimes(1);
+    expect(t.lookup).toHaveBeenCalledWith(FOLLOW_UP, expect.any(AbortSignal));
+    expect(final.lookup).toBe(LOOKUP);
+    expect(final.lookupState).toBe('ok');
+    expect(patches.filter((p) => p.lookup !== undefined)).toEqual([{ lookup: LOOKUP, lookupState: 'ok' }]);
+    expect(requestOf(t)).toEqual(
+      buildCopilotRequest({ history, question: FOLLOW_UP, depth: 'thorough', lookupContext: formatLookupForPrompt(LOOKUP) }),
+    );
+    // The reused lookup also titles the FDA label.
+    expect(final.sources?.[0].title).toBe('Remicade (Infliximab) prescribing information');
+  });
+
+  it('reuses the most recent earlier lookup that found a drug', async () => {
+    const vancomycin = lookupNaming('vancomycin');
+    const notFound = lookupNaming('notarealdrug');
+    notFound.drug_lookups[0].not_found = true;
+    const history = [earlier('t1', vancomycin), earlier('t2', LOOKUP), earlier('t3', lookupNaming()), earlier('t4', notFound), earlier('t5', null)];
+    const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => lookupNaming()) }), undefined, followUp(history)));
+
+    expect(final.lookup).toBe(LOOKUP);
+  });
+
+  it('treats a lookup whose drugs all lacked an FDA label as naming no drug', async () => {
+    const notFound = lookupNaming('notarealdrug');
+    notFound.drug_lookups[0].not_found = true;
+    const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => notFound) }), undefined, followUp([earlier('t1', LOOKUP)])));
+
+    expect(final.lookup).toBe(LOOKUP);
+  });
+
+  it('keeps the follow-up’s own lookup when it names a new drug', async () => {
+    const vancomycin = lookupNaming('vancomycin');
+    const t = fakeTransport({ lookup: vi.fn(async () => vancomycin) });
+    const final = merge(await run(t, undefined, followUp([earlier('t1', LOOKUP)])));
+
+    expect(final.lookup).toBe(vancomycin);
+    expect(requestOf(t).system).toContain(formatLookupForPrompt(vancomycin));
+    expect(requestOf(t).system).not.toContain('Store unopened vials');
+  });
+
+  it('keeps an empty lookup when no earlier turn found a drug', async () => {
+    const own = lookupNaming();
+    const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => own) }), undefined, followUp([earlier('t1', lookupNaming()), earlier('t2', null)])));
+
+    expect(final.lookup).toBe(own);
+    expect(final.lookupState).toBe('ok');
+  });
+
+  it('does not replace a failed lookup', async () => {
+    const t = fakeTransport({ lookup: vi.fn(async () => Promise.reject(new Error('classifier down'))) });
+    const final = merge(await run(t, undefined, followUp([earlier('t1', LOOKUP)])));
+
+    expect(final.lookupState).toBe('failed');
+    expect(final.lookup).toBeNull();
+    expect(requestOf(t).system).not.toContain('PRE-FETCHED AUTHORITATIVE DATA');
+  });
+
+  it('does not replace a timed-out lookup', async () => {
+    vi.useFakeTimers();
+    const t = fakeTransport({ lookup: vi.fn(() => new Promise<LookupResult | null>(() => {})) });
+    const patches: TurnPatch[] = [];
+    const done = runTurn(t, followUp([earlier('t1', LOOKUP)]), (p) => patches.push(p), new AbortController().signal, {
+      lookupTimeoutMs: 50,
+    });
+    await vi.advanceTimersByTimeAsync(50);
+    await done;
+    vi.useRealTimers();
+
+    const final = merge(patches);
+    expect(final.lookupState).toBe('timeout');
+    expect(final.lookup).toBeNull();
+    expect(requestOf(t).system).not.toContain('PRE-FETCHED AUTHORITATIVE DATA');
+  });
+});
+
 function ndjson(events: unknown[]): Response {
   const body = events.map((e) => JSON.stringify(e) + '\n').join('');
   return new Response(body, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
@@ -430,7 +571,7 @@ type FetchArgs = [string, RequestInit];
 describe('realTransport', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('streams through streamAI with web search, 8000 tokens, the request thinking level and the signal', async () => {
+  it('streams a Quick question through streamAI with web search, 8000 tokens, high thinking and the signal', async () => {
     const supports: CitationSupport[] = [{ text: 'Hello.', sourceIndices: [0] }];
     const fetchMock = vi.fn(async (..._args: FetchArgs) =>
       ndjson([
@@ -456,7 +597,7 @@ describe('realTransport', () => {
       messages: req.messages,
       maxTokens: 8000,
       webSearch: true,
-      thinkingLevel: 'low',
+      thinkingLevel: 'high',
     });
     expect(cb.onText.mock.calls).toEqual([['Hello'], ['Hello.']]);
     expect(cb.onSources).toHaveBeenCalledWith([SOURCES[0]]);

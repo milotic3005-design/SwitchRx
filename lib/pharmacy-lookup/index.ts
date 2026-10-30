@@ -23,6 +23,8 @@ const lookupOneDrug = async (drug: string): Promise<DrugLookup> => {
     generic_name: drug,
     rxcui: labelResult.rxcui,
     manufacturer: labelResult.manufacturer,
+    application_number: labelResult.application_number,
+    set_id: labelResult.set_id,
     label_sections: labelResult.sections,
     not_found: labelResult.not_found,
   };

@@ -25,7 +25,8 @@ function stubNetwork() {
         return json({
           results: [
             {
-              openfda: { manufacturer_name: ['Example Pharma'], rxcui: ['11124'] },
+              set_id: '3b6b2a1e-0c4f-4f1e-9d4f-2d9c3f1a7b10',
+              openfda: { manufacturer_name: ['Example Pharma'], rxcui: ['11124'], application_number: ['ANDA062911', 'ANDA062912'] },
               dosage_and_administration: ['Infuse over at least 60 minutes at a rate no greater than 10 mg/min.'],
             },
           ],
@@ -59,6 +60,37 @@ describe('runPharmacyLookup', () => {
     expect(result.safety_flags.filter((f) => f.level === 'critical' && /discontinued/i.test(f.message))).toEqual([]);
     expect(result.data_sources_used).toContain('openfda_label');
     expect(result.data_sources_used).not.toContain('openfda_shortage');
+  });
+});
+
+describe('runPharmacyLookup label identifiers', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps the label’s application number and set id, so FDA label links can be matched to the drug', async () => {
+    stubNetwork();
+    const result = await runPharmacyLookup('Max infusion rate for vancomycin?');
+
+    expect(result.drug_lookups[0]).toMatchObject({
+      generic_name: 'vancomycin',
+      application_number: 'ANDA062911',
+      set_id: '3b6b2a1e-0c4f-4f1e-9d4f-2d9c3f1a7b10',
+    });
+  });
+
+  it('leaves them out when openFDA has no label', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes('/api/ai/classify')
+          ? json({ drug_names: ['notarealdrug'], query_domain: 'iv_drug_info', urgency: 'routine' })
+          : json({ results: [] }),
+      ),
+    );
+    const [drug] = (await runPharmacyLookup('Notarealdrug rate?')).drug_lookups;
+
+    expect(drug.not_found).toBe(true);
+    expect(drug.application_number).toBeUndefined();
+    expect(drug.set_id).toBeUndefined();
   });
 });
 

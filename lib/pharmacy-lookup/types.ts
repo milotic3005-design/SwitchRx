@@ -59,6 +59,10 @@ export interface DrugLookup {
   generic_name: string;
   rxcui?: string;
   manufacturer?: string;
+  /** The label's FDA application, e.g. "BLA103772"; Drugs@FDA label PDFs are named by its digits. */
+  application_number?: string;
+  /** The label's SPL set id, which DailyMed links carry as `setid=`. */
+  set_id?: string;
   label_sections: LabelSection[];
   not_found?: boolean;
 }

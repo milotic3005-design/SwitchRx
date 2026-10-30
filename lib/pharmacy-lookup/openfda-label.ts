@@ -22,12 +22,14 @@ const SECTIONS: { field: LabelField; label: string }[] = [
 ];
 
 interface OpenFdaLabelResult {
+  set_id?: string;
   openfda?: {
     generic_name?: string[];
     brand_name?: string[];
     manufacturer_name?: string[];
     rxcui?: string[];
     route?: string[];
+    application_number?: string[];
   };
   [k: string]: any;
 }
@@ -60,6 +62,8 @@ export const fetchFdaLabel = async (
   sections: LabelSection[];
   manufacturer?: string;
   rxcui?: string;
+  application_number?: string;
+  set_id?: string;
   not_found: boolean;
 }> => {
   const escaped = genericName.toLowerCase().replace(/"/g, '');
@@ -100,6 +104,9 @@ export const fetchFdaLabel = async (
     sections,
     manufacturer: top.openfda?.manufacturer_name?.[0],
     rxcui: top.openfda?.rxcui?.[0],
+    // Kept so the Copilot can recognise this label among its web sources by link.
+    application_number: top.openfda?.application_number?.[0],
+    set_id: typeof top.set_id === 'string' ? top.set_id : undefined,
     not_found: false,
   };
 };

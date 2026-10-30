@@ -122,6 +122,19 @@ export function siteShortName(host: string): string {
 
 const DOMAIN_TITLE = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
 
+/** Whether a title is only a domain, e.g. "pfizermedical.com", as most Gemini grounding titles are. */
+export const isDomainTitle = (title: string): boolean => DOMAIN_TITLE.test(title.trim());
+
+/**
+ * How the reference card names a source's site: the full journal name for an article, otherwise the same
+ * short name its citation chip shows, so the chip and the card never name two different hosts. A short
+ * name that only repeats the type tag ("FDA label") gives way to the site.
+ */
+export function siteName(source: EnrichedSource): string {
+  if (source.journal) return source.journal;
+  return source.shortName && source.shortName !== TYPE_LABEL[source.type] ? source.shortName : source.site;
+}
+
 const stripWww = (host: string): string => host.replace(/^www\./, '');
 
 const uriHost = (uri: string): string => {
@@ -140,7 +153,7 @@ const uriHost = (uri: string): string => {
  */
 export function fallbackSource(src: GroundingSource): EnrichedSource {
   const title = src.title.trim();
-  const host = stripWww(DOMAIN_TITLE.test(title) ? title.toLowerCase() : uriHost(src.uri));
+  const host = stripWww(isDomainTitle(title) ? title.toLowerCase() : uriHost(src.uri));
   return {
     uri: src.uri,
     url: null,

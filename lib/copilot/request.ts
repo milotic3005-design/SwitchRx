@@ -42,5 +42,6 @@ export function buildCopilotRequest(args: {
     ]);
   messages.push({ role: 'user', content: question });
 
-  return { system, messages, thinkingLevel: depth === 'thorough' ? 'high' : 'low' };
+  // Both depths think at HIGH and differ only by the addendum: LOW thinking skipped Google Search in live runs.
+  return { system, messages, thinkingLevel: 'high' };
 }

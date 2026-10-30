@@ -24,12 +24,26 @@ describe('buildCopilotRequest', () => {
   it('combines prompt, depth addendum, and lookup context', () => {
     const r = buildCopilotRequest({ history: [], question: 'Q?', depth: 'quick', lookupContext: 'LOOKUP' });
     expect(r.system).toBe(`${INFUSION_QA_SYSTEM_PROMPT}\n\n${COPILOT_DEPTH_ADDENDA.quick}\n\n---\n\nLOOKUP`);
-    expect(r.thinkingLevel).toBe('low');
   });
 
-  it('uses high thinking for thorough and omits an empty lookup section', () => {
+  it('uses high thinking for both depths, so Quick still searches and cites its sources', () => {
+    for (const depth of ['quick', 'thorough'] as const) {
+      expect(buildCopilotRequest({ history: [], question: 'Q?', depth, lookupContext: '' }).thinkingLevel, depth).toBe('high');
+    }
+  });
+
+  it('differs between depths only by the depth addendum', () => {
+    const args = { history: [turn(1)], question: 'Q?', lookupContext: 'LOOKUP' };
+    const quick = buildCopilotRequest({ ...args, depth: 'quick' });
+    const thorough = buildCopilotRequest({ ...args, depth: 'thorough' });
+    expect(thorough).toEqual({
+      ...quick,
+      system: quick.system.replace(COPILOT_DEPTH_ADDENDA.quick, COPILOT_DEPTH_ADDENDA.thorough),
+    });
+  });
+
+  it('omits an empty lookup section', () => {
     const r = buildCopilotRequest({ history: [], question: 'Q?', depth: 'thorough', lookupContext: '' });
-    expect(r.thinkingLevel).toBe('high');
     expect(r.system.endsWith(COPILOT_DEPTH_ADDENDA.thorough)).toBe(true);
     expect(r.system).toBe(`${INFUSION_QA_SYSTEM_PROMPT}\n\n${COPILOT_DEPTH_ADDENDA.thorough}`);
   });
@@ -102,6 +116,19 @@ describe('INFUSION_QA_SYSTEM_PROMPT', () => {
     const split = splitFollowUps(`Answer.\n\n${match![0]}`, true);
     expect(split.body).toBe('Answer.');
     expect(split.followUps).toHaveLength(3);
+  });
+
+  it('asks for follow-ups the clinician would ask next, in their voice, never questions to the clinician', () => {
+    const ending = INFUSION_QA_SYSTEM_PROMPT.slice(INFUSION_QA_SYSTEM_PROMPT.indexOf('## Ending every answer'));
+    for (const needle of [
+      'questions the clinician would ask you next',
+      "in the clinician's own voice",
+      '"What premedications are recommended before re-challenge?"',
+      'Never ask the clinician',
+      '"Did the patient have',
+    ]) {
+      expect(ending, needle).toContain(needle);
+    }
   });
 
   it('covers the research order, answer shape, and decision-support framing', () => {

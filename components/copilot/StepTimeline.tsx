@@ -3,9 +3,8 @@
 import { Fragment, useId, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, Check, ChevronDown, ChevronRight, Circle, Loader2, Minus } from 'lucide-react';
 import { PharmacyLookupPanel } from '@/components/PharmacyLookupPanel';
+import { stepStates, type StepState } from '@/lib/copilot/turn-status';
 import type { CopilotTurn } from '@/lib/copilot/types';
-
-type StepState = 'pending' | 'active' | 'done' | 'failed' | 'skipped';
 
 const STATE_WORD: Record<StepState, string> = {
   pending: 'not started',
@@ -15,7 +14,8 @@ const STATE_WORD: Record<StepState, string> = {
   skipped: 'not completed',
 };
 
-const AMBER = 'text-amber-400 [html.light_&]:text-amber-700';
+/** The amber for safety cautions, deeper in the light theme for contrast. */
+export const AMBER = 'text-amber-400 [html.light_&]:text-amber-700';
 
 function StateIcon({ state }: { state: StepState }) {
   switch (state) {
@@ -32,34 +32,12 @@ function StateIcon({ state }: { state: StepState }) {
   }
 }
 
-/** Where each of the four steps stands, from the turn's status and the state of its pharmacy lookup. */
-function stepStates(turn: CopilotTurn): { running: boolean; drugs: StepState; fda: StepState; search: StepState; done: StepState } {
-  const running = turn.status === 'lookup' || turn.status === 'streaming' || turn.status === 'resolving';
-  const lookup: StepState =
-    turn.lookupState === 'ok' ? 'done' : turn.lookupState === 'pending' ? (running ? 'active' : 'skipped') : 'failed';
-  const search: StepState =
-    turn.status === 'done'
-      ? 'done'
-      : turn.status === 'streaming' || turn.status === 'resolving'
-        ? 'active'
-        : turn.status === 'lookup'
-          ? 'pending'
-          : 'skipped';
-  return {
-    running,
-    // The drug names come from the same call as the label check, so when it fails there is nothing to report.
-    drugs: lookup === 'failed' ? 'skipped' : lookup,
-    fda: lookup,
-    search,
-    done: turn.status === 'done' ? 'done' : running ? 'pending' : 'skipped',
-  };
-}
-
 /**
  * What the app did for a question: Identified drugs → Checked FDA labels & safety lists →
  * Searched literature & guidelines → Done. Collapsed to one line that updates live while the turn runs;
  * expanding it shows the identified drugs and the pharmacy lookup panel. A failed or timed-out lookup
- * reads "FDA lookup unavailable" in amber, collapsed or not.
+ * reads "FDA lookup unavailable" in amber, collapsed or not; a lookup that named no drug skips both
+ * lookup steps and reads "No drugs to check against FDA labels".
  */
 export function StepTimeline({ turn }: { turn: CopilotTurn }) {
   const [expanded, setExpanded] = useState(false);
@@ -75,6 +53,8 @@ export function StepTimeline({ turn }: { turn: CopilotTurn }) {
       label:
         states.fda === 'failed' ? (
           <span className={`font-medium ${AMBER}`}>FDA lookup unavailable</span>
+        ) : states.noDrugs ? (
+          'No drugs to check against FDA labels'
         ) : (
           'Checked FDA labels & safety lists'
         ),

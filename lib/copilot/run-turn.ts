@@ -2,6 +2,7 @@ import type { CitationSupport, GroundingSource } from '@/lib/ai';
 import { formatLookupForPrompt, type LookupResult } from '@/lib/pharmacy-lookup';
 import { splitFollowUps } from './followups';
 import { titleFdaLabels } from './label-titles';
+import { titleWebSources } from './path-title';
 import { buildCopilotRequest, type CopilotRequest } from './request';
 import { fallbackSource } from './source-types';
 import type { CopilotTurn, Depth, EnrichedSource, LookupState, TurnPatch } from './types';
@@ -65,6 +66,20 @@ async function lookupWithin(
   }
 }
 
+/** Whether the lookup found an FDA label for at least one drug. */
+const foundDrug = (lookup: LookupResult | null): boolean => !!lookup?.drug_lookups.some((d) => !d.not_found);
+
+/**
+ * A follow-up such as "What if they had a reaction last time?" names no drug, so its own lookup comes back
+ * empty. Then the most recent earlier lookup in the thread that found a drug stands in for it. Only a lookup
+ * that worked is replaced: a failed or timed-out one stays as it is, so the timeline still says so.
+ */
+function withThreadLookup(outcome: LookupOutcome, history: CopilotTurn[]): LookupOutcome {
+  if (outcome.lookupState !== 'ok' || foundDrug(outcome.lookup)) return outcome;
+  const earlier = history.findLast((turn) => foundDrug(turn.lookup))?.lookup;
+  return earlier ? { ...outcome, lookup: earlier } : outcome;
+}
+
 const errorMessage = (err: unknown): string =>
   (err instanceof Error ? err.message : typeof err === 'string' ? err : '') || 'The answer could not be completed.';
 
@@ -72,8 +87,11 @@ const errorMessage = (err: unknown): string =>
  * Drives one question from start to finish, reporting progress as patches to the turn:
  * pharmacy lookup (at most `lookupTimeoutMs`) → streamed answer → source resolution → done.
  *
+ * - A lookup that works but finds no drug is replaced by the most recent earlier one in `history` that
+ *   did; that lookup then feeds the prompt, the turn's `lookup`, and FDA-label titling.
  * - While streaming, `answer` is the text with any follow-up block hidden, and `sources` are
  *   fallbacks built from the grounding sources; once the stream ends the follow-ups are parsed.
+ * - Resolved sources are retitled: FDA labels for a looked-up drug, then bare-domain titles from the link's path.
  * - If source resolution fails, the fallback sources are kept and the turn still ends `done`.
  * - If the stream fails, the turn ends `error` with the message, keeping the partial answer.
  * - When `signal` aborts, `{ status: 'stopped' }` is reported at once (the partial answer is kept),
@@ -107,7 +125,7 @@ export async function runTurn(
 
   try {
     update({ status: 'lookup', lookupState: 'pending' });
-    const { lookup, lookupState } = await lookupWithin(t, question, signal, lookupTimeoutMs);
+    const { lookup, lookupState } = withThreadLookup(await lookupWithin(t, question, signal, lookupTimeoutMs), history);
     update({ lookup, lookupState });
 
     update({ status: 'streaming' });
@@ -156,7 +174,8 @@ export async function runTurn(
     if (sources.length > 0) {
       try {
         const enriched = await untilAborted(t.resolve(sources, signal), signal);
-        update({ sources: titleFdaLabels(enriched, lookup) });
+        // FDA labels first, so a matched label keeps its "prescribing information" title.
+        update({ sources: titleWebSources(titleFdaLabels(enriched, lookup)) });
       } catch {
         // Keep the fallback sources; an abort was already reported as stopped.
         if (signal.aborted) return;

@@ -39,6 +39,59 @@ describe('titleFdaLabels', () => {
   it('does not match on an empty generic name', () => {
     expect(titleFdaLabels([label], lookupFor(''))).toEqual([label]);
   });
+  describe('by label identifiers', () => {
+    const ACCESSDATA = 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/103772s5412lbl.pdf';
+    const SET_ID = 'B4F9D3A1-5C7E-4E2B-9F6A-0D8C1E2F3A4B';
+    // Gemini's grounding title for these links is just the domain.
+    const fdaLink = (url: string) => ({ ...label, title: 'fda.gov', site: 'accessdata.fda.gov', url });
+    const remicade = () => {
+      const l = lookupFor('infliximab');
+      Object.assign(l.drug_lookups[0], { application_number: 'BLA103772', set_id: SET_ID });
+      return l;
+    };
+
+    it('matches a Drugs@FDA label PDF by the application number in its file name', () => {
+      expect(titleFdaLabels([fdaLink(ACCESSDATA)], remicade())[0].title).toBe('Remicade (Infliximab) prescribing information');
+    });
+    it('strips the NDA, BLA or ANDA prefix and keeps leading zeros', () => {
+      const l = lookupFor('vancomycin');
+      l.drug_lookups[0].application_number = 'ANDA062911';
+      const pdf = fdaLink('https://www.accessdata.fda.gov/drugsatfda_docs/label/2020/062911s041lbl.pdf');
+      expect(titleFdaLabels([pdf], l)[0].title).toBe('Vancocin (Vancomycin) prescribing information');
+    });
+    it('matches the application number only as a whole token in the path', () => {
+      for (const url of [
+        'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/1037721s001lbl.pdf',
+        'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/2103772lbl.pdf',
+        'https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo=103772',
+      ]) {
+        const source = fdaLink(url);
+        expect(titleFdaLabels([source], remicade())[0], url).toEqual(source);
+      }
+      expect(titleFdaLabels([fdaLink('https://www.accessdata.fda.gov/label/103772/')], remicade())[0].title)
+        .toBe('Remicade (Infliximab) prescribing information');
+    });
+    it('needs at least five digits in the application number', () => {
+      const l = lookupFor('infliximab');
+      l.drug_lookups[0].application_number = 'NDA2025';
+      const source = fdaLink(ACCESSDATA);
+      expect(titleFdaLabels([source], l)[0]).toEqual(source);
+    });
+    it('matches a DailyMed link by its set id, ignoring case', () => {
+      const dailymed = { ...label, title: 'dailymed.nlm.nih.gov', url: `https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${SET_ID.toLowerCase()}` };
+      expect(titleFdaLabels([dailymed], remicade())[0].title).toBe('Remicade (Infliximab) prescribing information');
+    });
+    it('titles each label with the drug whose identifiers it carries', () => {
+      const both = lookupFor('vancomycin', 'infliximab');
+      Object.assign(both.drug_lookups[0], { application_number: 'ANDA062911' });
+      Object.assign(both.drug_lookups[1], { application_number: 'BLA103772' });
+      expect(titleFdaLabels([fdaLink(ACCESSDATA)], both)[0].title).toBe('Remicade (Infliximab) prescribing information');
+    });
+    it('still requires an FDA-label source', () => {
+      const web = { ...fdaLink(ACCESSDATA), type: 'web' as const };
+      expect(titleFdaLabels([web], remicade())[0]).toEqual(web);
+    });
+  });
   it('does not mutate its input', () => {
     const before = { ...label };
     titleFdaLabels([label], lookup);

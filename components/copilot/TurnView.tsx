@@ -1,16 +1,17 @@
 'use client';
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, Copy, CornerDownRight, Gamepad2, RotateCcw, Square } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, Copy, CornerDownRight, Gamepad2, RotateCcw, Square } from 'lucide-react';
 import { WaitGame } from '@/components/WaitGame';
 import { placeCitations, toPlainText } from '@/lib/copilot/citations';
 import type { DrugMatcher } from '@/lib/copilot/markdown';
+import { answeredWithoutSources } from '@/lib/copilot/turn-status';
 import type { CopilotTurn } from '@/lib/copilot/types';
 import { AnswerBlock } from './AnswerBlock';
 import { ReferenceList } from './ReferenceList';
 import { SafetyStrip } from './SafetyStrip';
 import { SourceMixBadge } from './SourceMixBadge';
-import { StepTimeline } from './StepTimeline';
+import { AMBER, StepTimeline } from './StepTimeline';
 
 const FOCUS_RING =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-500';
@@ -31,13 +32,15 @@ function askedAt(timestamp: number): { iso: string; label: string } | null {
 
 const NO_SOURCES_NOTE = "These sources couldn't be tied to specific sentences.";
 
+const UNSOURCED_NOTE = 'No sources came back for this answer. Check it against the label or a guideline before relying on it.';
+
 /**
  * One question and its answer: the question, its depth and time with the mix of sources behind the
  * answer, safety flags from the pharmacy lookup, the step timeline, then the answer with citation chips,
  * its references, and the actions on it (copy, retry, suggested follow-ups).
  *
  * Chips are placed only once the text has stopped streaming. When none can be placed the sources are
- * still listed, as "Sources searched".
+ * still listed, as "Sources searched". A finished answer with no sources at all carries an amber caution.
  */
 export const TurnView = memo(function TurnView({
   turn,
@@ -135,6 +138,13 @@ export const TurnView = memo(function TurnView({
           drugMatcher={drugMatcher}
           referencesId={referencesId}
         />
+      )}
+
+      {answeredWithoutSources(turn) && (
+        <p role="note" className={`flex items-start gap-1.5 text-[12px] font-medium leading-5 ${AMBER}`}>
+          <AlertTriangle size={12} strokeWidth={2} className="mt-1 shrink-0" aria-hidden="true" />
+          {UNSOURCED_NOTE}
+        </p>
       )}
 
       {turn.status === 'stopped' && (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifySource, fallbackSource, isRecent, siteShortName, sourceMix, TYPE_LABEL } from './source-types';
+import { classifySource, fallbackSource, isDomainTitle, isRecent, siteName, siteShortName, sourceMix, TYPE_LABEL } from './source-types';
 import type { SourceType } from './types';
 
 const V = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc';
@@ -91,6 +91,31 @@ describe('fallbackSource', () => {
   });
   it('treats an unparseable uri as having no host', () => {
     expect(fallbackSource({ uri: 'not a url', title: 'Some page title' })).toMatchObject({ site: 'web', type: 'web' });
+  });
+});
+
+describe('isDomainTitle', () => {
+  it('is true only for a bare domain', () => {
+    expect(isDomainTitle('pfizermedical.com')).toBe(true);
+    expect(isDomainTitle(' wa-provider.kaiserpermanente.org ')).toBe(true);
+    expect(isDomainTitle('DailyMed - REMICADE')).toBe(false);
+    expect(isDomainTitle('Dosing & Administration | REMICADE® (infliximab) HCP')).toBe(false);
+    expect(isDomainTitle('')).toBe(false);
+  });
+});
+
+describe('siteName', () => {
+  const web = { ...fallbackSource({ uri: V, title: 'kaiserpermanente.org' }), site: 'wa-provider.kaiserpermanente.org', shortName: 'wa-provider.kaiserpermanente.org' };
+
+  it('names the site the way its citation chip does', () => {
+    expect(siteName(web)).toBe('wa-provider.kaiserpermanente.org');
+    expect(siteName({ ...web, site: 'idsociety.org', shortName: 'IDSA', type: 'guideline' })).toBe('IDSA');
+  });
+  it('prefers the full journal name', () => {
+    expect(siteName({ ...web, shortName: 'J Crohns Colitis', journal: "Journal of Crohn's & colitis" })).toBe("Journal of Crohn's & colitis");
+  });
+  it('names the site when the short name only repeats the type tag', () => {
+    expect(siteName({ ...web, site: 'accessdata.fda.gov', shortName: 'FDA label', type: 'fda-label' })).toBe('accessdata.fda.gov');
   });
 });
 
