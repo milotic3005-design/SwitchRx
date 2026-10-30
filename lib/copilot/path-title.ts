@@ -1,7 +1,13 @@
 import { isDomainTitle } from './source-types';
-import type { EnrichedSource } from './types';
+import type { EnrichedSource, SourceType } from './types';
 
-/** Path segments that say nothing about the page. */
+/**
+ * Article and book links: their paths are publisher plumbing ("doi/full/10.1056/…", "article/pii/S…"), so
+ * these sources keep their domain title rather than a meaningless path title.
+ */
+const LITERATURE_TYPES: ReadonlySet<SourceType> = new Set<SourceType>(['journal', 'trial', 'systematic-review']);
+
+/** Path segments that say nothing about the page, including publisher path words. */
 const GENERIC_SEGMENTS = new Set([
   'index',
   'default',
@@ -21,7 +27,22 @@ const GENERIC_SEGMENTS = new Set([
   'files',
   'assets',
   'content',
+  'doi',
+  'full',
+  'abs',
+  'abstract',
+  'article',
+  'articles',
+  'fullarticle',
+  'fulltext',
+  'pii',
+  'science',
+  'books',
+  'journals',
 ]);
+
+/** A DOI prefix such as "10.1056"; it and the DOI suffix after it are skipped. */
+const DOI_PREFIX = /^10\.\d+$/;
 
 /** How many segments, counted from the end of the path, make up a title. */
 const MAX_PARTS = 2;
@@ -59,7 +80,8 @@ function segmentWords(segment: string): string | null {
 /**
  * A readable title from a URL's path: its last one or two meaningful segments joined with " › ",
  * e.g. "Inflectra › Dosage admin" for https://www.pfizermedical.com/inflectra/dosage-admin. File
- * extensions are dropped, with " (PDF)" added for a PDF; generic and ID-like segments are skipped.
+ * extensions are dropped, with " (PDF)" added for a PDF; generic and ID-like segments, and a DOI with
+ * everything after it, are skipped.
  * Null when nothing usable is left (or the URL does not parse).
  */
 export function pathTitle(url: string): string | null {
@@ -70,7 +92,10 @@ export function pathTitle(url: string): string | null {
     return null;
   }
   const segments = pathname.split('/').filter(Boolean);
-  const parts = segments.flatMap(segment => segmentWords(segment) ?? []).slice(-MAX_PARTS);
+  // From a DOI prefix on, the path is the DOI itself ("10.1002/phar.2501"), not words.
+  const doiAt = segments.findIndex(segment => DOI_PREFIX.test(decode(segment)));
+  const named = doiAt < 0 ? segments : segments.slice(0, doiAt);
+  const parts = named.flatMap(segment => segmentWords(segment) ?? []).slice(-MAX_PARTS);
   if (parts.length === 0) return null;
   const isPdf = /\.pdf$/i.test(decode(segments[segments.length - 1]));
   return `${parts.join(' › ')}${isPdf ? ' (PDF)' : ''}`;
@@ -88,12 +113,13 @@ const hostOf = (url: string): string => {
  * Gives each resolved source whose title is only a domain (most Gemini grounding titles) a title from
  * its URL path, so two pages on one site no longer read the same. When the path has nothing usable the
  * domain title is kept, unless it names a different host than the resolved link, in which case the
- * resolved host is used so the card agrees with the chip. Run after `titleFdaLabels`, so a matched FDA
- * label keeps its "prescribing information" title; PubMed records keep NCBI's title.
+ * resolved host is used so the card agrees with the chip. Literature sources (journals, trials, reviews,
+ * PubMed, PMC, books) keep their domain title. Run after `titleFdaLabels`, so a matched FDA label keeps its
+ * "prescribing information" title; PubMed records keep NCBI's title.
  */
 export function titleWebSources(sources: EnrichedSource[]): EnrichedSource[] {
   return sources.map(source => {
-    if (!source.url || source.pmid || !isDomainTitle(source.title)) return source;
+    if (!source.url || source.pmid || LITERATURE_TYPES.has(source.type) || !isDomainTitle(source.title)) return source;
     const title = pathTitle(source.url);
     if (title) return { ...source, title };
 

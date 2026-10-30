@@ -7,6 +7,7 @@ import { placeCitations, toPlainText } from '@/lib/copilot/citations';
 import type { DrugMatcher } from '@/lib/copilot/markdown';
 import { answeredWithoutSources } from '@/lib/copilot/turn-status';
 import type { CopilotTurn } from '@/lib/copilot/types';
+import type { LookupResult } from '@/lib/pharmacy-lookup';
 import { AnswerBlock } from './AnswerBlock';
 import { ReferenceList } from './ReferenceList';
 import { SafetyStrip } from './SafetyStrip';
@@ -44,12 +45,17 @@ const UNSOURCED_NOTE = 'No sources came back for this answer. Check it against t
  */
 export const TurnView = memo(function TurnView({
   turn,
+  lookup,
+  lookupFromEarlierTurn,
   isLatest,
   onFollowUp,
   onRetry,
   drugMatcher,
 }: {
   turn: CopilotTurn;
+  /** The pharmacy lookup to show: the turn's own, or an earlier turn's it reused (see `effectiveLookup`). */
+  lookup: LookupResult | null;
+  lookupFromEarlierTurn: boolean;
   isLatest: boolean;
   onFollowUp: (question: string) => void;
   onRetry: (turnId: string) => void;
@@ -79,7 +85,7 @@ export const TurnView = memo(function TurnView({
   }, [textFinal, turn.answer, turn.supports, turn.sources]);
 
   const listedSources = useMemo(() => view.listed.map(i => turn.sources[i]), [view.listed, turn.sources]);
-  const flags = turn.lookup?.safety_flags ?? [];
+  const flags = lookup?.safety_flags ?? [];
   const asked = askedAt(turn.askedAt);
   const hasAnswer = turn.answer.trim().length > 0;
 
@@ -114,7 +120,7 @@ export const TurnView = memo(function TurnView({
       </div>
 
       <SafetyStrip flags={flags} />
-      <StepTimeline turn={turn} />
+      <StepTimeline turn={turn} lookup={lookup} fromEarlierTurn={lookupFromEarlierTurn} />
 
       {waitingForText &&
         (gameOpen ? (

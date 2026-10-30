@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { pathTitle, titleWebSources } from './path-title';
-import { fallbackSource } from './source-types';
+import { classifySource, fallbackSource } from './source-types';
 import type { EnrichedSource } from './types';
 
 const V = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc';
@@ -57,10 +57,26 @@ describe('pathTitle', () => {
     expect(pathTitle('https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/103772s5412lbl.pdf')).toBe(
       'Drugsatfda docs › Label (PDF)',
     );
-    expect(pathTitle('https://example.org/articles/PMC4558633/')).toBe('Articles');
+    expect(pathTitle('https://example.org/reviews/PMC4558633/')).toBe('Reviews');
     expect(pathTitle('https://example.org/monographs/a0a046c1-056d-45a9-bfd9-13b47c24f257')).toBe('Monographs');
     expect(pathTitle('https://example.org/news/2024-10-29/rapid-infliximab')).toBe('News › Rapid infliximab');
     expect(pathTitle('https://example.org/news/123456/')).toBe('News');
+  });
+
+  it('skips publisher path words and DOI prefixes, so article links give no title of their own', () => {
+    for (const url of [
+      'https://www.nejm.org/doi/full/10.1056/NEJMoa2034577',
+      'https://www.nejm.org/doi/abs/10.1056/NEJMoa2034577',
+      'https://www.ncbi.nlm.nih.gov/books/NBK482405/',
+      'https://www.sciencedirect.com/science/article/pii/S0002934319301234',
+      'https://pmc.ncbi.nlm.nih.gov/articles/PMC4558633/',
+      'https://onlinelibrary.wiley.com/doi/fulltext/10.1002/phar.2501',
+      'https://example.org/abstract/10.1093/abc',
+    ]) {
+      expect(pathTitle(url), url).toBeNull();
+    }
+    expect(pathTitle('https://jamanetwork.com/journals/jama/fullarticle/2768391')).toBe('Jama');
+    expect(pathTitle('https://academic.oup.com/cid/article/71/6/1400/5824444')).toBe('Cid');
   });
 
   it('keeps short or separated tokens that mix letters and digits', () => {
@@ -104,6 +120,34 @@ describe('titleWebSources', () => {
     const titled = resolved('Remicade (Infliximab) prescribing information', 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/103772s5412lbl.pdf');
     const pubmed = resolved('pubmed.ncbi.nlm.nih.gov', 'https://pubmed.ncbi.nlm.nih.gov/articles/12047962/', { pmid: '12047962' });
     expect(titleWebSources([unresolved, titled, pubmed])).toEqual([unresolved, titled, pubmed]);
+  });
+
+  it('keeps the domain title on journal, PubMed, PMC, book and other literature sources', () => {
+    const literature = [
+      'https://www.nejm.org/doi/full/10.1056/NEJMoa2034577',
+      'https://www.ncbi.nlm.nih.gov/books/NBK482405/',
+      'https://www.sciencedirect.com/science/article/pii/S0002934319301234',
+      'https://jamanetwork.com/journals/jama/fullarticle/2768391',
+      'https://academic.oup.com/cid/article/71/6/1400/5824444',
+      'https://pmc.ncbi.nlm.nih.gov/articles/PMC4558633/',
+      'https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD012345/full',
+    ].map(url => {
+      const host = new URL(url).hostname.replace(/^www\./, '');
+      return resolved(host.split('.').slice(-2).join('.'), url, { type: classifySource({ host }) });
+    });
+    expect(literature.map(s => s.type)).toEqual(['journal', 'journal', 'journal', 'journal', 'journal', 'journal', 'systematic-review']);
+    expect(titleWebSources(literature)).toEqual(literature);
+    for (const type of ['trial', 'systematic-review', 'journal'] as const) {
+      const source = resolved('example.org', 'https://example.org/vancomycin-dosing', { type });
+      expect(titleWebSources([source])[0], type).toEqual(source);
+    }
+  });
+
+  it('still titles guideline, agency, FDA and web pages', () => {
+    for (const type of ['guideline', 'agency', 'fda-label', 'web'] as const) {
+      const source = resolved('example.org', 'https://example.org/vancomycin-dosing', { type });
+      expect(titleWebSources([source])[0].title, type).toBe('Vancomycin dosing');
+    }
   });
 
   it('does not mutate its input', () => {

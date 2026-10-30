@@ -43,6 +43,11 @@ export interface CopilotTurn {
   sources: EnrichedSource[];
   lookup: LookupResult | null;
   lookupState: LookupState;
+  /**
+   * Set when this turn's own lookup named no drug and the answer used the lookup of this earlier turn in the
+   * thread instead. Only the id is kept (the lookup itself is not copied); see `effectiveLookup`.
+   */
+  lookupFromTurnId?: string;
   firstTokenAt?: number;
   error?: string;
 }

@@ -5,6 +5,7 @@ import { titleFdaLabels } from './label-titles';
 import { titleWebSources } from './path-title';
 import { buildCopilotRequest, type CopilotRequest } from './request';
 import { fallbackSource } from './source-types';
+import { namesDrug } from './turn-status';
 import type { CopilotTurn, Depth, EnrichedSource, LookupState, TurnPatch } from './types';
 
 /** The three backend calls one Copilot question needs (real backend or the dev-only demo). */
@@ -66,18 +67,19 @@ async function lookupWithin(
   }
 }
 
-/** Whether the lookup found an FDA label for at least one drug. */
-const foundDrug = (lookup: LookupResult | null): boolean => !!lookup?.drug_lookups.some((d) => !d.not_found);
-
 /**
  * A follow-up such as "What if they had a reaction last time?" names no drug, so its own lookup comes back
- * empty. Then the most recent earlier lookup in the thread that found a drug stands in for it. Only a lookup
- * that worked is replaced: a failed or timed-out one stays as it is, so the timeline still says so.
+ * empty. Then the most recent earlier turn whose own lookup named a drug stands in for it (a turn that itself
+ * reused one is passed over, so references never chain). A follow-up that names any drug keeps its own lookup
+ * and safety flags, even when openFDA had no label for it; a failed or timed-out lookup is never replaced, so
+ * the timeline still says the lookup was unavailable.
  */
-function withThreadLookup(outcome: LookupOutcome, history: CopilotTurn[]): LookupOutcome {
-  if (outcome.lookupState !== 'ok' || foundDrug(outcome.lookup)) return outcome;
-  const earlier = history.findLast((turn) => foundDrug(turn.lookup))?.lookup;
-  return earlier ? { ...outcome, lookup: earlier } : outcome;
+function reusableTurn(outcome: LookupOutcome, history: CopilotTurn[]): CopilotTurn | undefined {
+  if (outcome.lookupState !== 'ok' || namesDrug(outcome.lookup)) return undefined;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (namesDrug(history[i].lookup)) return history[i];
+  }
+  return undefined;
 }
 
 const errorMessage = (err: unknown): string =>
@@ -87,8 +89,9 @@ const errorMessage = (err: unknown): string =>
  * Drives one question from start to finish, reporting progress as patches to the turn:
  * pharmacy lookup (at most `lookupTimeoutMs`) → streamed answer → source resolution → done.
  *
- * - A lookup that works but finds no drug is replaced by the most recent earlier one in `history` that
- *   did; that lookup then feeds the prompt, the turn's `lookup`, and FDA-label titling.
+ * - A lookup that works but names no drug is stood in for by the most recent earlier turn in `history`
+ *   whose own lookup named one: the turn records that turn's id (`lookupFromTurnId`), and that lookup
+ *   feeds the prompt and FDA-label titling.
  * - While streaming, `answer` is the text with any follow-up block hidden, and `sources` are
  *   fallbacks built from the grounding sources; once the stream ends the follow-ups are parsed.
  * - Resolved sources are retitled: FDA labels for a looked-up drug, then bare-domain titles from the link's path.
@@ -125,8 +128,11 @@ export async function runTurn(
 
   try {
     update({ status: 'lookup', lookupState: 'pending' });
-    const { lookup, lookupState } = withThreadLookup(await lookupWithin(t, question, signal, lookupTimeoutMs), history);
-    update({ lookup, lookupState });
+    const own = await lookupWithin(t, question, signal, lookupTimeoutMs);
+    const from = reusableTurn(own, history);
+    // The turn records only which turn's lookup it used; that lookup is not copied into it.
+    update(from ? { ...own, lookupFromTurnId: from.id } : { ...own });
+    const lookup = from ? from.lookup : own.lookup;
 
     update({ status: 'streaming' });
     const req = buildCopilotRequest({

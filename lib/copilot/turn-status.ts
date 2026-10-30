@@ -1,3 +1,4 @@
+import type { LookupResult } from '@/lib/pharmacy-lookup';
 import type { CopilotTurn } from './types';
 
 export type StepState = 'pending' | 'active' | 'done' | 'failed' | 'skipped';
@@ -12,18 +13,39 @@ export interface StepStates {
   noDrugs: boolean;
 }
 
+/**
+ * Whether the classifier named at least one drug, whether or not openFDA had its label (a 429, a timeout or
+ * a combination name also comes back as not found). The one rule for both reusing an earlier turn's lookup
+ * and skipping the timeline's drug and FDA steps.
+ */
+export const namesDrug = (lookup: LookupResult | null): boolean => (lookup?.drug_lookups.length ?? 0) > 0;
+
+/**
+ * The lookup a turn's timeline, lookup panel and safety strip show: its own, or the one of the earlier turn
+ * it reused (`lookupFromTurnId`). A reference to a turn that is missing, or that has no lookup, shows none.
+ * `fromEarlierTurn` is true only when the reference resolved.
+ */
+export function effectiveLookup(
+  turn: CopilotTurn,
+  turns: readonly CopilotTurn[],
+): { lookup: LookupResult | null; fromEarlierTurn: boolean } {
+  if (turn.lookupFromTurnId === undefined) return { lookup: turn.lookup, fromEarlierTurn: false };
+  const lookup = turns.find(t => t.id === turn.lookupFromTurnId)?.lookup ?? null;
+  return { lookup, fromEarlierTurn: lookup !== null };
+}
+
 const isRunning = (turn: CopilotTurn): boolean =>
   turn.status === 'lookup' || turn.status === 'streaming' || turn.status === 'resolving';
 
 /**
- * Where each of the timeline's four steps stands, from the turn's status and the state of its pharmacy
- * lookup (after any reuse of an earlier turn's lookup). A lookup that worked but named no drug leaves the
- * drug and FDA steps skipped rather than done.
+ * Where each of the timeline's four steps stands, from the turn's status, the state of its pharmacy lookup,
+ * and the lookup it shows (`effectiveLookup`). A lookup that worked but named no drug leaves the drug and
+ * FDA steps skipped rather than done.
  */
-export function stepStates(turn: CopilotTurn): StepStates {
+export function stepStates(turn: CopilotTurn, lookup: LookupResult | null): StepStates {
   const running = isRunning(turn);
-  const noDrugs = turn.lookupState === 'ok' && (turn.lookup?.drug_lookups.length ?? 0) === 0;
-  const lookup: StepState =
+  const noDrugs = turn.lookupState === 'ok' && !namesDrug(lookup);
+  const lookupStep: StepState =
     turn.lookupState === 'pending'
       ? running
         ? 'active'
@@ -44,8 +66,8 @@ export function stepStates(turn: CopilotTurn): StepStates {
   return {
     running,
     // The drug names come from the same call as the label check, so when it fails there is nothing to report.
-    drugs: lookup === 'failed' ? 'skipped' : lookup,
-    fda: lookup,
+    drugs: lookupStep === 'failed' ? 'skipped' : lookupStep,
+    fda: lookupStep,
     search,
     done: turn.status === 'done' ? 'done' : running ? 'pending' : 'skipped',
     noDrugs,

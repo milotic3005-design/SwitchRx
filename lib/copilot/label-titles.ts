@@ -19,14 +19,22 @@ const pathOf = (url: string): string => {
 };
 
 /**
- * Whether `url`'s path carries the digits of an application number such as "BLA103772" as a whole token,
- * the way Drugs@FDA names label PDFs ("…/label/2025/103772s5412lbl.pdf"). The digits must not run on into
- * other digits, so "103772" does not match "1037721". Fewer than five digits never match.
+ * A Drugs@FDA label link: a `/label/` folder or a file named `…lbl.pdf`. Approval letters (`…ltr.pdf`) and
+ * reviews carry the same application number but are not the prescribing information.
+ */
+const isLabelPath = (path: string): boolean => /\/label\//i.test(path) || /lbl\.pdf$/i.test(path);
+
+/**
+ * Whether `url` is an FDA label link whose path carries the digits of an application number such as
+ * "BLA103772" as a whole token, the way Drugs@FDA names label PDFs ("…/label/2025/103772s5412lbl.pdf").
+ * The digits must not run on into other digits, so "103772" does not match "1037721". Fewer than five
+ * digits never match.
  */
 function hasApplicationNumber(url: string, applicationNumber: string | undefined): boolean {
   const digits = applicationNumber?.trim().replace(/^[a-z]+/i, '') ?? '';
   if (!/^\d{5,}$/.test(digits)) return false;
-  return new RegExp(`(?:^|\\D)${digits}(?:\\D|$)`).test(pathOf(url));
+  const path = pathOf(url);
+  return isLabelPath(path) && new RegExp(`(?:^|\\D)${digits}(?:\\D|$)`).test(path);
 }
 
 /** Whether `url` carries the label's SPL set id, as DailyMed links do (`setid=<uuid>`). */

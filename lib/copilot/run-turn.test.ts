@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
 import type { CitationSupport, GroundingSource } from '@/lib/ai';
 import { formatLookupForPrompt, type LookupResult } from '@/lib/pharmacy-lookup';
+import { generateSafetyFlags } from '@/lib/pharmacy-lookup/safety-checker';
 import { titleFdaLabels } from './label-titles';
 import { buildCopilotRequest, type CopilotRequest } from './request';
 import { runTurn, type CopilotTransport } from './run-turn';
@@ -478,42 +479,84 @@ const earlier = (id: string, lookup: LookupResult | null): CopilotTurn => ({
 
 describe('runTurn lookup reuse in a thread', () => {
   const FOLLOW_UP = 'What if they had an infusion reaction last time?';
-  const followUp = (history: CopilotTurn[]) => ({ history, question: FOLLOW_UP, depth: 'thorough' as const });
+  const followUp = (history: CopilotTurn[], question = FOLLOW_UP) => ({ history, question, depth: 'thorough' as const });
+  const notFound = (name: string) => {
+    const l = lookupNaming(name);
+    l.drug_lookups[0].not_found = true;
+    return l;
+  };
 
-  it('reuses the earlier lookup when a follow-up names no drug, without another lookup call', async () => {
-    const t = fakeTransport({ lookup: vi.fn(async () => lookupNaming()) });
+  it('uses the earlier turn’s lookup when a follow-up names no drug, storing only a reference to it', async () => {
+    const own = lookupNaming();
+    const t = fakeTransport({ lookup: vi.fn(async () => own) });
     const history = [earlier('t1', LOOKUP)];
     const patches = await run(t, undefined, followUp(history));
     const final = merge(patches);
 
+    // No second lookup call: the earlier result is reused as it is.
     expect(t.lookup).toHaveBeenCalledTimes(1);
     expect(t.lookup).toHaveBeenCalledWith(FOLLOW_UP, expect.any(AbortSignal));
-    expect(final.lookup).toBe(LOOKUP);
-    expect(final.lookupState).toBe('ok');
-    expect(patches.filter((p) => p.lookup !== undefined)).toEqual([{ lookup: LOOKUP, lookupState: 'ok' }]);
+    // The turn keeps its own (empty) lookup and points at t1; it never stores a copy of t1's lookup.
+    expect(patches.filter((p) => p.lookup !== undefined)).toEqual([{ lookup: own, lookupState: 'ok', lookupFromTurnId: 't1' }]);
+    expect(final.lookup).toBe(own);
+    expect(final.lookupFromTurnId).toBe('t1');
+    // The earlier lookup still feeds the prompt and FDA-label titling.
     expect(requestOf(t)).toEqual(
       buildCopilotRequest({ history, question: FOLLOW_UP, depth: 'thorough', lookupContext: formatLookupForPrompt(LOOKUP) }),
     );
-    // The reused lookup also titles the FDA label.
     expect(final.sources?.[0].title).toBe('Remicade (Infliximab) prescribing information');
   });
 
-  it('reuses the most recent earlier lookup that found a drug', async () => {
-    const vancomycin = lookupNaming('vancomycin');
-    const notFound = lookupNaming('notarealdrug');
-    notFound.drug_lookups[0].not_found = true;
-    const history = [earlier('t1', vancomycin), earlier('t2', LOOKUP), earlier('t3', lookupNaming()), earlier('t4', notFound), earlier('t5', null)];
-    const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => lookupNaming()) }), undefined, followUp(history)));
+  it('points at the most recent earlier turn whose own lookup named a drug, never at one that reused it', async () => {
+    const reused = { ...earlier('t3', lookupNaming()), lookupFromTurnId: 't2' };
+    const history = [earlier('t1', lookupNaming('vancomycin')), earlier('t2', LOOKUP), reused, earlier('t4', null)];
+    const t = fakeTransport({ lookup: vi.fn(async () => lookupNaming()) });
+    const final = merge(await run(t, undefined, followUp(history)));
 
-    expect(final.lookup).toBe(LOOKUP);
+    expect(final.lookupFromTurnId).toBe('t2');
+    expect(requestOf(t).system).toContain(formatLookupForPrompt(LOOKUP));
   });
 
-  it('treats a lookup whose drugs all lacked an FDA label as naming no drug', async () => {
-    const notFound = lookupNaming('notarealdrug');
-    notFound.drug_lookups[0].not_found = true;
-    const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => notFound) }), undefined, followUp([earlier('t1', LOOKUP)])));
+  it('counts an earlier drug that openFDA had no label for as the drug under discussion', async () => {
+    const history = [earlier('t1', LOOKUP), earlier('t2', notFound('notarealdrug'))];
+    const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => lookupNaming()) }), undefined, followUp(history)));
 
-    expect(final.lookup).toBe(LOOKUP);
+    expect(final.lookupFromTurnId).toBe('t2');
+  });
+
+  it('keeps the follow-up’s own lookup when it names a drug openFDA had no label for', async () => {
+    const own = notFound('notarealdrug');
+    const t = fakeTransport({ lookup: vi.fn(async () => own) });
+    const final = merge(await run(t, undefined, followUp([earlier('t1', LOOKUP)])));
+
+    expect(final.lookup).toBe(own);
+    expect(final.lookupFromTurnId).toBeUndefined();
+    expect(requestOf(t).system).toContain(formatLookupForPrompt(own));
+    expect(requestOf(t).system).not.toContain('Store unopened vials');
+  });
+
+  it('keeps a named drug’s own safety flags when openFDA is failing (vincristine after infliximab)', async () => {
+    // fetchJson turns a 429, timeout or other non-2xx answer into not_found, so the label is missing, but the
+    // locally curated flags for the drug the clinician named must stay.
+    const classification = { drug_names: ['vincristine'], query_domain: 'iv_drug_info' as const, urgency: 'routine' as const };
+    const own: LookupResult = {
+      classification,
+      drug_lookups: [{ generic_name: 'vincristine', label_sections: [], not_found: true }],
+      safety_flags: generateSafetyFlags(classification),
+      data_sources_used: ['niosh_ismp_vesicant'],
+    };
+    expect(own.safety_flags.map((f) => f.category)).toEqual(expect.arrayContaining(['vesicant', 'hazardous_drug']));
+    const t = fakeTransport({ lookup: vi.fn(async () => own) });
+    const final = merge(await run(t, undefined, followUp([earlier('t1', LOOKUP)], 'Can vincristine run peripherally?')));
+
+    expect(final.lookup).toBe(own);
+    expect(final.lookupFromTurnId).toBeUndefined();
+    expect(final.lookup?.safety_flags).toEqual(own.safety_flags);
+    expect(final.lookup?.classification.drug_names).toEqual(['vincristine']);
+    const { system } = requestOf(t);
+    expect(system).toContain('### vincristine');
+    expect(system).not.toContain('### infliximab');
+    expect(system).not.toContain('Store unopened vials');
   });
 
   it('keeps the follow-up’s own lookup when it names a new drug', async () => {
@@ -522,16 +565,18 @@ describe('runTurn lookup reuse in a thread', () => {
     const final = merge(await run(t, undefined, followUp([earlier('t1', LOOKUP)])));
 
     expect(final.lookup).toBe(vancomycin);
+    expect(final.lookupFromTurnId).toBeUndefined();
     expect(requestOf(t).system).toContain(formatLookupForPrompt(vancomycin));
     expect(requestOf(t).system).not.toContain('Store unopened vials');
   });
 
-  it('keeps an empty lookup when no earlier turn found a drug', async () => {
+  it('keeps an empty lookup when no earlier turn named a drug', async () => {
     const own = lookupNaming();
     const final = merge(await run(fakeTransport({ lookup: vi.fn(async () => own) }), undefined, followUp([earlier('t1', lookupNaming()), earlier('t2', null)])));
 
     expect(final.lookup).toBe(own);
     expect(final.lookupState).toBe('ok');
+    expect(final.lookupFromTurnId).toBeUndefined();
   });
 
   it('does not replace a failed lookup', async () => {
@@ -540,6 +585,7 @@ describe('runTurn lookup reuse in a thread', () => {
 
     expect(final.lookupState).toBe('failed');
     expect(final.lookup).toBeNull();
+    expect(final.lookupFromTurnId).toBeUndefined();
     expect(requestOf(t).system).not.toContain('PRE-FETCHED AUTHORITATIVE DATA');
   });
 
@@ -557,6 +603,7 @@ describe('runTurn lookup reuse in a thread', () => {
     const final = merge(patches);
     expect(final.lookupState).toBe('timeout');
     expect(final.lookup).toBeNull();
+    expect(final.lookupFromTurnId).toBeUndefined();
     expect(requestOf(t).system).not.toContain('PRE-FETCHED AUTHORITATIVE DATA');
   });
 });

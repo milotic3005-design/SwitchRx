@@ -71,6 +71,20 @@ describe('titleFdaLabels', () => {
       expect(titleFdaLabels([fdaLink('https://www.accessdata.fda.gov/label/103772/')], remicade())[0].title)
         .toBe('Remicade (Infliximab) prescribing information');
     });
+    it('matches the application number only on an FDA label link', () => {
+      // An approval letter and a review carry the same application number but are not the label.
+      for (const url of [
+        'https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2021/103772Orig1s5401ltr.pdf',
+        'https://www.accessdata.fda.gov/drugsatfda_docs/nda/99/103772_Remicade_medr.pdf',
+        'https://www.accessdata.fda.gov/drugsatfda_docs/nda/99/103772_Remicade.cfm',
+      ]) {
+        const source = fdaLink(url);
+        expect(titleFdaLabels([source], remicade())[0], url).toEqual(source);
+      }
+      // A label PDF named …lbl.pdf outside a /label/ folder still counts.
+      const lbl = fdaLink('https://www.accessdata.fda.gov/drugsatfda_docs/103772s5412lbl.pdf');
+      expect(titleFdaLabels([lbl], remicade())[0].title).toBe('Remicade (Infliximab) prescribing information');
+    });
     it('needs at least five digits in the application number', () => {
       const l = lookupFor('infliximab');
       l.drug_lookups[0].application_number = 'NDA2025';

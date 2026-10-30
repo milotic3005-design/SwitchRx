@@ -72,6 +72,23 @@ describe('saveThreads / loadThreads', () => {
     expect(loadThreads(m)).toEqual([thread('t1', [done('a')])]);
   });
 
+  it('saves a reused lookup as a reference only, and loads turns saved before references existed', () => {
+    const m = new MemoryStorage();
+    const reusing: CopilotTurn = { ...done('b'), lookupFromTurnId: 'a' };
+    saveThreads(m, [thread('t1', [done('a'), reusing])]);
+    const stored = JSON.parse(m.getItem(THREADS_KEY)!).threads[0].turns[1];
+    expect(stored.lookupFromTurnId).toBe('a');
+    expect(stored.lookup).toBeNull();
+    expect(loadThreads(m)).toEqual([thread('t1', [done('a'), reusing])]);
+
+    // A thread saved by an earlier version has no lookupFromTurnId at all.
+    const old = { version: 1, threads: [thread('t2', [done('c')])] };
+    m.setItem(THREADS_KEY, JSON.stringify(old));
+    const [loaded] = loadThreads(m);
+    expect(loaded.turns[0]).toEqual(done('c'));
+    expect('lookupFromTurnId' in loaded.turns[0]).toBe(false);
+  });
+
   it('keeps stopped and errored turns', () => {
     const m = new MemoryStorage();
     const t = thread('t1', [turnWith('a', 'done'), turnWith('b', 'stopped'), { ...turnWith('c', 'error'), error: 'boom' }]);

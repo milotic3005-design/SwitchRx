@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, Check, ChevronDown, ChevronRight, Circle, Lo
 import { PharmacyLookupPanel } from '@/components/PharmacyLookupPanel';
 import { stepStates, type StepState } from '@/lib/copilot/turn-status';
 import type { CopilotTurn } from '@/lib/copilot/types';
+import type { LookupResult } from '@/lib/pharmacy-lookup';
 
 const STATE_WORD: Record<StepState, string> = {
   pending: 'not started',
@@ -37,13 +38,23 @@ function StateIcon({ state }: { state: StepState }) {
  * Searched literature & guidelines → Done. Collapsed to one line that updates live while the turn runs;
  * expanding it shows the identified drugs and the pharmacy lookup panel. A failed or timed-out lookup
  * reads "FDA lookup unavailable" in amber, collapsed or not; a lookup that named no drug skips both
- * lookup steps and reads "No drugs to check against FDA labels".
+ * lookup steps and reads "No drugs to check against FDA labels". A lookup reused from an earlier turn
+ * says so under the line.
  */
-export function StepTimeline({ turn }: { turn: CopilotTurn }) {
+export function StepTimeline({
+  turn,
+  lookup,
+  fromEarlierTurn,
+}: {
+  turn: CopilotTurn;
+  /** The lookup this turn shows: its own, or the earlier turn's it reused (see `effectiveLookup`). */
+  lookup: LookupResult | null;
+  fromEarlierTurn: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
-  const states = stepStates(turn);
-  const drugNames = turn.lookup?.classification.drug_names ?? [];
+  const states = stepStates(turn, lookup);
+  const drugNames = lookup?.classification.drug_names ?? [];
 
   const steps: { key: string; state: StepState; label: ReactNode }[] = [
     { key: 'drugs', state: states.drugs, label: 'Identified drugs' },
@@ -97,6 +108,7 @@ export function StepTimeline({ turn }: { turn: CopilotTurn }) {
           ))}
         </span>
       </button>
+      {fromEarlierTurn && <p className="pl-[26px] text-[11px] text-slate-500">Using drug info from earlier in this thread</p>}
 
       {expanded && (
         <div id={panelId} className="mt-2 space-y-3 pl-5">
@@ -115,7 +127,7 @@ export function StepTimeline({ turn }: { turn: CopilotTurn }) {
               <span className="text-slate-500">{states.drugs === 'active' ? '…' : '—'}</span>
             )}
           </div>
-          <PharmacyLookupPanel lookup={turn.lookup} isLoading={turn.lookupState === 'pending' && states.running} />
+          <PharmacyLookupPanel lookup={lookup} isLoading={turn.lookupState === 'pending' && states.running} />
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LookupResult } from '@/lib/pharmacy-lookup';
-import { answeredWithoutSources, stepStates } from './turn-status';
+import { answeredWithoutSources, effectiveLookup, namesDrug, stepStates as statesFor } from './turn-status';
 import { fallbackSource } from './source-types';
 import type { CopilotTurn, LookupState, TurnStatus } from './types';
 
@@ -27,6 +27,46 @@ function turn(status: TurnStatus, lookupState: LookupState, extra: Partial<Copil
     ...extra,
   };
 }
+
+/** The step states for a turn showing its own lookup. */
+const stepStates = (t: CopilotTurn) => statesFor(t, t.lookup);
+
+describe('namesDrug', () => {
+  it('is true when the classifier named a drug, whether or not openFDA had its label', () => {
+    expect(namesDrug(lookupFor('infliximab'))).toBe(true);
+    const missing = lookupFor('vincristine');
+    missing.drug_lookups[0].not_found = true;
+    expect(namesDrug(missing)).toBe(true);
+  });
+  it('is false for a lookup that named no drug, or no lookup', () => {
+    expect(namesDrug(lookupFor())).toBe(false);
+    expect(namesDrug(null)).toBe(false);
+  });
+});
+
+describe('effectiveLookup', () => {
+  const first = turn('done', 'ok', { id: 't1' });
+  const reusing = turn('done', 'ok', { id: 't2', lookup: lookupFor(), lookupFromTurnId: 't1' });
+
+  it('is the turn’s own lookup when it reused none', () => {
+    expect(effectiveLookup(first, [first])).toEqual({ lookup: first.lookup, fromEarlierTurn: false });
+    expect(effectiveLookup(first, [first]).lookup).toBe(first.lookup);
+  });
+  it('follows the reference to the earlier turn’s lookup', () => {
+    const shown = effectiveLookup(reusing, [first, reusing]);
+    expect(shown.lookup).toBe(first.lookup);
+    expect(shown.fromEarlierTurn).toBe(true);
+  });
+  it('shows no lookup when the referenced turn is missing or has none', () => {
+    expect(effectiveLookup(reusing, [reusing])).toEqual({ lookup: null, fromEarlierTurn: false });
+    const failed = turn('done', 'failed', { id: 't1' });
+    expect(effectiveLookup(reusing, [failed, reusing])).toEqual({ lookup: null, fromEarlierTurn: false });
+  });
+  it('treats a turn saved before references existed as showing its own lookup', () => {
+    const { lookupFromTurnId: _unused, ...old } = reusing;
+    expect(effectiveLookup(old, [first, old]).lookup).toBe(old.lookup);
+  });
+});
 
 describe('stepStates', () => {
   it('shows the lookup in progress, then the search, then done', () => {
@@ -88,6 +128,13 @@ describe('stepStates', () => {
 
   it('treats an ok lookup with no result as naming no drug', () => {
     expect(stepStates(turn('done', 'ok', { lookup: null }))).toMatchObject({ drugs: 'skipped', fda: 'skipped', noDrugs: true });
+  });
+
+  it('reads a reused earlier lookup that names a drug as done', () => {
+    const reusing = turn('done', 'ok', { lookup: lookupFor(), lookupFromTurnId: 't0' });
+    expect(statesFor(reusing, lookupFor('infliximab'))).toMatchObject({ drugs: 'done', fda: 'done', noDrugs: false });
+    // A reference to a turn that is gone shows no lookup, so nothing was checked.
+    expect(statesFor(reusing, null)).toMatchObject({ drugs: 'skipped', fda: 'skipped', noDrugs: true });
   });
 
   it('counts a drug the classifier named even when openFDA had no label for it', () => {

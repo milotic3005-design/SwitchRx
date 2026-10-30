@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { DrugMatcher } from '@/lib/copilot/markdown';
+import { effectiveLookup } from '@/lib/copilot/turn-status';
 import type { CopilotThread } from '@/lib/copilot/types';
 import { TurnView } from './TurnView';
 
@@ -29,6 +30,8 @@ export function ThreadView({
     <div className="pb-8 pt-6">
       {thread.turns.map((turn, i) => {
         const isLatest = turn.id === latestId;
+        // A follow-up that reused an earlier turn's lookup stores only that turn's id; resolve it here.
+        const shown = effectiveLookup(turn, thread.turns);
         return (
           <div
             key={turn.id}
@@ -37,6 +40,8 @@ export function ThreadView({
           >
             <TurnView
               turn={turn}
+              lookup={shown.lookup}
+              lookupFromEarlierTurn={shown.fromEarlierTurn}
               isLatest={isLatest}
               onFollowUp={onFollowUp}
               onRetry={onRetry}
