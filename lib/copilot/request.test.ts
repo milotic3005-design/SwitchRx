@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { COPILOT_DEPTH_ADDENDA, INFUSION_QA_SYSTEM_PROMPT } from '@/lib/ai-prompts';
-import { buildCopilotRequest } from './request';
+import { buildCopilotRequest, SEARCH_NUDGE } from './request';
 import { splitFollowUps } from './followups';
 import type { CopilotTurn, TurnStatus } from './types';
 
@@ -50,7 +50,19 @@ describe('buildCopilotRequest', () => {
 
   it('sends only the question when there is no history', () => {
     const r = buildCopilotRequest({ history: [], question: 'Q?', depth: 'quick', lookupContext: '' });
-    expect(r.messages).toEqual([{ role: 'user', content: 'Q?' }]);
+    expect(r.messages).toEqual([{ role: 'user', content: `Q?\n\n${SEARCH_NUDGE}` }]);
+  });
+
+  it('adds the search reminder to the new question only, never to earlier questions', () => {
+    // Gemini decides per request whether to search; in live runs this reminder in the user turn made it
+    // search far more often than any system-prompt wording.
+    expect(SEARCH_NUDGE).toBe('(Search Google before answering and base every number on what you find.)');
+    const r = buildCopilotRequest({ history: [turn(1)], question: 'Q?', depth: 'quick', lookupContext: '' });
+    expect(r.messages).toEqual([
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+      { role: 'user', content: `Q?\n\n${SEARCH_NUDGE}` },
+    ]);
   });
 
   it('sends the last six finished turns as user/assistant pairs, then the question', () => {
@@ -86,14 +98,14 @@ describe('buildCopilotRequest', () => {
       { role: 'assistant', content: 'a7' },
       { role: 'user', content: 'q8' },
       { role: 'assistant', content: 'a8' },
-      { role: 'user', content: 'Q?' },
+      { role: 'user', content: `Q?\n\n${SEARCH_NUDGE}` },
     ]);
   });
 
   it('keeps every eligible turn when there are fewer than six', () => {
     const history = [turn(1), turn('err', 'error', 'x'), turn(2, 'stopped')];
     const r = buildCopilotRequest({ history, question: 'Q?', depth: 'quick', lookupContext: '' });
-    expect(r.messages.map((m) => m.content)).toEqual(['q1', 'a1', 'q2', 'a2', 'Q?']);
+    expect(r.messages.map((m) => m.content)).toEqual(['q1', 'a1', 'q2', 'a2', `Q?\n\n${SEARCH_NUDGE}`]);
   });
 
   it('does not mutate the history it is given', () => {

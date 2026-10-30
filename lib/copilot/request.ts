@@ -11,6 +11,12 @@ export interface CopilotRequest {
   thinkingLevel: 'low' | 'high';
 }
 
+/**
+ * Appended to the new question (not to earlier ones). Gemini decides per request whether to run Google Search;
+ * live, it searched about a third of the time with system-prompt instructions alone and 5 of 6 times with this.
+ */
+export const SEARCH_NUDGE = '(Search Google before answering and base every number on what you find.)';
+
 /** A turn is sent as context only if it finished (done or stopped) and has an answer. */
 function isSendable(turn: CopilotTurn): boolean {
   return (turn.status === 'done' || turn.status === 'stopped') && turn.answer.trim() !== '';
@@ -40,9 +46,8 @@ export function buildCopilotRequest(args: {
       { role: 'user', content: turn.question },
       { role: 'assistant', content: turn.answer },
     ]);
-  messages.push({ role: 'user', content: question });
+  messages.push({ role: 'user', content: `${question}\n\n${SEARCH_NUDGE}` });
 
-  // Both depths think at HIGH and differ only by the addendum. Quick answers skipped Google Search in live runs at
-  // LOW and at HIGH until the Quick addendum said to search anyway, so HIGH is kept as the safer setting.
+  // Both depths think at HIGH and differ only by the addendum: with the reminder, LOW searched in 1 of 3 live runs.
   return { system, messages, thinkingLevel: 'high' };
 }
