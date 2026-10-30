@@ -52,7 +52,9 @@ End every answer with exactly one fenced block of three follow-up questions the 
 \`\`\``;
 
 export const COPILOT_DEPTH_ADDENDA: Record<Depth, string> = {
-  // The search reminder matters: with plain "Be brief", Gemini skipped Google Search for Quick answers in live runs.
+  // Keeps "be brief" from reading as "skip the search". In live runs Gemini still searched only some of the time
+  // whatever this said; the reminder added to the question (SEARCH_NUDGE in lib/copilot/request.ts) made it search
+  // more often.
   quick:
     'Be brief in what you write: 1–3 short paragraphs or a short list; skip background. Brevity applies only to the written answer: still search before you answer, exactly as for a full answer.',
   thorough: 'Give a complete answer: lead with the bottom line, then short sections as the question requires.',

@@ -2,6 +2,49 @@
 
 **Date:** 2026-10-28 · **Branch:** `copilot-qa` · **Status:** approved design, awaiting spec review
 
+## Changes after implementation
+
+These decisions came from live checks and user requests while the design was being built, and they win
+where the sections below disagree: the Depth row in §2, the shortage check in §4 and §8, the Quick
+addendum in §7 and the FDA-label titling in §4. R numbers are the rulings in the build ledger.
+
+- **R10, no shortage check (user request).** openFDA's shortage feed is per product, so one discontinued vial
+  marked a whole drug "DISCONTINUED". It is removed; the copy says "Verified FDA label check on every question".
+- **R11, Clinical Chat removed (user request).** Its tab, buttons, component, prompt and identifier scrubber are
+  gone. The IDSA advisor keeps its own follow-up chat.
+- **R12, password screen (user's choice).** Checked in the browser, so the password ships in the bundle: a
+  screen, not security. Unlock lasts until the tab closes; a Lock button locks again.
+- **R13, both depths at HIGH thinking.** Quick at LOW skipped Google Search live, so the depths differ only by
+  the length addendum. A finished answer with no sources shows an amber caution.
+- **R14, lookup reuse.** A follow-up that names no drug reuses the thread's latest earlier lookup with drugs.
+  FDA labels also match by application number or DailyMed set id.
+- **R15, readable titles.** Pages are never fetched for titles; a domain-only title gets one from the URL path,
+  e.g. "Inflectra › Dosage admin".
+- **R16, follow-up voice.** Suggested follow-ups are questions the clinician would ask the Copilot, never
+  questions back to the clinician.
+- **R17, refines R14.** Reuse only when the follow-up names no drug at all; a named drug keeps its own lookup
+  and safety flags, found or not.
+- **R18, refines R15.** Literature sources (journals, PubMed, PMC, books) keep their domain title; publisher
+  path words and DOIs are skipped.
+- **R19.** The application-number match needs a label path (`/label/` or `…lbl.pdf`). A reused lookup is a
+  reference to the earlier turn, shown as "Using drug info from earlier in this thread".
+- **R20.** The Quick addendum says brevity applies only to the written answer, not to searching.
+- **R21, search reminder.** "(Search Google before answering and base every number on what you find.)" goes
+  on the new question only. Live, about 5 of 6 answers were grounded; both depths stay at HIGH.
+- **R22, planned: one automatic retry.** A finished answer with text but no sources is re-run once in the
+  background; the retry replaces it only if it has sources, and Stop keeps the first answer.
+
+Fixes from the final review:
+
+- The question box keeps one draft per place (home and each thread), so a question typed or handed over
+  for one case is never sent as a follow-up in another thread.
+- An FDA page is titled "… prescribing information" by drug name only when it is a label link (DailyMed,
+  or a Drugs@FDA label path), not a shortage page or safety communication.
+- The lookup section tells the model it is authoritative for what it covers and to still search before
+  answering; it no longer says to search "ONLY for items not covered".
+- A path segment with at least five digits and no more letters than digits counts as an ID, and
+  europepmc.org is a journal host, so article links keep their domain title.
+
 ## 1. Goal
 
 Rebuild the Infusion Copilot tab as a conversational clinical Q&A modeled on the

@@ -22,7 +22,7 @@ export type OpenDrugDetail = {
 
 export type AskCopilotDetail = {
   scenario: string;
-  /** When true, auto-clicks "Generate Consult Brief" after prefill. */
+  /** Ignored: the Copilot always fills its box without sending, and no caller sets this. */
   autoSubmit?: boolean;
 };
 

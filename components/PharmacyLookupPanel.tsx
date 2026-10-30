@@ -90,7 +90,7 @@ function DrugLookupCard({ drug }: { drug: DrugLookup }) {
 
       {drug.not_found ? (
         <div className="p-4 text-[12px] text-slate-500 italic">
-          openFDA returned no IV/parenteral label match for this drug. The brief below uses the AI&apos;s grounded search results.
+          openFDA returned no IV/parenteral label match for this drug. The answer below uses the AI&apos;s grounded search results.
         </div>
       ) : drug.label_sections.length === 0 ? (
         <div className="p-4 text-[12px] text-slate-500 italic">
@@ -256,7 +256,7 @@ export function PharmacyLookupPanel({
 
                   {!hasContent && !isLoading && (
                     <div className="text-[12px] text-slate-500 italic py-2">
-                      No drugs were extracted from the scenario. The consult brief below relies on the AI&apos;s general grounding.
+                      No drugs were extracted from the scenario. The answer below relies on the AI&apos;s general grounding.
                     </div>
                   )}
 

@@ -341,7 +341,7 @@ export function WaitGame({ active }: { active: boolean }) {
         <div className="flex items-center gap-1.5 text-[12px] text-slate-400">
           <Sparkles size={12} className="text-amber-300/80" />
           <span className="font-medium text-slate-300">Capsule Catch</span>
-          <span className="text-slate-500">— pass the time while the brief generates</span>
+          <span className="text-slate-500">— pass the time while the answer generates</span>
         </div>
         <div className="flex items-center gap-3 text-[12px]">
           <span className="text-slate-400">Score <span className="text-amber-300 font-semibold tabular-nums">{score}</span></span>
@@ -377,7 +377,7 @@ export function WaitGame({ active }: { active: boolean }) {
             ) : (
               <>
                 <p className="text-[14px] text-slate-200 font-medium">
-                  {active ? 'Game over' : 'Brief is ready!'}
+                  {active ? 'Game over' : 'Answer is ready!'}
                 </p>
                 <p className="text-[13px] text-slate-300">
                   Score <span className="text-amber-300 font-semibold">{score}</span>

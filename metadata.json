@@ -1,5 +1,5 @@
 {
   "name": "ClinicalRx AI Assistant",
-  "description": "Clinical decision support web application tailored for clinical pharmacists with deterministic switching protocols and AI-assisted clinical chat.",
+  "description": "Clinical decision support web application tailored for clinical pharmacists with deterministic switching protocols and an Infusion Copilot that answers infusion questions with cited sources.",
   "requestFramePermissions": []
 }
