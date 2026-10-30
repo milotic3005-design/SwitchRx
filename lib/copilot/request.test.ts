@@ -165,6 +165,14 @@ describe('INFUSION_QA_SYSTEM_PROMPT', () => {
     }
   });
 
+  it('places the verified lookup where the request puts it: in these instructions, below, not in the message', () => {
+    expect(INFUSION_QA_SYSTEM_PROMPT).toContain('When a verified lookup section follows below (FDA label text, safety lists)');
+    expect(INFUSION_QA_SYSTEM_PROMPT).not.toMatch(/message includes a verified lookup/i);
+    const r = buildCopilotRequest({ history: [], question: 'Q?', depth: 'quick', lookupContext: '## LOOKUP' });
+    expect(r.system.indexOf('## LOOKUP')).toBeGreaterThan(r.system.indexOf('verified lookup section follows below'));
+    expect(JSON.stringify(r.messages)).not.toContain('## LOOKUP');
+  });
+
   it('never carries another product identity or a HIPAA claim', () => {
     for (const banned of [/OpenEvidence/i, /EvidenceGrade/i, /Osler/i, /Sackett/i, /\bSnow\b/i, /HIPAA/i]) {
       expect(INFUSION_QA_SYSTEM_PROMPT).not.toMatch(banned);

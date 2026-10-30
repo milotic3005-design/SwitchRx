@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatLookupForPrompt, runPharmacyLookup } from './index';
+import { formatLookupForPrompt, runPharmacyLookup, type LookupResult } from './index';
 
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -105,5 +105,42 @@ describe('formatLookupForPrompt', () => {
     expect(prompt).toContain('vancomycin');
     expect(prompt).toContain('FDA Label');
     expect(prompt).not.toMatch(/shortage|discontinued/i);
+  });
+
+  // A label excerpt plus a safety flag, as the Copilot sends it for a vancomycin question.
+  const LOOKUP: LookupResult = {
+    classification: { drug_names: ['vancomycin'], query_domain: 'iv_drug_info', urgency: 'routine' },
+    drug_lookups: [
+      {
+        generic_name: 'vancomycin',
+        label_sections: [
+          {
+            drug: 'vancomycin',
+            field: 'dosage_and_administration',
+            label: 'Dosage & Administration',
+            content: 'Infuse over at least 60 minutes.',
+            source: 'openFDA',
+          },
+        ],
+      },
+    ],
+    safety_flags: [{ level: 'warning', category: 'vesicant', drug: 'vancomycin', message: 'Irritant.' }],
+    data_sources_used: ['openfda_label'],
+  };
+
+  it('never tells the model to search less than its instructions ask', () => {
+    const prompt = formatLookupForPrompt(LOOKUP);
+    expect(prompt).not.toMatch(/ONLY for items not covered/i);
+    expect(prompt).not.toMatch(/\bsearch\b[^.]*\bonly\b|\bonly\b[^.]*\bsearch\b/i);
+    expect(prompt).toContain('Treat the above as authoritative for what it covers.');
+    expect(prompt).toContain('Still search before answering, as instructed');
+    // The search instruction is the last thing the model reads in its system prompt.
+    expect(prompt.trimEnd().split('\n').pop()).toMatch(/Still search before answering/);
+  });
+
+  it('anchors the answer, not a brief, on the lookup and keeps its heading', () => {
+    const prompt = formatLookupForPrompt(LOOKUP);
+    expect(prompt.split('\n')[0]).toBe('## PRE-FETCHED AUTHORITATIVE DATA (verified — anchor your answer on this)');
+    expect(prompt).not.toMatch(/\bbrief\b/i);
   });
 });

@@ -55,14 +55,16 @@ export const runPharmacyLookup = async (
   };
 };
 
-// Format the lookup as a compact string the consult-brief LLM can consume
+// Format the lookup as a compact string the Copilot's answer model can consume
 // as authoritative pre-fetched context. Short and structured so it doesn't
-// blow the context window for multi-drug regimens.
+// blow the context window for multi-drug regimens. It is the last part of the
+// system prompt, so its closing line repeats the instruction to search: an
+// earlier "search ONLY for items not covered" undercut it.
 export const formatLookupForPrompt = (result: LookupResult): string => {
   if (!result.drug_lookups.length && !result.safety_flags.length) return '';
 
   const lines: string[] = [];
-  lines.push('## PRE-FETCHED AUTHORITATIVE DATA (verified — anchor your brief on this)');
+  lines.push('## PRE-FETCHED AUTHORITATIVE DATA (verified — anchor your answer on this)');
   lines.push('');
   lines.push(`Classified domain: **${result.classification.query_domain}** · urgency: ${result.classification.urgency}`);
 
@@ -90,7 +92,7 @@ export const formatLookupForPrompt = (result: LookupResult): string => {
   }
 
   lines.push('');
-  lines.push('Use the above as your primary source of truth for the drug-specific facts. Supplement with web search ONLY for items not covered above (e.g. specific guideline recommendations, comparative trials).');
+  lines.push('Treat the above as authoritative for what it covers. Still search before answering, as instructed: for guidelines, literature, anything the label does not cover, and to confirm the numbers you give.');
 
   return lines.join('\n');
 };
