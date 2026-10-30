@@ -10,13 +10,15 @@ const brandFor = (generic: string): string => {
   return DRUG_DB.find(d => d.genericName.toLowerCase() === g)?.brandName.trim() ?? '';
 };
 
-const pathOf = (url: string): string => {
+const parse = (url: string): URL | null => {
   try {
-    return new URL(url).pathname;
+    return new URL(url);
   } catch {
-    return '';
+    return null;
   }
 };
+
+const pathOf = (url: string): string => parse(url)?.pathname ?? '';
 
 /**
  * A Drugs@FDA label link: a `/label/` folder or a file named `…lbl.pdf`. Approval letters (`…ltr.pdf`) and
@@ -37,6 +39,16 @@ function hasApplicationNumber(url: string, applicationNumber: string | undefined
   return isLabelPath(path) && new RegExp(`(?:^|\\D)${digits}(?:\\D|$)`).test(path);
 }
 
+/**
+ * Whether `url` is a label page: anything on DailyMed, or a Drugs@FDA label link. Other fda.gov pages (drug
+ * shortages, safety communications, press releases) often name the drug in their link but are not the label.
+ */
+function isLabelLink(url: string): boolean {
+  const parsed = parse(url);
+  if (!parsed) return false;
+  return parsed.hostname.toLowerCase() === 'dailymed.nlm.nih.gov' || isLabelPath(parsed.pathname);
+}
+
 /** Whether `url` carries the label's SPL set id, as DailyMed links do (`setid=<uuid>`). */
 function hasSetId(url: string, setId: string | undefined): boolean {
   const id = setId?.trim().toLowerCase() ?? '';
@@ -47,13 +59,18 @@ function hasSetId(url: string, setId: string | undefined): boolean {
 const longest = (names: string[]): string | null =>
   names.reduce<string | null>((best, g) => (best === null || g.length > best.length ? g : best), null);
 
-/** The looked-up drug an FDA-label source is for: by its label's identifiers in the link, else by name. */
+/**
+ * The looked-up drug an FDA-label source is for: by its label's identifiers in the link, else by name. The
+ * name match applies only to an unresolved source or a label link, so a shortage page that names the drug
+ * is never titled as its prescribing information.
+ */
 function drugFor(source: EnrichedSource, drugs: DrugLookup[]): string | null {
   const url = source.url ?? '';
   const byId = url
     ? drugs.find(d => hasApplicationNumber(url, d.application_number) || hasSetId(url, d.set_id))
     : undefined;
   if (byId && byId.generic_name.trim()) return byId.generic_name.trim();
+  if (url && !isLabelLink(url)) return null;
 
   const haystack = `${source.title} ${url}`.toLowerCase();
   const generics = drugs.map(d => d.generic_name.trim()).filter(Boolean);
@@ -63,8 +80,9 @@ function drugFor(source: EnrichedSource, drugs: DrugLookup[]): string | null {
 /**
  * Replaces the title of each FDA-label source that is for a looked-up drug with a readable
  * "Brand (Generic) prescribing information" title. A label is matched by the application number or
- * set id of the drug's openFDA label in its link, or by the generic name in its title or link. Other
- * sources, and labels for no looked-up drug, are returned unchanged.
+ * set id of the drug's openFDA label in its link, or by the generic name in its title or link when the
+ * link is a DailyMed or Drugs@FDA label link (or unresolved). Other sources, and labels for no looked-up
+ * drug, are returned unchanged.
  */
 export function titleFdaLabels(sources: EnrichedSource[], lookup: LookupResult | null): EnrichedSource[] {
   if (!lookup || lookup.drug_lookups.length === 0) return sources;

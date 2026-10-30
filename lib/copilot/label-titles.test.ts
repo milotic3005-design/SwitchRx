@@ -39,6 +39,30 @@ describe('titleFdaLabels', () => {
   it('does not match on an empty generic name', () => {
     expect(titleFdaLabels([label], lookupFor(''))).toEqual([label]);
   });
+  describe('by name, only on label links', () => {
+    // Every fda.gov page is typed as an FDA label, and Gemini's grounding title for these links is just the domain.
+    const fdaPage = (url: string) => ({ ...label, title: 'fda.gov', site: new URL(url).hostname, url });
+
+    it('leaves an FDA page that is not a label alone even when its link names the drug', () => {
+      for (const [url, drug] of [
+        // The Drug Shortages page cited for "alternatives when cefazolin is on shortage".
+        ['https://www.accessdata.fda.gov/scripts/drugshortages/dsp_ActiveIngredientDetails.cfm?AI=Cefazolin%20Sodium%20Injection&st=c', 'cefazolin'],
+        // A Drug Safety Communication.
+        ['https://www.fda.gov/drugs/drug-safety-and-availability/fda-drug-safety-communication-vancomycin-dosing-errors', 'vancomycin'],
+      ]) {
+        const source = fdaPage(url);
+        expect(titleFdaLabels([source], lookupFor(drug))[0], url).toEqual(source);
+      }
+    });
+    it('still names a DailyMed page or a Drugs@FDA label link by the drug in it', () => {
+      const dailymed = fdaPage('https://dailymed.nlm.nih.gov/dailymed/search.cfm?query=cefazolin');
+      const pdf = fdaPage('https://www.accessdata.fda.gov/drugsatfda_docs/label/2021/cefazolin_sodium_lbl.pdf');
+      expect(titleFdaLabels([dailymed, pdf], lookupFor('cefazolin')).map(s => s.title)).toEqual([
+        'Ancef (Cefazolin) prescribing information',
+        'Ancef (Cefazolin) prescribing information',
+      ]);
+    });
+  });
   describe('by label identifiers', () => {
     const ACCESSDATA = 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/103772s5412lbl.pdf';
     const SET_ID = 'B4F9D3A1-5C7E-4E2B-9F6A-0D8C1E2F3A4B';
