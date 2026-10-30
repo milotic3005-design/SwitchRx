@@ -45,7 +45,7 @@ describe('pathTitle', () => {
   });
 
   it('keeps a segment that does not decode as it is', () => {
-    expect(pathTitle('https://example.org/guides/100%25-bad%E0')).toBe('Guides › 100%25 bad%E0');
+    expect(pathTitle('https://example.org/guides/dosing-100%25-bad%E0')).toBe('Guides › Dosing 100%25 bad%E0');
   });
 
   it('skips generic segments', () => {
@@ -82,6 +82,17 @@ describe('pathTitle', () => {
   it('keeps short or separated tokens that mix letters and digits', () => {
     expect(pathTitle('https://example.org/guidance/covid-19')).toBe('Guidance › Covid 19');
     expect(pathTitle('https://example.org/products/b12')).toBe('Products › B12');
+  });
+
+  it('skips a segment with at least five digits and no more letters than digits, such as an Elsevier article id', () => {
+    expect(pathTitle('https://www.ajkd.org/article/S0272-6386(20)30123-4/fulltext')).toBeNull();
+    expect(pathTitle('https://www.jacionline.org/article/S0091-6749(19)31234-5/fulltext')).toBeNull();
+    expect(pathTitle('https://example.org/documents/doc-20240118-001')).toBe('Documents');
+  });
+
+  it('still titles a segment where a year sits among words', () => {
+    expect(pathTitle('https://example.org/guidelines/2024-ashp-guidelines')).toBe('Guidelines › 2024 ashp guidelines');
+    expect(pathTitle('https://example.org/news/fda-update-12345-infliximab-biosimilars')).toBe('News › Fda update 12345 infliximab biosimilars');
   });
 
   it('drops a file extension but marks a PDF', () => {
@@ -141,6 +152,14 @@ describe('titleWebSources', () => {
       const source = resolved('example.org', 'https://example.org/vancomycin-dosing', { type });
       expect(titleWebSources([source])[0], type).toEqual(source);
     }
+  });
+
+  it('keeps the domain title for an article on a journal host it does not know, or on Europe PMC', () => {
+    // Neither gets a path title: an Elsevier article id is not words, and Europe PMC is a literature host.
+    const ajkd = resolved('ajkd.org', 'https://www.ajkd.org/article/S0272-6386(20)30123-4/fulltext');
+    const europepmc = resolved('europepmc.org', 'https://europepmc.org/article/MED/32345678');
+    expect(europepmc.type).toBe('journal');
+    expect(titleWebSources([ajkd, europepmc])).toEqual([ajkd, europepmc]);
   });
 
   it('still titles guideline, agency, FDA and web pages', () => {

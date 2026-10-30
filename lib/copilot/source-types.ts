@@ -29,6 +29,7 @@ const JOURNAL_HOSTS = [
   'ashpublications.org',
   'ascopubs.org',
   'asm.org',
+  'europepmc.org',
 ];
 const AGENCY_HOSTS = ['cdc.gov', 'nih.gov', 'who.int', 'cms.gov'];
 

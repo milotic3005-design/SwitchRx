@@ -16,6 +16,7 @@ describe('classifySource', () => {
     [{ host: 'pubmed.ncbi.nlm.nih.gov' }, 'journal'],
     [{ host: 'pmc.ncbi.nlm.nih.gov' }, 'journal'],
     [{ host: 'www.nejm.org' }, 'journal'],
+    [{ host: 'europepmc.org' }, 'journal'],
     [{ host: 'www.cdc.gov' }, 'agency'],
     [{ host: 'example.com' }, 'web'],
   ])('classifySource(%o) → %s', (input, type) => expect(classifySource(input)).toBe(type));

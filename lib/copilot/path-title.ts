@@ -51,11 +51,14 @@ const FILE_EXTENSION = /\.[a-z][a-z0-9]{0,4}$/i;
 
 /**
  * Whether a segment is an identifier rather than words: a long run of letters and digits with no
- * separators ("103772s5412lbl", "PMC4558633"), or hex digits split by dashes or underscores (UUIDs,
- * dates such as "2024-10-29").
+ * separators ("103772s5412lbl", "PMC4558633"), hex digits split by dashes or underscores (UUIDs, dates
+ * such as "2024-10-29"), or anything with at least five digits and no more letters than digits, such as
+ * an Elsevier article id ("S0272-6386(20)30123-4"). A year among words ("2024-ashp-guidelines") stays.
  */
 function isIdLike(text: string): boolean {
   if (/^[a-z0-9]{8,}$/i.test(text) && /\d/.test(text) && /[a-z]/i.test(text)) return true;
+  const digits = text.match(/\d/g)?.length ?? 0;
+  if (digits >= 5 && digits >= (text.match(/\p{L}/gu)?.length ?? 0)) return true;
   return text.length >= 8 && /\d/.test(text) && /^[0-9a-f]+(?:[-_][0-9a-f]+)+$/i.test(text);
 }
 
