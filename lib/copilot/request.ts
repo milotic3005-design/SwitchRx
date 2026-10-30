@@ -42,6 +42,7 @@ export function buildCopilotRequest(args: {
     ]);
   messages.push({ role: 'user', content: question });
 
-  // Both depths think at HIGH and differ only by the addendum: LOW thinking skipped Google Search in live runs.
+  // Both depths think at HIGH and differ only by the addendum. Quick answers skipped Google Search in live runs at
+  // LOW and at HIGH until the Quick addendum said to search anyway, so HIGH is kept as the safer setting.
   return { system, messages, thinkingLevel: 'high' };
 }

@@ -164,7 +164,9 @@ describe('INFUSION_QA_SYSTEM_PROMPT', () => {
 
 describe('COPILOT_DEPTH_ADDENDA', () => {
   it('pins the exact depth instructions', () => {
-    expect(COPILOT_DEPTH_ADDENDA.quick).toBe('Be brief: 1–3 short paragraphs or a short list; skip background.');
+    expect(COPILOT_DEPTH_ADDENDA.quick).toBe(
+      'Be brief in what you write: 1–3 short paragraphs or a short list; skip background. Brevity applies only to the written answer: still search before you answer, exactly as for a full answer.',
+    );
     expect(COPILOT_DEPTH_ADDENDA.thorough).toBe(
       'Give a complete answer: lead with the bottom line, then short sections as the question requires.',
     );
