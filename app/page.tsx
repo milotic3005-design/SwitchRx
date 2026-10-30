@@ -1,14 +1,13 @@
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import { SwitchingProtocols } from '@/components/SwitchingProtocols';
-import { ClinicalChat } from '@/components/ClinicalChat';
-import { InfusionConsult } from '@/components/InfusionConsult';
+import { CopilotGate } from '@/components/copilot/CopilotGate';
 import { ClinicalCalculators } from '@/components/ClinicalCalculators';
 import { DrugReference } from '@/components/DrugReference';
 import { BreakRoom } from '@/components/BreakRoom';
 import { MixingGuide } from '@/components/MixingGuide';
 import { Starfield } from '@/components/Starfield';
-import { Activity, ArrowRight, MessageSquare, Network, Calculator, FlaskConical, Beaker, Coffee, Sun, Moon } from 'lucide-react';
+import { Activity, ArrowRight, Network, Calculator, FlaskConical, Beaker, Coffee, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 
@@ -82,15 +81,9 @@ export default function Home() {
 
   const infusionTab = useMemo(() => (
     <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
-      <InfusionConsult prefillScenario={pendingScenario} />
+      <CopilotGate prefillScenario={pendingScenario} />
     </div>
   ), [pendingScenario]);
-
-  const chatTab = useMemo(() => (
-    <div className="pt-28 pb-8 px-6 md:px-12 max-w-5xl mx-auto w-full h-screen">
-      <ClinicalChat />
-    </div>
-  ), []);
 
   const calculatorsTab = useMemo(() => <ClinicalCalculators />, []);
 
@@ -126,12 +119,6 @@ export default function Home() {
             className={`text-[13px] font-medium transition-all px-3 xl:px-4 py-2 rounded-full ${activeTab === 'infusion' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           >
             Infusion Copilot
-          </button>
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`text-[13px] font-medium transition-all px-3 xl:px-4 py-2 rounded-full ${activeTab === 'chat' ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-          >
-            Clinical Chat
           </button>
           <button
             onClick={() => setActiveTab('calculators')}
@@ -223,7 +210,7 @@ export default function Home() {
                 className="text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed"
                 style={{ color: 'var(--cc-muted)' }}
               >
-                Empower your clinical practice with AI-driven medication switching protocols and evidence-based clinical chat.
+                Empower your clinical practice with AI-driven medication switching protocols and an evidence-cited infusion copilot.
               </motion.p>
 
               <motion.div
@@ -246,13 +233,6 @@ export default function Home() {
                   <Network size={18} className="text-blue-400" />
                   Infusion Copilot
                 </button>
-                <button
-                  onClick={() => setActiveTab('chat')}
-                  className="glass-card w-full sm:w-auto px-8 py-4 rounded-full font-medium flex items-center justify-center gap-2 hover:bg-white/5 transition-all text-[15px] border border-white/10 text-white"
-                >
-                  <MessageSquare size={18} className="text-emerald-400" />
-                  Clinical Chat
-                </button>
               </motion.div>
             </div>
           </div>
@@ -270,10 +250,6 @@ export default function Home() {
 
         <div className={activeTab === 'infusion' ? 'contents' : 'hidden'}>
           {infusionTab}
-        </div>
-
-        <div className={activeTab === 'chat' ? 'contents' : 'hidden'}>
-          {chatTab}
         </div>
 
         <div className={activeTab === 'calculators' ? 'contents' : 'hidden'}>

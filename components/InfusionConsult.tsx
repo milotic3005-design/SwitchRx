@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { History, SquarePen } from 'lucide-react';
+import { History, Lock, SquarePen } from 'lucide-react';
 import { Composer } from './copilot/Composer';
 import { CopilotHome } from './copilot/CopilotHome';
 import { HistoryDrawer } from './copilot/HistoryDrawer';
@@ -18,12 +18,14 @@ const BAR_BUTTON = `inline-flex items-center gap-1.5 rounded-lg border border-wh
  * The Infusion Copilot tab: a question box on the home screen, then the open thread with a docked box
  * for follow-ups, plus the saved-thread history. A question handed over from another tab
  * (`prefillScenario`, re-applied whenever its token changes) starts a new question with the box filled
- * in but not sent.
+ * in but not sent. `onLock`, when given, adds a Lock button that returns to the password screen.
  */
 export function InfusionConsult({
   prefillScenario,
+  onLock,
 }: {
   prefillScenario?: { scenario: string; autoSubmit: boolean; token: number } | null;
+  onLock?: () => void;
 } = {}) {
   const { state, activeThread, busy, storageAvailable, ask, stop, retry, newQuestion, openThread, deleteThread, clearAll } =
     useCopilot();
@@ -100,16 +102,24 @@ export function InfusionConsult({
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          ref={historyButtonRef}
-          type="button"
-          aria-expanded={historyOpen}
-          onClick={() => setHistoryOpen(open => !open)}
-          className={BAR_BUTTON}
-        >
-          <History size={14} aria-hidden="true" />
-          History
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            ref={historyButtonRef}
+            type="button"
+            aria-expanded={historyOpen}
+            onClick={() => setHistoryOpen(open => !open)}
+            className={BAR_BUTTON}
+          >
+            <History size={14} aria-hidden="true" />
+            History
+          </button>
+          {onLock && (
+            <button type="button" onClick={onLock} className={BAR_BUTTON}>
+              <Lock size={14} aria-hidden="true" />
+              Lock
+            </button>
+          )}
+        </div>
         {!storageAvailable && <p className="text-[12px] text-slate-500">History can&apos;t be saved in this browser</p>}
         {activeThread && (
           <button type="button" onClick={newQuestion} className={BAR_BUTTON}>
