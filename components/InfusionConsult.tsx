@@ -6,6 +6,7 @@ import { CopilotHome } from './copilot/CopilotHome';
 import { HistoryDrawer } from './copilot/HistoryDrawer';
 import { ThreadView } from './copilot/ThreadView';
 import { useCopilot } from './copilot/useCopilot';
+import { draftAt, draftKey, HOME_DRAFT, homeDraftOnly, withDraft, type Drafts } from '@/lib/copilot/drafts';
 import { buildDrugMatcher } from '@/lib/copilot/markdown';
 import type { Depth } from '@/lib/copilot/types';
 
@@ -18,7 +19,9 @@ const BAR_BUTTON = `inline-flex items-center gap-1.5 rounded-lg border border-wh
  * The Infusion Copilot tab: a question box on the home screen, then the open thread with a docked box
  * for follow-ups, plus the saved-thread history. A question handed over from another tab
  * (`prefillScenario`, re-applied whenever its token changes) starts a new question with the box filled
- * in but not sent. `onLock`, when given, adds a Lock button that returns to the password screen.
+ * in but not sent. The box keeps one draft per place (home and each thread), so text typed for one case is
+ * never sent into another thread. `onLock`, when given, adds a Lock button that returns to the password
+ * screen.
  */
 export function InfusionConsult({
   prefillScenario,
@@ -29,19 +32,23 @@ export function InfusionConsult({
 } = {}) {
   const { state, activeThread, busy, storageAvailable, ask, stop, retry, newQuestion, openThread, deleteThread, clearAll } =
     useCopilot();
-  const [draft, setDraft] = useState('');
+  // Unsent text per place: the home screen's draft, and each thread's own half-typed follow-up.
+  const [drafts, setDrafts] = useState<Drafts>({});
+  const key = draftKey(state.activeThreadId);
+  const draft = draftAt(drafts, key);
+  const setDraft = useCallback((text: string) => setDrafts(d => withDraft(d, key, text)), [key]);
   const [depth, setDepth] = useState<Depth>('thorough');
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyButtonRef = useRef<HTMLButtonElement>(null);
   // DRUG_DB is static, so the drug-name matcher is built once.
   const [drugMatcher] = useState(buildDrugMatcher);
 
-  // A new prefill fills the box during render, so it shows in the same render that makes the tab visible;
-  // leaving the open thread for the home screen happens just after, in the effect below.
+  // A new prefill fills the home box during render, so it shows in the same render that makes the tab visible
+  // when home is on screen; leaving an open thread for the home screen happens just after, in the effect below.
   const [prefillToken, setPrefillToken] = useState<number | null>(null);
   if (prefillScenario && prefillScenario.token !== prefillToken) {
     setPrefillToken(prefillScenario.token);
-    setDraft(prefillScenario.scenario);
+    setDrafts(d => withDraft(d, HOME_DRAFT, prefillScenario.scenario));
   }
   const handledPrefill = useRef<number | null>(null);
   useEffect(() => {
@@ -71,6 +78,7 @@ export function InfusionConsult({
     };
   }, [threadOpen]);
 
+  // Sending clears only the box it was sent from (`setDraft` is bound to that place's key).
   const submit = () => {
     ask(draft, depth);
     setDraft('');
@@ -85,6 +93,17 @@ export function InfusionConsult({
     },
     [openThread],
   );
+  const removeThread = useCallback(
+    (id: string) => {
+      deleteThread(id);
+      setDrafts(d => withDraft(d, id, ''));
+    },
+    [deleteThread],
+  );
+  const clearHistory = useCallback(() => {
+    clearAll();
+    setDrafts(homeDraftOnly);
+  }, [clearAll]);
 
   const composer = (variant: 'hero' | 'docked') => (
     <Composer
@@ -153,8 +172,8 @@ export function InfusionConsult({
         threads={state.threads}
         activeThreadId={state.activeThreadId}
         onOpen={openFromHistory}
-        onDelete={deleteThread}
-        onClearAll={clearAll}
+        onDelete={removeThread}
+        onClearAll={clearHistory}
         storageAvailable={storageAvailable}
         returnFocusRef={historyButtonRef}
       />
