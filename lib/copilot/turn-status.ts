@@ -31,6 +31,23 @@ export const endsTurn = (patch: TurnPatch): boolean =>
   patch.status !== undefined && !isRunning({ status: patch.status, sourceRetry: patch.sourceRetry });
 
 /**
+ * The filter for a run's updates. Until `signal` aborts, every update passes. After it, only the first update that
+ * finishes the turn passes (a stop mid-answer ends it as stopped; a stop during the source retry ends it as done
+ * with the first answer), and nothing after that, so a late update can never reopen or change a stopped turn.
+ */
+export function acceptAfterStop(signal: AbortSignal): (patch: TurnPatch) => boolean {
+  let ended = false;
+  return patch => {
+    if (ended) return false;
+    if (signal.aborted) {
+      if (!endsTurn(patch)) return false;
+      ended = true;
+    }
+    return true;
+  };
+}
+
+/**
  * Whether the classifier named at least one drug, whether or not openFDA had its label (a 429, a timeout or
  * a combination name also comes back as not found). The one rule for both reusing an earlier turn's lookup
  * and skipping the timeline's drug and FDA steps.

@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { LookupResult } from '@/lib/pharmacy-lookup';
-import { answeredWithoutSources, effectiveLookup, endsTurn, isRunning, namesDrug, stepStates as statesFor } from './turn-status';
+import {
+  acceptAfterStop,
+  answeredWithoutSources,
+  effectiveLookup,
+  endsTurn,
+  isRunning,
+  namesDrug,
+  stepStates as statesFor,
+} from './turn-status';
 import { fallbackSource } from './source-types';
 import type { CopilotTurn, LookupState, TurnStatus } from './types';
 
@@ -93,6 +101,36 @@ describe('endsTurn', () => {
     expect(endsTurn({ status: 'resolving' })).toBe(false);
     // The first answer is done, but it is being asked again for sources.
     expect(endsTurn({ status: 'done', sourceRetry: true })).toBe(false);
+  });
+});
+
+describe('acceptAfterStop', () => {
+  it('passes every patch while the run has not been stopped', () => {
+    const accept = acceptAfterStop(new AbortController().signal);
+    expect(accept({ status: 'streaming' })).toBe(true);
+    expect(accept({ answer: 'Partial' })).toBe(true);
+    expect(accept({ status: 'done', sourceRetry: true })).toBe(true);
+    expect(accept({ status: 'done', sourceRetry: false })).toBe(true);
+  });
+
+  it('after a stop, passes only the first patch that finishes the turn, then nothing', () => {
+    const controller = new AbortController();
+    const accept = acceptAfterStop(controller.signal);
+    controller.abort();
+    expect(accept({ answer: 'late text' })).toBe(false);
+    // A stop during the source retry ends the turn as done with the first answer, not as stopped.
+    expect(accept({ status: 'done', sourceRetry: false })).toBe(true);
+    expect(accept({ status: 'stopped' })).toBe(false);
+    expect(accept({ answer: 'even later' })).toBe(false);
+  });
+
+  it('after a stop mid-answer, passes the stopped patch', () => {
+    const controller = new AbortController();
+    const accept = acceptAfterStop(controller.signal);
+    expect(accept({ answer: 'Partial' })).toBe(true);
+    controller.abort();
+    expect(accept({ status: 'stopped' })).toBe(true);
+    expect(accept({ status: 'done' })).toBe(false);
   });
 });
 

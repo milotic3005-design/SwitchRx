@@ -5,7 +5,7 @@ import { runTurn, type CopilotTransport } from '@/lib/copilot/run-turn';
 import { copilotReducer, type CopilotAction, type CopilotState } from '@/lib/copilot/state';
 import { loadThreads, saveThreads, type StorageLike } from '@/lib/copilot/threads';
 import { realTransport } from '@/lib/copilot/transport';
-import { endsTurn, FINISHED_STATUSES, isRunning } from '@/lib/copilot/turn-status';
+import { acceptAfterStop, FINISHED_STATUSES, isRunning } from '@/lib/copilot/turn-status';
 import type { CopilotThread, CopilotTurn, Depth, TurnPatch } from '@/lib/copilot/types';
 
 interface Snapshot {
@@ -180,13 +180,9 @@ export function useCopilot(): Copilot {
 
       const controller = new AbortController();
       runRef.current = controller;
-      let ended = false;
+      const accept = acceptAfterStop(controller.signal);
       const onUpdate = (patch: TurnPatch) => {
-        if (ended) return;
-        if (controller.signal.aborted) {
-          if (!endsTurn(patch)) return;
-          ended = true;
-        }
+        if (!accept(patch)) return;
         store.dispatch({ type: 'patchTurn', threadId, turnId: turn.id, patch, now: Date.now() });
       };
 
