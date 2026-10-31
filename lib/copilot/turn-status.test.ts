@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { LookupResult } from '@/lib/pharmacy-lookup';
-import { answeredWithoutSources, effectiveLookup, namesDrug, stepStates as statesFor } from './turn-status';
+import { answeredWithoutSources, effectiveLookup, endsTurn, isRunning, namesDrug, stepStates as statesFor } from './turn-status';
 import { fallbackSource } from './source-types';
 import type { CopilotTurn, LookupState, TurnStatus } from './types';
 
@@ -68,6 +68,34 @@ describe('effectiveLookup', () => {
   });
 });
 
+describe('isRunning', () => {
+  it('is true while the answer is in flight and false once it has finished', () => {
+    for (const status of ['lookup', 'streaming', 'resolving'] as const) expect(isRunning(turn(status, 'ok')), status).toBe(true);
+    for (const status of ['done', 'stopped', 'error'] as const) expect(isRunning(turn(status, 'ok')), status).toBe(false);
+  });
+
+  it('is true for a finished answer that is being asked again for sources', () => {
+    expect(isRunning(turn('done', 'ok', { answer: 'Infuse over 2 hours.', sourceRetry: true }))).toBe(true);
+    expect(isRunning(turn('done', 'ok', { answer: 'Infuse over 2 hours.', sourceRetry: false }))).toBe(false);
+  });
+});
+
+describe('endsTurn', () => {
+  it('is true for the patch that leaves the turn finished', () => {
+    expect(endsTurn({ status: 'stopped' })).toBe(true);
+    expect(endsTurn({ status: 'error', error: 'boom' })).toBe(true);
+    expect(endsTurn({ status: 'done' })).toBe(true);
+    expect(endsTurn({ status: 'done', sourceRetry: false })).toBe(true);
+  });
+
+  it('is false for a patch that leaves the turn running', () => {
+    expect(endsTurn({ answer: 'Partial' })).toBe(false);
+    expect(endsTurn({ status: 'resolving' })).toBe(false);
+    // The first answer is done, but it is being asked again for sources.
+    expect(endsTurn({ status: 'done', sourceRetry: true })).toBe(false);
+  });
+});
+
 describe('stepStates', () => {
   it('shows the lookup in progress, then the search, then done', () => {
     expect(stepStates(turn('lookup', 'pending'))).toEqual({
@@ -77,6 +105,7 @@ describe('stepStates', () => {
       search: 'pending',
       done: 'pending',
       noDrugs: false,
+      searchingAgain: false,
     });
     expect(stepStates(turn('streaming', 'ok'))).toMatchObject({ running: true, drugs: 'done', fda: 'done', search: 'active', done: 'pending' });
     expect(stepStates(turn('resolving', 'ok'))).toMatchObject({ running: true, search: 'active', done: 'pending' });
@@ -87,6 +116,7 @@ describe('stepStates', () => {
       search: 'done',
       done: 'done',
       noDrugs: false,
+      searchingAgain: false,
     });
   });
 
@@ -116,6 +146,7 @@ describe('stepStates', () => {
       search: 'done',
       done: 'done',
       noDrugs: true,
+      searchingAgain: false,
     });
     // Also while the answer is still streaming.
     expect(stepStates(turn('streaming', 'ok', { lookup: lookupFor() }))).toMatchObject({
@@ -123,6 +154,7 @@ describe('stepStates', () => {
       fda: 'skipped',
       search: 'active',
       noDrugs: true,
+      searchingAgain: false,
     });
   });
 
@@ -135,6 +167,20 @@ describe('stepStates', () => {
     expect(statesFor(reusing, lookupFor('infliximab'))).toMatchObject({ drugs: 'done', fda: 'done', noDrugs: false });
     // A reference to a turn that is gone shows no lookup, so nothing was checked.
     expect(statesFor(reusing, null)).toMatchObject({ drugs: 'skipped', fda: 'skipped', noDrugs: true });
+  });
+
+  it('shows the search as active again while a finished answer is asked again for sources', () => {
+    const retrying = turn('done', 'ok', { answer: 'Infuse over 2 hours.', sourceRetry: true });
+    expect(stepStates(retrying)).toEqual({
+      running: true,
+      drugs: 'done',
+      fda: 'done',
+      search: 'active',
+      done: 'pending',
+      noDrugs: false,
+      searchingAgain: true,
+    });
+    expect(stepStates({ ...retrying, sourceRetry: false })).toMatchObject({ running: false, search: 'done', done: 'done', searchingAgain: false });
   });
 
   it('counts a drug the classifier named even when openFDA had no label for it', () => {
@@ -158,6 +204,11 @@ describe('answeredWithoutSources', () => {
   it('is false without answer text', () => {
     expect(answeredWithoutSources(turn('done', 'ok', { answer: '' }))).toBe(false);
     expect(answeredWithoutSources(turn('done', 'ok', { answer: ' \n ' }))).toBe(false);
+  });
+
+  it('is false while the answer is being asked again for sources', () => {
+    expect(answeredWithoutSources(turn('done', 'ok', { answer: 'Infuse over 2 hours.', sourceRetry: true }))).toBe(false);
+    expect(answeredWithoutSources(turn('done', 'ok', { answer: 'Infuse over 2 hours.', sourceRetry: false }))).toBe(true);
   });
 
   it('is false while the turn runs, and for a stopped or failed turn', () => {

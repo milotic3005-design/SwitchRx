@@ -1,4 +1,5 @@
-import type { CopilotThread, CopilotTurn, TurnStatus } from './types';
+import { FINISHED_STATUSES } from './turn-status';
+import type { CopilotThread, CopilotTurn } from './types';
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -6,9 +7,6 @@ export const THREADS_KEY = 'switchrx.copilot.threads.v1';
 export const MAX_THREADS = 50;
 
 const STORAGE_VERSION = 1;
-
-/** Turns still in flight are never saved: nothing would be running them after a reload. */
-const PERSISTED_STATUSES: ReadonlySet<TurnStatus> = new Set<TurnStatus>(['done', 'stopped', 'error']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -41,12 +39,20 @@ function isThreadShape(value: unknown): value is CopilotThread {
 }
 
 /**
- * What may be stored: only finished turns, no thread left empty, the
- * MAX_THREADS most recently updated threads, newest first. Never mutates `threads`.
+ * A finished turn as stored. An answer being asked again for sources is stored as the finished first answer it
+ * already is: nothing would be asking again after a reload.
+ */
+function persistedTurn({ sourceRetry: _retrying, ...turn }: CopilotTurn): CopilotTurn {
+  return turn;
+}
+
+/**
+ * What may be stored: only finished turns (`FINISHED_STATUSES`; nothing would be running any other after a
+ * reload), no thread left empty, the MAX_THREADS most recently updated threads, newest first. Never mutates `threads`.
  */
 function toPersistable(threads: CopilotThread[]): CopilotThread[] {
   return threads
-    .map((t) => ({ ...t, turns: t.turns.filter((turn) => PERSISTED_STATUSES.has(turn.status)) }))
+    .map((t) => ({ ...t, turns: t.turns.filter((turn) => FINISHED_STATUSES.has(turn.status)).map(persistedTurn) }))
     .filter((t) => t.turns.length > 0)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_THREADS);

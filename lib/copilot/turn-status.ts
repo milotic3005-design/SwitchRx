@@ -1,5 +1,5 @@
 import type { LookupResult } from '@/lib/pharmacy-lookup';
-import type { CopilotTurn } from './types';
+import type { CopilotTurn, TurnPatch, TurnStatus } from './types';
 
 export type StepState = 'pending' | 'active' | 'done' | 'failed' | 'skipped';
 
@@ -11,7 +11,24 @@ export interface StepStates {
   done: StepState;
   /** The lookup finished but named no drug, so nothing was checked against FDA labels. */
   noDrugs: boolean;
+  /** The answer came back without sources and is being asked again (`sourceRetry`). */
+  searchingAgain: boolean;
 }
+
+/** The statuses an answer ends in. Only turns in one of them are saved: nothing would finish any other after a reload. */
+export const FINISHED_STATUSES: ReadonlySet<TurnStatus> = new Set<TurnStatus>(['done', 'stopped', 'error']);
+
+/**
+ * Whether a turn is still being worked on: its answer has not finished, or it is a finished answer that came back
+ * without sources and is being asked again (`sourceRetry`). The one rule for the Composer's Stop, the timeline and
+ * the turn's actions.
+ */
+export const isRunning = (turn: Pick<CopilotTurn, 'status' | 'sourceRetry'>): boolean =>
+  !FINISHED_STATUSES.has(turn.status) || turn.sourceRetry === true;
+
+/** Whether `patch` leaves its turn finished, i.e. is the runner's last update for it. */
+export const endsTurn = (patch: TurnPatch): boolean =>
+  patch.status !== undefined && !isRunning({ status: patch.status, sourceRetry: patch.sourceRetry });
 
 /**
  * Whether the classifier named at least one drug, whether or not openFDA had its label (a 429, a timeout or
@@ -34,16 +51,15 @@ export function effectiveLookup(
   return { lookup, fromEarlierTurn: lookup !== null };
 }
 
-const isRunning = (turn: CopilotTurn): boolean =>
-  turn.status === 'lookup' || turn.status === 'streaming' || turn.status === 'resolving';
-
 /**
  * Where each of the timeline's four steps stands, from the turn's status, the state of its pharmacy lookup,
  * and the lookup it shows (`effectiveLookup`). A lookup that worked but named no drug leaves the drug and
- * FDA steps skipped rather than done.
+ * FDA steps skipped rather than done. While a finished answer is asked again for sources the search is
+ * active again and Done waits.
  */
 export function stepStates(turn: CopilotTurn, lookup: LookupResult | null): StepStates {
   const running = isRunning(turn);
+  const searchingAgain = turn.sourceRetry === true;
   const noDrugs = turn.lookupState === 'ok' && !namesDrug(lookup);
   const lookupStep: StepState =
     turn.lookupState === 'pending'
@@ -56,9 +72,9 @@ export function stepStates(turn: CopilotTurn, lookup: LookupResult | null): Step
           ? 'skipped'
           : 'done';
   const search: StepState =
-    turn.status === 'done'
+    turn.status === 'done' && !searchingAgain
       ? 'done'
-      : turn.status === 'streaming' || turn.status === 'resolving'
+      : turn.status === 'streaming' || turn.status === 'resolving' || searchingAgain
         ? 'active'
         : turn.status === 'lookup'
           ? 'pending'
@@ -69,12 +85,16 @@ export function stepStates(turn: CopilotTurn, lookup: LookupResult | null): Step
     drugs: lookupStep === 'failed' ? 'skipped' : lookupStep,
     fda: lookupStep,
     search,
-    done: turn.status === 'done' ? 'done' : running ? 'pending' : 'skipped',
+    done: running ? 'pending' : turn.status === 'done' ? 'done' : 'skipped',
     noDrugs,
+    searchingAgain,
   };
 }
 
-/** A finished answer that came back without a single source, so nothing in it is cited. */
+/**
+ * A finished answer that came back without a single source, so nothing in it is cited. Not while it is being
+ * asked again for sources: that may still bring some.
+ */
 export function answeredWithoutSources(turn: CopilotTurn): boolean {
-  return turn.status === 'done' && turn.answer.trim() !== '' && turn.sources.length === 0;
+  return turn.status === 'done' && !isRunning(turn) && turn.answer.trim() !== '' && turn.sources.length === 0;
 }

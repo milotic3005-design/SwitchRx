@@ -3,10 +3,12 @@ import type { CitationSupport, GroundingSource } from '@/lib/ai';
 import { formatLookupForPrompt, type LookupResult } from '@/lib/pharmacy-lookup';
 import { generateSafetyFlags } from '@/lib/pharmacy-lookup/safety-checker';
 import { titleFdaLabels } from './label-titles';
+import { titleWebSources } from './path-title';
 import { buildCopilotRequest, type CopilotRequest } from './request';
 import { runTurn, type CopilotTransport } from './run-turn';
 import { fallbackSource } from './source-types';
 import { realTransport } from './transport';
+import { answeredWithoutSources, endsTurn, isRunning } from './turn-status';
 import type { CopilotTurn, EnrichedSource, TurnPatch } from './types';
 
 const V = (id: string) => `https://vertexaisearch.cloud.google.com/grounding-api-redirect/${id}`;
@@ -380,13 +382,13 @@ describe('runTurn', () => {
     expect(final.followUps).toHaveLength(3);
   });
 
-  it('skips resolving when the answer has no sources', async () => {
+  it('skips resolving when the answer, and the source retry, have no sources', async () => {
     const t = fakeTransport({
       stream: vi.fn(async (_req: CopilotRequest, cb: StreamCallbacks) => cb.onText(ANSWER)),
     });
     const patches = await run(t);
 
-    expect(statuses(patches)).toEqual(['lookup', 'streaming', 'resolving', 'done']);
+    expect(statuses(patches)).toEqual(['lookup', 'streaming', 'resolving', 'done', 'done']);
     expect(t.resolve).not.toHaveBeenCalled();
     expect(merge(patches).sources).toBeUndefined();
   });
@@ -452,6 +454,290 @@ describe('runTurn', () => {
     ]);
     expect(merge(patches).answer).toBe(BODY);
     expect(merge(patches).supports).toEqual(SUPPORTS);
+  });
+});
+
+const RETRY_BODY = 'Infuse over at least 2 hours through a 1.2 µm in-line filter.';
+const RETRY_ANSWER = `${RETRY_BODY}\n\n\`\`\`followups\n- Retry follow-up?\n\`\`\``;
+const RETRY_SUPPORTS: CitationSupport[] = [{ text: RETRY_BODY, sourceIndices: [0, 1] }];
+const FIRST_FOLLOW_UPS = ['First follow-up?', 'Second follow-up?', 'Third follow-up?'];
+
+/** A stream that sends `answer` in two chunks, then `sources` and `supports` when there are any. */
+const answering =
+  (answer: string, sources: GroundingSource[] = [], supports: CitationSupport[] = []) =>
+  async (_req: CopilotRequest, cb: StreamCallbacks) => {
+    cb.onText(answer.slice(0, 10));
+    cb.onText(answer);
+    if (sources.length > 0) cb.onSources(sources);
+    if (supports.length > 0) cb.onSupports(supports);
+  };
+
+/** A transport whose first answer has no sources; `retry` answers the second request. */
+const withoutSourcesFirst = (
+  retry: CopilotTransport['stream'],
+  overrides: Partial<{ [K in keyof CopilotTransport]: Mock<CopilotTransport[K]> }> = {},
+) =>
+  fakeTransport({
+    stream: vi.fn<CopilotTransport['stream']>().mockImplementationOnce(answering(ANSWER)).mockImplementationOnce(retry),
+    ...overrides,
+  });
+
+/** The turn the patches build, starting from a fresh turn for QUESTION. */
+const turnFrom = (patches: TurnPatch[]): CopilotTurn => ({
+  id: 'turn',
+  question: QUESTION,
+  depth: 'thorough',
+  askedAt: 1,
+  status: 'lookup',
+  answer: '',
+  followUps: [],
+  supports: [],
+  sources: [],
+  lookup: null,
+  lookupState: 'pending',
+  ...merge(patches),
+});
+
+/** Where the first answer was reported done and the source retry began. */
+const retryStart = (patches: TurnPatch[]) => patches.findIndex((p) => p.sourceRetry === true);
+
+describe('runTurn source retry', () => {
+  it('asks the same request once more, without a second lookup, when a finished answer has no sources', async () => {
+    const t = fakeTransport({ stream: vi.fn(answering(ANSWER)) });
+    const patches = await run(t);
+
+    // Exactly one retry, even though it has no sources either.
+    expect(t.stream).toHaveBeenCalledTimes(2);
+    expect(t.stream.mock.calls[1][0]).toBe(t.stream.mock.calls[0][0]);
+    expect(t.lookup).toHaveBeenCalledTimes(1);
+    // The first answer is done, and saved as such, before the retry starts.
+    const at = retryStart(patches);
+    expect(patches[at]).toEqual({ status: 'done', sourceRetry: true });
+    expect(turnFrom(patches.slice(0, at + 1))).toMatchObject({ status: 'done', answer: BODY, followUps: FIRST_FOLLOW_UPS });
+    expect(isRunning(turnFrom(patches.slice(0, at + 1)))).toBe(true);
+    expect(endsTurn(patches.at(-1)!)).toBe(true);
+  });
+
+  it('does not retry an answer that has sources', async () => {
+    const t = fakeTransport();
+    const patches = await run(t);
+
+    expect(t.stream).toHaveBeenCalledTimes(1);
+    expect(patches.some((p) => p.sourceRetry !== undefined)).toBe(false);
+    expect(patches.at(-1)).toEqual({ status: 'done' });
+  });
+
+  it('does not retry when the stream fails', async () => {
+    const t = fakeTransport({
+      stream: vi.fn(async (_req: CopilotRequest, cb: StreamCallbacks) => {
+        cb.onText(ANSWER);
+        throw new Error('boom');
+      }),
+    });
+    const patches = await run(t);
+
+    expect(t.stream).toHaveBeenCalledTimes(1);
+    expect(patches.at(-1)).toEqual({ status: 'error', error: 'boom' });
+    expect(patches.some((p) => p.sourceRetry !== undefined)).toBe(false);
+  });
+
+  it('does not retry when stopped as the answer finishes', async () => {
+    const controller = new AbortController();
+    const t = fakeTransport({ stream: vi.fn(answering(ANSWER)) });
+    const patches: TurnPatch[] = [];
+    await runTurn(
+      t,
+      INPUT,
+      (p) => {
+        patches.push(p);
+        if (p.status === 'resolving') controller.abort();
+      },
+      controller.signal,
+    );
+
+    expect(t.stream).toHaveBeenCalledTimes(1);
+    expect(statuses(patches)).toEqual(['lookup', 'streaming', 'resolving', 'stopped']);
+    expect(patches.some((p) => p.sourceRetry !== undefined)).toBe(false);
+  });
+
+  it('does not retry an empty answer', async () => {
+    for (const answer of ['', '```followups\n- Only a follow-up?\n```']) {
+      const t = fakeTransport({ stream: vi.fn(answering(answer)) });
+      const patches = await run(t);
+
+      expect(t.stream, JSON.stringify(answer)).toHaveBeenCalledTimes(1);
+      expect(patches.at(-1)).toEqual({ status: 'done' });
+    }
+  });
+
+  it('replaces the answer, follow-ups, supports and sources with a retry that has sources, resolved and titled', async () => {
+    const t = withoutSourcesFirst(answering(RETRY_ANSWER, SOURCES, RETRY_SUPPORTS));
+    const patches = await run(t);
+    const final = turnFrom(patches);
+
+    expect(t.resolve).toHaveBeenCalledTimes(1);
+    expect(t.resolve).toHaveBeenCalledWith(SOURCES, expect.any(AbortSignal));
+    const titled = titleWebSources(titleFdaLabels(ENRICHED, LOOKUP));
+    expect(titled[0].title).toBe('Remicade (Infliximab) prescribing information');
+    // Swapped in all at once, with the turn left finished.
+    expect(patches.at(-1)).toEqual({
+      answer: RETRY_BODY,
+      followUps: ['Retry follow-up?'],
+      supports: RETRY_SUPPORTS,
+      sources: titled,
+      status: 'done',
+      sourceRetry: false,
+    });
+    expect(final).toMatchObject({ status: 'done', answer: RETRY_BODY, sourceRetry: false });
+    expect(isRunning(final)).toBe(false);
+    expect(answeredWithoutSources(final)).toBe(false);
+  });
+
+  it('swaps in a retry with sources even when they cannot be resolved, keeping their fallbacks', async () => {
+    const t = withoutSourcesFirst(answering(RETRY_ANSWER, SOURCES, RETRY_SUPPORTS), {
+      resolve: vi.fn(async () => Promise.reject(new Error('resolve failed'))),
+    });
+    const final = turnFrom(await run(t));
+
+    expect(final).toMatchObject({ status: 'done', answer: RETRY_BODY, supports: RETRY_SUPPORTS, sourceRetry: false });
+    expect(final.sources).toEqual(SOURCES.map(fallbackSource));
+  });
+
+  it('keeps the first answer when the retry has no sources, and ends done with the no-sources notice', async () => {
+    const t = withoutSourcesFirst(answering(RETRY_ANSWER));
+    const patches = await run(t);
+    const final = turnFrom(patches);
+
+    expect(patches.slice(retryStart(patches) + 1)).toEqual([{ status: 'done', sourceRetry: false }]);
+    expect(final).toMatchObject({ status: 'done', answer: BODY, followUps: FIRST_FOLLOW_UPS, sources: [], sourceRetry: false });
+    expect(t.resolve).not.toHaveBeenCalled();
+    expect(answeredWithoutSources(final)).toBe(true);
+  });
+
+  it('keeps the first answer when the retry has sources but no answer text', async () => {
+    const t = withoutSourcesFirst(answering('```followups\n- Retry follow-up?\n```', SOURCES));
+    const final = turnFrom(await run(t));
+
+    expect(final).toMatchObject({ status: 'done', answer: BODY, followUps: FIRST_FOLLOW_UPS, sources: [], sourceRetry: false });
+    expect(t.resolve).not.toHaveBeenCalled();
+  });
+
+  it('keeps the first answer when the retry fails, and ends done without an error', async () => {
+    const t = withoutSourcesFirst(async (_req, cb) => {
+      cb.onText('Retry partial');
+      cb.onSources(SOURCES);
+      throw new Error('retry boom');
+    });
+    const patches = await run(t);
+    const final = turnFrom(patches);
+
+    expect(patches.slice(retryStart(patches) + 1)).toEqual([{ status: 'done', sourceRetry: false }]);
+    expect(final).toMatchObject({ status: 'done', answer: BODY, followUps: FIRST_FOLLOW_UPS, sources: [] });
+    expect(final.error).toBeUndefined();
+    expect(answeredWithoutSources(final)).toBe(true);
+  });
+
+  it('ends done with the first answer when stopped during the retry, and aborts the retry', async () => {
+    const controller = new AbortController();
+    const retryStarted = deferred<void>();
+    const t = withoutSourcesFirst(
+      (_req, cb, signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+          cb.onText('Retry partial');
+          cb.onSources(SOURCES);
+          retryStarted.resolve();
+        }),
+    );
+    const patches: TurnPatch[] = [];
+    const done = runTurn(t, INPUT, (p) => patches.push(p), controller.signal);
+    await retryStarted.promise;
+    controller.abort();
+    await done;
+    await settle();
+
+    const retrySignal = t.stream.mock.calls[1][2];
+    expect(retrySignal.aborted).toBe(true);
+    expect(patches.slice(retryStart(patches) + 1)).toEqual([{ status: 'done', sourceRetry: false }]);
+    expect(statuses(patches)).not.toContain('stopped');
+    const final = turnFrom(patches);
+    expect(final).toMatchObject({ status: 'done', answer: BODY, followUps: FIRST_FOLLOW_UPS, sources: [] });
+    expect(isRunning(final)).toBe(false);
+    expect(answeredWithoutSources(final)).toBe(true);
+  });
+
+  it('ends done with the first answer when stopped while the retry’s sources resolve', async () => {
+    const controller = new AbortController();
+    const pending = deferred<EnrichedSource[]>();
+    const resolving = deferred<void>();
+    const t = withoutSourcesFirst(answering(RETRY_ANSWER, SOURCES, RETRY_SUPPORTS), {
+      resolve: vi.fn(() => {
+        resolving.resolve();
+        return pending.promise;
+      }),
+    });
+    const patches: TurnPatch[] = [];
+    const done = runTurn(t, INPUT, (p) => patches.push(p), controller.signal);
+    await resolving.promise;
+    controller.abort();
+    await done;
+    pending.resolve(ENRICHED);
+    await settle();
+
+    expect(patches.slice(retryStart(patches) + 1)).toEqual([{ status: 'done', sourceRetry: false }]);
+    expect(turnFrom(patches)).toMatchObject({ status: 'done', answer: BODY, followUps: FIRST_FOLLOW_UPS, sources: [] });
+  });
+
+  it('ends done when stopped as the retry begins, without starting it', async () => {
+    const controller = new AbortController();
+    const t = fakeTransport({ stream: vi.fn(answering(ANSWER)) });
+    const patches: TurnPatch[] = [];
+    await runTurn(
+      t,
+      INPUT,
+      (p) => {
+        patches.push(p);
+        if (p.sourceRetry === true) controller.abort();
+      },
+      controller.signal,
+    );
+
+    expect(t.stream).toHaveBeenCalledTimes(1);
+    expect(patches.slice(retryStart(patches) + 1)).toEqual([{ status: 'done', sourceRetry: false }]);
+    expect(turnFrom(patches)).toMatchObject({ status: 'done', answer: BODY });
+  });
+
+  it('reports nothing while the retry streams, so the first answer is never overwritten', async () => {
+    const patches: TurnPatch[] = [];
+    let retryCb: StreamCallbacks | undefined;
+    const t = withoutSourcesFirst(
+      async (_req, cb) => {
+        retryCb = cb;
+        const before = patches.length;
+        cb.onText('Retry');
+        cb.onText(RETRY_ANSWER);
+        cb.onSources(SOURCES);
+        cb.onSupports(RETRY_SUPPORTS);
+        expect(patches).toHaveLength(before);
+        expect(turnFrom(patches)).toMatchObject({ answer: BODY, followUps: FIRST_FOLLOW_UPS, sources: [], sourceRetry: true });
+      },
+      {
+        // Calls back into the finished retry stream while its sources are being resolved.
+        resolve: vi.fn(async () => {
+          retryCb?.onText('Late text');
+          retryCb?.onSources([]);
+          retryCb?.onSupports([]);
+          return ENRICHED;
+        }),
+      },
+    );
+    await runTurn(t, INPUT, (p) => patches.push(p), new AbortController().signal, { now: () => 1234 });
+
+    // After the retry starts, the only patch is the one that swaps in the retry and ends the turn.
+    const after = patches.slice(retryStart(patches) + 1);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ answer: RETRY_BODY, supports: RETRY_SUPPORTS, status: 'done', sourceRetry: false });
+    expect(after[0].sources).toHaveLength(SOURCES.length);
   });
 });
 

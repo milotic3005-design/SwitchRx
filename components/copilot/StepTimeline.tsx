@@ -38,8 +38,9 @@ function StateIcon({ state }: { state: StepState }) {
  * Searched literature & guidelines → Done. Collapsed to one line that updates live while the turn runs;
  * expanding it shows the identified drugs and the pharmacy lookup panel. A failed or timed-out lookup
  * reads "FDA lookup unavailable" in amber, collapsed or not; a lookup that named no drug skips both
- * lookup steps and reads "No drugs to check against FDA labels". A lookup reused from an earlier turn
- * says so under the line.
+ * lookup steps and reads "No drugs to check against FDA labels". While an answer that came back without
+ * sources is asked again, the search step is active again and reads "No sources yet — searching again".
+ * A lookup reused from an earlier turn says so under the line.
  */
 export function StepTimeline({
   turn,
@@ -70,7 +71,11 @@ export function StepTimeline({
           'Checked FDA labels & safety lists'
         ),
     },
-    { key: 'search', state: states.search, label: 'Searched literature & guidelines' },
+    {
+      key: 'search',
+      state: states.search,
+      label: states.searchingAgain ? 'No sources yet — searching again' : 'Searched literature & guidelines',
+    },
     { key: 'done', state: states.done, label: 'Done' },
   ];
 

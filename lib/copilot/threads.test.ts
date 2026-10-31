@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { loadThreads, saveThreads, THREADS_KEY, MAX_THREADS, type StorageLike } from './threads';
+import { isRunning } from './turn-status';
 import type { CopilotThread, CopilotTurn, TurnStatus } from './types';
 
 class MemoryStorage implements StorageLike {
@@ -105,6 +106,31 @@ describe('saveThreads / loadThreads', () => {
     expect(stored.threads.map((t: CopilotThread) => t.id)).toEqual(['t1']);
     expect(stored.threads[0].turns.map((t: CopilotTurn) => t.id)).toEqual(['a']);
     expect(loadThreads(m)).toEqual([thread('t1', [done('a')])]);
+  });
+
+  it('saves an answer that is being asked again for sources as the finished first answer, without the flag', () => {
+    const m = new MemoryStorage();
+    const retrying: CopilotTurn = { ...done('a'), sourceRetry: true };
+    expect(saveThreads(m, [thread('t1', [retrying])])).toBe('ok');
+    const stored = JSON.parse(m.getItem(THREADS_KEY)!).threads[0].turns[0];
+    expect(stored.status).toBe('done');
+    expect(stored.answer).toBe('An answer.');
+    expect(stored.followUps).toEqual(['Next?']);
+    expect('sourceRetry' in stored).toBe(false);
+    // A reload in the middle of the retry shows the first answer as a finished turn.
+    const [loaded] = loadThreads(m);
+    expect(loaded.turns).toEqual([done('a')]);
+    expect('sourceRetry' in loaded.turns[0]).toBe(false);
+    expect(isRunning(loaded.turns[0])).toBe(false);
+  });
+
+  it('loads a stored turn still flagged as being asked again for sources as finished', () => {
+    const m = new MemoryStorage();
+    const stale = thread('t1', [done('a'), { ...done('b'), sourceRetry: true }]);
+    m.setItem(THREADS_KEY, JSON.stringify({ version: 1, threads: [stale] }));
+    const [loaded] = loadThreads(m);
+    expect(loaded.turns).toEqual([done('a'), done('b')]);
+    expect(loaded.turns.some((t) => 'sourceRetry' in t || isRunning(t))).toBe(false);
   });
 
   it('keeps only the 50 most recently updated threads', () => {

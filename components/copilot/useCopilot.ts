@@ -5,7 +5,8 @@ import { runTurn, type CopilotTransport } from '@/lib/copilot/run-turn';
 import { copilotReducer, type CopilotAction, type CopilotState } from '@/lib/copilot/state';
 import { loadThreads, saveThreads, type StorageLike } from '@/lib/copilot/threads';
 import { realTransport } from '@/lib/copilot/transport';
-import type { CopilotThread, CopilotTurn, Depth, TurnPatch, TurnStatus } from '@/lib/copilot/types';
+import { endsTurn, FINISHED_STATUSES, isRunning } from '@/lib/copilot/turn-status';
+import type { CopilotThread, CopilotTurn, Depth, TurnPatch } from '@/lib/copilot/types';
 
 interface Snapshot {
   state: CopilotState;
@@ -14,8 +15,6 @@ interface Snapshot {
 
 const INITIAL: Snapshot = { state: { threads: [], activeThreadId: null }, storageAvailable: true };
 const getInitialSnapshot = (): Snapshot => INITIAL;
-
-const IN_FLIGHT: ReadonlySet<TurnStatus> = new Set<TurnStatus>(['lookup', 'streaming', 'resolving']);
 
 /** `window.localStorage`, or null where reading it throws (blocked storage, some private modes). */
 function browserStorage(): StorageLike | null {
@@ -85,11 +84,13 @@ function createStore() {
     dispatch(action: CopilotAction) {
       const state = copilotReducer(snapshot.state, action);
       if (state === snapshot.state) return;
-      // Running turns are never saved, so a patch that leaves its turn running changes nothing on disk;
-      // skipping those keeps a streaming answer from rewriting the whole history on every chunk.
-      const leavesTurnRunning =
-        action.type === 'patchTurn' && (action.patch.status === undefined || IN_FLIGHT.has(action.patch.status));
-      const save = hydrated && !leavesTurnRunning;
+      // Only finished turns are saved, so a patch that leaves its turn unfinished changes nothing on disk;
+      // skipping those keeps a streaming answer from rewriting the whole history on every chunk. An answer
+      // being asked again for sources is already done, so it is saved, and a reload shows it finished.
+      const leavesTurnUnfinished =
+        action.type === 'patchTurn' &&
+        (action.patch.status === undefined || !FINISHED_STATUSES.has(action.patch.status));
+      const save = hydrated && !leavesTurnUnfinished;
       publish({
         state,
         storageAvailable: save ? saveThreads(storage, state.threads) === 'ok' : snapshot.storageAvailable,
@@ -101,7 +102,7 @@ function createStore() {
 export interface Copilot {
   state: CopilotState;
   activeThread: CopilotThread | null;
-  /** True while an answer is being generated. */
+  /** True while an answer is being generated, or asked again because it came back without sources. */
   busy: boolean;
   /** False when history cannot be saved in this browser (threads then live in memory only). */
   storageAvailable: boolean;
@@ -118,8 +119,8 @@ export interface Copilot {
  * The Copilot's threads and the one answer that may be running. Saved threads load on mount and every
  * change after that is saved. At most one answer runs at a time, with its own AbortController: asking
  * again, starting a new question, switching, deleting or clearing threads stops it first, and once it
- * is stopped nothing but the runner's final "stopped" update is applied, always to the thread that
- * holds the turn.
+ * is stopped nothing but the runner's final update is applied ("stopped", or "done" with the first answer
+ * when it was being asked again for sources), always to the thread that holds the turn.
  */
 export function useCopilot(): Copilot {
   const [store] = useState(createStore);
@@ -183,7 +184,7 @@ export function useCopilot(): Copilot {
       const onUpdate = (patch: TurnPatch) => {
         if (ended) return;
         if (controller.signal.aborted) {
-          if (patch.status !== 'stopped') return;
+          if (!endsTurn(patch)) return;
           ended = true;
         }
         store.dispatch({ type: 'patchTurn', threadId, turnId: turn.id, patch, now: Date.now() });
@@ -239,7 +240,7 @@ export function useCopilot(): Copilot {
   }, [store, abortRunning]);
 
   const activeThread = state.threads.find(t => t.id === state.activeThreadId) ?? null;
-  const busy = state.threads.some(t => t.turns.some(turn => IN_FLIGHT.has(turn.status)));
+  const busy = state.threads.some(t => t.turns.some(turn => isRunning(turn)));
 
   return {
     state,

@@ -5,7 +5,7 @@ import { AlertCircle, AlertTriangle, Check, Copy, CornerDownRight, Gamepad2, Rot
 import { WaitGame } from '@/components/WaitGame';
 import { placeCitations, toPlainText } from '@/lib/copilot/citations';
 import type { DrugMatcher } from '@/lib/copilot/markdown';
-import { answeredWithoutSources } from '@/lib/copilot/turn-status';
+import { answeredWithoutSources, isRunning } from '@/lib/copilot/turn-status';
 import type { CopilotTurn } from '@/lib/copilot/types';
 import type { LookupResult } from '@/lib/pharmacy-lookup';
 import { AnswerBlock } from './AnswerBlock';
@@ -41,7 +41,9 @@ const UNSOURCED_NOTE = 'No sources came back for this answer. Check it against t
  * its references, and the actions on it (copy, retry, suggested follow-ups).
  *
  * Chips are placed only once the text has stopped streaming. When none can be placed the sources are
- * still listed, as "Sources searched". A finished answer with no sources at all carries an amber caution.
+ * still listed, as "Sources searched". A finished answer with no sources at all carries an amber caution,
+ * once it is no longer being asked again for sources; until then it counts as running, so its copy and
+ * follow-up actions wait, as they do while any answer is generated.
  */
 export const TurnView = memo(function TurnView({
   turn,
@@ -66,7 +68,7 @@ export const TurnView = memo(function TurnView({
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
-  const running = turn.status === 'lookup' || turn.status === 'streaming' || turn.status === 'resolving';
+  const running = isRunning(turn);
   const textFinal = turn.status !== 'lookup' && turn.status !== 'streaming';
   const waitingForText = turn.depth === 'thorough' && turn.status === 'streaming' && turn.firstTokenAt === undefined;
   const referencesId = `copilot-refs-${turn.id}`;

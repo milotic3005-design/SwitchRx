@@ -31,8 +31,10 @@ addendum in §7 and the FDA-label titling in §4. R numbers are the rulings in t
 - **R20.** The Quick addendum says brevity applies only to the written answer, not to searching.
 - **R21, search reminder.** "(Search Google before answering and base every number on what you find.)" goes
   on the new question only. Live, about 5 of 6 answers were grounded; both depths stay at HIGH.
-- **R22, planned: one automatic retry.** A finished answer with text but no sources is re-run once in the
-  background; the retry replaces it only if it has sources, and Stop keeps the first answer.
+- **R22, one automatic retry.** A finished answer with text but no sources is asked again once, with the same
+  request and no second lookup. Meanwhile the first answer stays on screen, already saved as done, and the
+  search step reads "No sources yet — searching again". The retry replaces it only if it has sources; when it
+  has none, fails, or is stopped, the first answer stays and gets the no-sources caution.
 
 Fixes from the final review:
 

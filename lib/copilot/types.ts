@@ -48,6 +48,12 @@ export interface CopilotTurn {
    * thread instead. Only the id is kept (the lookup itself is not copied); see `effectiveLookup`.
    */
   lookupFromTurnId?: string;
+  /**
+   * True while a `done` answer that came back without sources is being asked again (the "source retry"). The
+   * turn keeps showing that first answer, already saved as done, but counts as running (`isRunning`); the flag is
+   * never saved.
+   */
+  sourceRetry?: boolean;
   firstTokenAt?: number;
   error?: string;
 }
