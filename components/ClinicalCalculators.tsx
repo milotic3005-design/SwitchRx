@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle, ArrowUp, ArrowDown, Pause, Check, Droplets, FlaskConical, ShieldAlert } from 'lucide-react';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
 import { DiluentVolumeAdvisor } from './DiluentVolumeAdvisor';
+import { CALC_GROUPS, CALCULATORS, DEFAULT_CALC, LAST_CALC_KEY, isCalcId, type CalcId } from '@/lib/launcher/catalog';
+import { recordRecent } from '@/lib/launcher/recents';
 
 // ── CADD drug presets ──────────────────────────────────────────────────────────
 // Concentration, KVO, concentration range, unit, and stability notes are sourced
@@ -35,23 +37,6 @@ const CADD_PRESETS: Record<string, CADDPreset> = {
 };
 
 const DAYS = [1, 2, 3, 4, 5];
-
-// ── Calculator list ────────────────────────────────────────────────────────────
-const CALCULATORS = [
-  { id: 'idsa-abx', label: 'IDSA Antibiotic Advisor' },
-  { id: 'cadd',    label: 'CADD Bag Calculator' },
-  { id: 'diluent', label: 'Diluent Volume / Bag Prep' },
-  { id: 'ivig',   label: 'IVIG Infusion Rate' },
-  { id: 'biolrate', label: 'Biologic Rate Titration' },
-  { id: 'vanco',  label: 'Vancomycin AUC Dosing' },
-  { id: 'crcl',   label: 'CrCl (Cockcroft-Gault)' },
-  // Combined: BMI + Ideal/Adjusted Body Weight all from one set of inputs.
-  { id: 'bodywt', label: 'Body Weight & BMI' },
-  { id: 'iron',   label: 'Iron Deficit (Ganzoni)' },
-  { id: 'esa',    label: 'ESA Dosing (CKD Anemia)' },
-  { id: 'calcium',label: 'Corrected Calcium' },
-  { id: 'hbv',    label: 'HBV Serology Interpreter' },
-];
 
 // ── Shared style helpers ───────────────────────────────────────────────────────
 const inputCls =
@@ -2267,9 +2252,69 @@ function HBVSerologyInterpreter() {
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────
-export function ClinicalCalculators() {
-  const [activeCalc, setActiveCalc] = useState('cadd');
+// One entry per calculator in the catalog: leaving one out is a compile error.
+const PANELS: Record<CalcId, ComponentType> = {
+  'idsa-abx': IDSAAntibioticAdvisor,
+  vanco: VancomycinAUCCalculator,
+  cadd: CADDCalculator,
+  diluent: DiluentVolumeAdvisor,
+  ivig: IVIGRateCalculator,
+  biolrate: InfusionRateCalculator,
+  crcl: CrClCalculator,
+  bodywt: BodyMetricsCalculator,
+  calcium: CorrectedCalciumCalculator,
+  iron: IronDeficitCalculator,
+  esa: ESADosingCalculator,
+  hbv: HBVSerologyInterpreter,
+};
+
+// The calculator used last is read from storage as an external value, so the server and the first client
+// render agree (both see none) and no effect has to set state after mount.
+const noStorageEvents = () => () => {};
+const readLastCalc = (): string | null => {
+  try {
+    return window.localStorage.getItem(LAST_CALC_KEY);
+  } catch {
+    return null;
+  }
+};
+const saveLastCalc = (id: CalcId) => {
+  try {
+    window.localStorage.setItem(LAST_CALC_KEY, id);
+  } catch {
+    // Storage is blocked or full: the page still works, it just opens on the default next time.
+  }
+};
+
+/**
+ * The Calculators tab. It opens on the calculator used last (CADD Bag when none is remembered). `openCalc`
+ * is a request from the search to show one calculator, re-applied whenever its token changes.
+ */
+export function ClinicalCalculators({ openCalc }: { openCalc?: { id: CalcId; token: number } | null } = {}) {
+  const [chosen, setChosen] = useState<CalcId | null>(null);
+  const stored = useSyncExternalStore(noStorageEvents, readLastCalc, () => null);
+
+  // A new request shows its calculator during render, in the same render that makes the tab visible.
+  const [seenToken, setSeenToken] = useState<number | null>(null);
+  if (openCalc && openCalc.token !== seenToken) {
+    setSeenToken(openCalc.token);
+    setChosen(openCalc.id);
+  }
+  const requested = openCalc?.id;
+  const requestToken = openCalc?.token;
+  useEffect(() => {
+    if (requested) saveLastCalc(requested);
+  }, [requested, requestToken]);
+
+  const activeCalc: CalcId = chosen ?? (isCalcId(stored) ? stored : DEFAULT_CALC);
   const active = CALCULATORS.find(c => c.id === activeCalc);
+  const ActivePanel = PANELS[activeCalc];
+
+  const pick = (id: CalcId) => {
+    setChosen(id);
+    saveLastCalc(id);
+    recordRecent({ kind: 'calculator', id });
+  };
 
   return (
     <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
@@ -2286,20 +2331,29 @@ export function ClinicalCalculators() {
         </p>
       </div>
 
-      {/* Calculator selector */}
-      <div className="mb-8 flex flex-wrap gap-2">
-        {CALCULATORS.map(calc => (
-          <button
-            key={calc.id}
-            onClick={() => setActiveCalc(calc.id)}
-            className={`px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
-              activeCalc === calc.id
-                ? 'bg-white/10 text-white shadow-sm border border-white/20'
-                : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            {calc.label}
-          </button>
+      {/* Calculator selector: one labelled row per group */}
+      <div className="mb-8 space-y-2">
+        {CALC_GROUPS.map(group => (
+          <div key={group.id} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <div className="w-44 shrink-0 text-[13px] font-medium text-slate-500">{group.label}</div>
+            <div className="flex flex-wrap gap-2">
+              {CALCULATORS.filter(calc => calc.group === group.id).map(calc => (
+                <button
+                  key={calc.id}
+                  type="button"
+                  aria-pressed={activeCalc === calc.id}
+                  onClick={() => pick(calc.id)}
+                  className={`px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
+                    activeCalc === calc.id
+                      ? 'bg-white/10 text-white shadow-sm border border-white/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  {calc.label}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
@@ -2312,18 +2366,7 @@ export function ClinicalCalculators() {
           <h2 className="font-bold text-white">{active?.label}</h2>
         </div>
 
-        {activeCalc === 'idsa-abx' && <IDSAAntibioticAdvisor />}
-        {activeCalc === 'cadd'    && <CADDCalculator />}
-        {activeCalc === 'diluent' && <DiluentVolumeAdvisor />}
-        {activeCalc === 'ivig'   && <IVIGRateCalculator />}
-        {activeCalc === 'biolrate' && <InfusionRateCalculator />}
-        {activeCalc === 'vanco'  && <VancomycinAUCCalculator />}
-        {activeCalc === 'crcl'   && <CrClCalculator />}
-        {activeCalc === 'bodywt' && <BodyMetricsCalculator />}
-        {activeCalc === 'iron'   && <IronDeficitCalculator />}
-        {activeCalc === 'esa'    && <ESADosingCalculator />}
-        {activeCalc === 'calcium'&& <CorrectedCalciumCalculator />}
-        {activeCalc === 'hbv'    && <HBVSerologyInterpreter />}
+        <ActivePanel />
       </div>
     </div>
   );
