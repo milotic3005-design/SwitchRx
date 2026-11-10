@@ -14,6 +14,7 @@ import {
   type DrugStability, type EffectiveBud, type ElastomericStability,
 } from '@/data/bud-stability';
 import { emitAskCopilot } from '@/lib/cross-tab-events';
+import { recordRecent } from '@/lib/launcher/recents';
 
 /* ── Badge ────────────────────────────────────────────────────── */
 function IVBadge({ type, children }: { type: string; children: React.ReactNode }) {
@@ -915,7 +916,14 @@ export function DrugReference({
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(drug => (
-            <DrugCard key={drug.id} drug={drug} onClick={() => setSelected(drug)} />
+            <DrugCard
+              key={drug.id}
+              drug={drug}
+              onClick={() => {
+                setSelected(drug);
+                recordRecent({ kind: 'drug', id: drug.id, dest: 'reference' });
+              }}
+            />
           ))}
         </div>
       ) : (

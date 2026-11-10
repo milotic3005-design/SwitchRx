@@ -30,6 +30,7 @@ import {
 import { PRESETS, type Preset } from '@/components/InfusionRateCalculator';
 import { emitOpenDrug, emitAskCopilot } from '@/lib/cross-tab-events';
 import { searchDrugs } from '@/lib/drug-search';
+import { recordRecent } from '@/lib/launcher/recents';
 
 // ── Palette (remapped classes — render correctly in dark + light themes) ──────
 type Tone = 'violet' | 'teal' | 'gold' | 'amber' | 'rose' | 'slate';
@@ -668,12 +669,25 @@ function MixingCard({ drug }: { drug: Drug }) {
 // Tab
 // ═════════════════════════════════════════════════════════════════════════════
 
-export function MixingGuide() {
+export function MixingGuide({ openDrug }: { openDrug?: { drugKey: string; token: number } | null } = {}) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // A request from the search (`openDrug`, re-applied whenever its token changes) shows that drug's card
+  // during render, in the same render that makes the tab visible. An id the list lacks changes nothing.
+  const [seenToken, setSeenToken] = useState<number | null>(null);
+  if (openDrug && openDrug.token !== seenToken) {
+    setSeenToken(openDrug.token);
+    const requested = DRUG_DB.find(d => d.id === openDrug.drugKey);
+    if (requested) {
+      setSelectedId(requested.id);
+      setQuery(requested.genericName);
+      setOpen(false);
+    }
+  }
 
   const results = useMemo(() => searchDrugs(query), [query]);
   const drug = useMemo(() => DRUG_DB.find(d => d.id === selectedId) ?? null, [selectedId]);
@@ -687,6 +701,7 @@ export function MixingGuide() {
     setQuery(d.genericName);
     setOpen(false);
     inputRef.current?.blur();
+    recordRecent({ kind: 'drug', id: d.id, dest: 'mixing' });
   };
 
   const askCopilot = (name: string) => emitAskCopilot({
