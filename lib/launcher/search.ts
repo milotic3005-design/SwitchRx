@@ -1,5 +1,6 @@
 import { DRUG_DB } from '@/data/drug-database';
 import { norm, searchDrugs } from '@/lib/drug-search';
+import type { Drug } from '@/lib/iv-reference-types';
 import { CALC_GROUPS, CALCULATORS, TOOLS, isCalcId, type CalcId, type TabId } from './catalog';
 
 /** Where a drug can be opened from the search. */
@@ -64,8 +65,34 @@ function score(n: string, label: string, keywords: readonly string[] = []): numb
   return 0;
 }
 
+/**
+ * How well a typed query matches: the whole query as one word first ("crcl", "5-FU"), and failing that,
+ * every word of it in any order ("vanco auc"), which ranks after any whole-query match.
+ */
+function matchScore(query: string, label: string, keywords: readonly string[] = []): number {
+  const whole = score(norm(query), label, keywords);
+  if (whole > 0) return whole;
+  const parts = words(query);
+  if (parts.length < 2) return 0;
+  const each = parts.map(part => score(part, label, keywords));
+  return each.every(s => s > 0) ? 4 + Math.max(...each) : 0;
+}
+
+const GENERIC_COUNT = DRUG_DB.reduce(
+  (counts, d) => counts.set(d.genericName, (counts.get(d.genericName) ?? 0) + 1),
+  new Map<string, number>(),
+);
+
+/**
+ * A drug's name where no brand is shown beside it (a recent item): the generic name, with the brand added
+ * when two products share it, such as Denosumab (Prolia) and Denosumab (Xgeva).
+ */
+export function recentDrugName(drug: Drug): string {
+  return (GENERIC_COUNT.get(drug.genericName) ?? 0) > 1 ? `${drug.genericName} (${drug.brandName})` : drug.genericName;
+}
+
 /** The best `limit` matches, best score first; ties keep the catalog's order. */
-function best<T>(items: readonly T[], n: string, limit: number, of: (item: T) => number): T[] {
+function best<T>(items: readonly T[], limit: number, of: (item: T) => number): T[] {
   return items
     .map((item, i) => ({ item, i, s: of(item) }))
     .filter(x => x.s > 0)
@@ -93,7 +120,7 @@ function recentRow(item: RecentItem): ResultRow[] {
   const drug = DRUG_DB.find(d => d.id === item.id);
   if (!drug) return [];
   const dest = item.dest ?? 'mixing';
-  return [{ kind: 'drug', key: `drug:${drug.id}`, id: drug.id, title: drug.genericName, subtitle: DEST_PLACE[dest], dest }];
+  return [{ kind: 'drug', key: `drug:${drug.id}`, id: drug.id, title: recentDrugName(drug), subtitle: DEST_PLACE[dest], dest }];
 }
 
 /**
@@ -118,8 +145,8 @@ export function searchAll(query: string, recents: RecentItem[]): ResultSection[]
     title: d.genericName,
     subtitle: d.brandName,
   }));
-  const calculators = best(CALCULATORS, n, MAX_CALCULATORS, c => score(n, c.label, c.keywords)).map(calculatorRow);
-  const tools = best(TOOLS, n, MAX_TOOLS, t => score(n, t.label)).map(toolRow);
+  const calculators = best(CALCULATORS, MAX_CALCULATORS, c => matchScore(query, c.label, c.keywords)).map(calculatorRow);
+  const tools = best(TOOLS, MAX_TOOLS, t => matchScore(query, t.label)).map(toolRow);
 
   const sections: ResultSection[] = [
     { heading: 'Drugs' as const, rows: drugs },

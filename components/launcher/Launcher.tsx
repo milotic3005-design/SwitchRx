@@ -2,7 +2,7 @@
 import type { RefObject } from 'react';
 import { DRUG_DB } from '@/data/drug-database';
 import { CALCULATORS, TOOLS, isCalcId, toolLine } from '@/lib/launcher/catalog';
-import { DEST_PLACE, type RecentItem, type Target } from '@/lib/launcher/search';
+import { DEST_PLACE, recentDrugName, type RecentItem, type Target } from '@/lib/launcher/search';
 import { useFinePointer, useRecents } from './hooks';
 import { TOOL_ICONS } from './icons';
 import { SearchPanel } from './SearchPanel';
@@ -11,14 +11,15 @@ const FOCUS_RING =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500';
 
 /** What a recent item's chip says and where it leads, or null when its drug or calculator no longer exists. */
-function recentChip(item: RecentItem): { label: string; target: Target } | null {
+function recentChip(item: RecentItem): { key: string; label: string; target: Target } | null {
+  const key = `${item.kind}:${item.id}`;
   if (item.kind === 'calculator') {
     const calc = isCalcId(item.id) ? CALCULATORS.find(c => c.id === item.id) : undefined;
-    return calc ? { label: calc.label, target: { kind: 'calculator', id: calc.id } } : null;
+    return calc ? { key, label: calc.label, target: { kind: 'calculator', id: calc.id } } : null;
   }
   const drug = DRUG_DB.find(d => d.id === item.id);
   const dest = item.dest ?? 'mixing';
-  return drug ? { label: `${drug.genericName} · ${DEST_PLACE[dest]}`, target: { kind: 'drug', id: drug.id, dest } } : null;
+  return drug ? { key, label: `${recentDrugName(drug)} · ${DEST_PLACE[dest]}`, target: { kind: 'drug', id: drug.id, dest } } : null;
 }
 
 /**
@@ -65,7 +66,7 @@ export function Launcher({ onGo, searchInputRef }: { onGo: (target: Target) => v
           <span className="mr-1 text-[13px] font-medium text-slate-500">Recent</span>
           {chips.map(chip => (
             <button
-              key={chip.label}
+              key={chip.key}
               type="button"
               onClick={() => onGo(chip.target)}
               className={`rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[13px] text-slate-300 transition-colors hover:bg-white/10 hover:text-white ${FOCUS_RING}`}

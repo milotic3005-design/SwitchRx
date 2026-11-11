@@ -64,7 +64,34 @@ describe('recordRecent', () => {
       },
     };
     expect(() => recordRecent({ kind: 'calculator', id: 'crcl' }, broken)).not.toThrow();
-    expect(readRecentsRaw(broken)).toBeNull();
-    expect(readRecentsRaw(null)).toBeNull();
+  });
+
+  it('keeps the list until the page reloads when storage is blocked or full', () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(readRecentsRaw(blocked)).toBeNull();
+    recordRecent({ kind: 'calculator', id: 'crcl' }, blocked);
+    recordRecent({ kind: 'calculator', id: 'cadd' }, blocked);
+    expect(parseRecents(readRecentsRaw(blocked), known).map(x => x.id)).toEqual(['cadd', 'crcl']);
+
+    // Full: reads still work, writes fail. What was stored before stays, with the new item in front.
+    const full = {
+      getItem: () => JSON.stringify([{ kind: 'calculator', id: 'crcl' }]),
+      setItem: () => {
+        throw new Error('full');
+      },
+    };
+    recordRecent({ kind: 'calculator', id: 'cadd' }, full);
+    expect(parseRecents(readRecentsRaw(full), known).map(x => x.id)).toEqual(['cadd', 'crcl']);
+
+    // Another store is unaffected.
+    const empty = { getItem: () => null, setItem: () => {} };
+    expect(readRecentsRaw(empty)).toBeNull();
   });
 });

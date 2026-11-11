@@ -54,6 +54,14 @@ export function SearchPanel({
     if (autoFocus) ref.current?.focus();
   }, [autoFocus, ref]);
 
+  // A row reached with the arrow keys is brought into view; the list is shorter than its results can be.
+  // A row reached with the mouse is already under the pointer, and scrolling it would move it away.
+  const movedByKey = useRef(false);
+  useEffect(() => {
+    if (!showList || !movedByKey.current) return;
+    document.getElementById(`${listId}-option-${panel.active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [panel.active, showList, listId]);
+
   const run = (target: Target) => {
     onGo(target);
     if (variant === 'inline') {
@@ -67,6 +75,7 @@ export function SearchPanel({
       if (!showList) return setListOpen(true);
       const moved = panelKey(panel, e.key, rows);
       if (moved.handled) e.preventDefault();
+      movedByKey.current = true;
       setPanel(moved.state);
     } else if (e.key === 'Tab') {
       if (!showList) return;
@@ -89,7 +98,14 @@ export function SearchPanel({
   const optionId = (i: number) => `${listId}-option-${i}`;
 
   return (
-    <div className={variant === 'inline' ? 'relative' : ''}>
+    <div
+      className={variant === 'inline' ? 'relative' : ''}
+      // A press anywhere in the panel but the input (a heading, the padding, the list's scrollbar) must not
+      // take focus from the input: typing would stop working, and on the home page the list would close.
+      onMouseDown={e => {
+        if (e.target !== ref.current) e.preventDefault();
+      }}
+    >
       <div
         className={
           variant === 'inline'
@@ -109,6 +125,10 @@ export function SearchPanel({
           }}
           onKeyDown={onKeyDown}
           onFocus={() => setListOpen(true)}
+          // On the home page the list covers the tool cards, so it closes when focus leaves the box.
+          onBlur={() => {
+            if (variant === 'inline') setListOpen(false);
+          }}
           placeholder="Search any drug or calculator…"
           aria-label="Search drugs and tools"
           role="combobox"
@@ -150,10 +170,10 @@ export function SearchPanel({
                       id={optionId(i)}
                       role="option"
                       aria-selected={active}
-                      // Keep focus in the input: a press on a row must not blur it.
-                      onMouseDown={e => e.preventDefault()}
                       onMouseMove={() => {
-                        if (!active) setPanel({ active: i, action: 0 });
+                        if (active) return;
+                        movedByKey.current = false;
+                        setPanel({ active: i, action: 0 });
                       }}
                       onClick={() => run(rowTarget(row, 0))}
                       className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${active ? 'bg-white/10' : ''}`}

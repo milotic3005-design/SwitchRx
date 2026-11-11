@@ -81,6 +81,8 @@ export default function Home() {
   // tool its request with a fresh token, so the same request applies twice in a row.
   const go = useCallback((target: Target) => {
     setPaletteOpen(false);
+    // The tabs share one window scroll: without this a jump made deep in one page lands deep in the next.
+    window.scrollTo(0, 0);
     const token = Date.now();
     if (target.kind === 'tool') {
       setActiveTab(target.tab);

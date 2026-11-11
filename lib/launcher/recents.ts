@@ -57,8 +57,15 @@ function browserStore(): KeyValueStore | null {
   }
 }
 
-/** The stored list as text, or null when there is none or storage cannot be read. */
+// Where storage is blocked or full, the list is kept here instead, so it lasts until the page reloads. It
+// is kept per store (one entry for "no store at all"), and dropped again once a write goes through.
+const NO_STORE = {};
+const unsaved = new WeakMap<object, string>();
+
+/** The list as text: what could not be saved if anything, else what is stored, else null. */
 export function readRecentsRaw(storage: KeyValueStore | null = browserStore()): string | null {
+  const kept = unsaved.get(storage ?? NO_STORE);
+  if (kept !== undefined) return kept;
   try {
     return storage?.getItem(RECENTS_KEY) ?? null;
   } catch {
@@ -68,13 +75,16 @@ export function readRecentsRaw(storage: KeyValueStore | null = browserStore()): 
 
 const ANY = { hasDrug: () => true, hasCalc: () => true };
 
-/** Puts `item` at the front of the stored list. Where storage is blocked or full, nothing is kept. */
+/** Puts `item` at the front of the list and saves it, or keeps it in memory where storage is blocked or full. */
 export function recordRecent(item: RecentItem, storage: KeyValueStore | null = browserStore()): void {
-  if (!storage) return;
+  const next = JSON.stringify(addRecent(parseRecents(readRecentsRaw(storage), ANY), item));
+  const slot = storage ?? NO_STORE;
   try {
-    storage.setItem(RECENTS_KEY, JSON.stringify(addRecent(parseRecents(readRecentsRaw(storage), ANY), item)));
+    if (!storage) throw new Error('no storage');
+    storage.setItem(RECENTS_KEY, next);
+    unsaved.delete(slot);
   } catch {
-    return;
+    unsaved.set(slot, next);
   }
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(RECENTS_EVENT));
 }

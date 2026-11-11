@@ -18,6 +18,23 @@ describe('searchAll', () => {
     expect(titles('creatinine', 'Calculators')).toEqual(['CrCl (Cockcroft-Gault)']);
   });
 
+  it('matches a calculator on several words in any order', () => {
+    expect(titles('vanco auc', 'Calculators')).toEqual(['Vancomycin AUC Dosing']);
+    expect(titles('auc vanco', 'Calculators')).toEqual(['Vancomycin AUC Dosing']);
+    expect(titles('hep b', 'Calculators')).toEqual(['HBV Serology Interpreter']);
+    // Every word has to match: one stray word leaves only the Copilot row.
+    expect(heads('vanco zzqx')).toEqual([null]);
+  });
+
+  it('tells apart two products that share a generic name in the recent list', () => {
+    const rows = searchAll('', [
+      { kind: 'drug', id: 's1', dest: 'mixing' },
+      { kind: 'drug', id: 's2', dest: 'mixing' },
+    ])[0].rows;
+    expect(rows.map(r => r.title)).toEqual(['Denosumab (Prolia)', 'Denosumab (Xgeva)']);
+    expect(new Set(rows.map(r => r.key)).size).toBe(2);
+  });
+
   it('finds tools by name', () => {
     expect(titles('mixing', 'Tools')).toEqual(['Mixing Guide']);
   });
