@@ -9,9 +9,9 @@ import { MixingGuide } from '@/components/MixingGuide';
 import { Starfield } from '@/components/Starfield';
 import { CommandPalette } from '@/components/launcher/CommandPalette';
 import { useShortcutHint } from '@/components/launcher/hooks';
+import { Launcher } from '@/components/launcher/Launcher';
 import { TOOL_ICONS } from '@/components/launcher/icons';
-import { Activity, ArrowRight, Network, Search, Sun, Moon } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Activity, Search, Sun, Moon } from 'lucide-react';
 import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 import { DRUG_DB } from '@/data/drug-database';
 import { TOOLS, type CalcId, type TabId } from '@/lib/launcher/catalog';
@@ -213,82 +213,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col">
-        {activeTab === 'home' && (
-          <div className="flex-1 relative flex items-center justify-center overflow-hidden min-h-screen">
-            {/* Background Effects — cosmic violet / teal / wine washes */}
-            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-              <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full blur-[130px] mix-blend-screen" style={{ background: 'rgba(154,108,255,0.22)' }} />
-              <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full blur-[130px] mix-blend-screen" style={{ background: 'rgba(95,168,162,0.16)' }} />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[820px] h-[820px] rounded-full blur-[130px] mix-blend-screen" style={{ background: 'rgba(227,194,126,0.08)' }} />
-            </div>
-
-            <div className="relative z-10 text-center max-w-5xl px-8 flex flex-col items-center">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, ease: "easeOut" }}
-                className="cc-eyebrow inline-flex items-center gap-2.5 mb-8"
-              >
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--cc-gold)' }}></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: 'var(--cc-gold)' }}></span>
-                </span>
-                Clinical Intelligence Platform
-              </motion.div>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.1, ease: "easeOut" }}
-                className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tighter mb-8 leading-[1.1]"
-                style={{ color: 'var(--cc-gold-warm)' }}
-              >
-                Precision Medicine <br/>
-                <span style={{ fontStyle: 'italic', color: 'var(--cc-gold)' }}>At Scale</span>
-              </motion.h1>
-
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.7, delay: 0.15 }}
-                className="mb-8"
-                style={{ width: 70, height: 1, background: 'rgba(227,194,126,0.5)' }}
-              />
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
-                className="text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed"
-                style={{ color: 'var(--cc-muted)' }}
-              >
-                Empower your clinical practice with AI-driven medication switching protocols and an evidence-cited infusion copilot.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
-                className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto mt-4"
-              >
-                <button
-                  onClick={() => setActiveTab('switching')}
-                  className="btn-premium w-full sm:w-auto px-8 py-4 rounded-full font-medium flex items-center justify-center gap-2 group text-[15px]"
-                >
-                  Explore Protocols
-                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button
-                  onClick={() => setActiveTab('infusion')}
-                  className="glass-card w-full sm:w-auto px-8 py-4 rounded-full font-medium flex items-center justify-center gap-2 hover:bg-white/5 transition-all text-[15px] border border-white/10 text-white"
-                >
-                  <Network size={18} className="text-blue-400" />
-                  Infusion Copilot
-                </button>
-              </motion.div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'home' && <Launcher onGo={go} searchInputRef={homeSearchRef} />}
 
         {/* The working tabs stay MOUNTED and toggle visibility with `hidden`
             instead of conditional rendering. Unmounting a tab would reset all
