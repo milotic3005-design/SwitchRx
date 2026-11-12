@@ -757,15 +757,16 @@ function DrugCard({ drug, onClick }: { drug: Drug; onClick: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <div className="bg-white/5 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-2 text-xs">
-          <Droplet className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-          <span className="text-slate-300 font-medium truncate">
+        {/* Up to two lines, so the larger text never hides a diluent or a BUD behind an ellipsis. */}
+        <div className="bg-white/5 border border-white/5 rounded-lg px-3 py-2 flex items-start gap-2 text-xs">
+          <Droplet className="w-3.5 h-3.5 text-blue-400 flex-shrink-0 mt-0.5" />
+          <span className="text-slate-300 font-medium line-clamp-2 min-w-0">
             {drug.dilution?.preferredDiluent || 'N/A'}
           </span>
         </div>
-        <div className="bg-white/5 border border-white/5 rounded-lg px-3 py-2 flex items-center gap-2 text-xs">
-          <Thermometer className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-          <span className="text-slate-300 font-medium truncate">
+        <div className="bg-white/5 border border-white/5 rounded-lg px-3 py-2 flex items-start gap-2 text-xs">
+          <Thermometer className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+          <span className="text-slate-300 font-medium line-clamp-2 min-w-0">
             BUD: {drug.bud?.roomTemp || 'N/A'} (RT)
           </span>
         </div>
