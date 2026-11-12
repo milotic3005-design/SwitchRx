@@ -6,7 +6,7 @@ import { CopilotHome } from './copilot/CopilotHome';
 import { HistoryDrawer } from './copilot/HistoryDrawer';
 import { ThreadView } from './copilot/ThreadView';
 import { useCopilot } from './copilot/useCopilot';
-import { draftAt, draftKey, HOME_DRAFT, homeDraftOnly, withDraft, type Drafts } from '@/lib/copilot/drafts';
+import { draftAt, draftKey, HOME_DRAFT, homeDraftOnly, withDraft, withHandedOver, type Drafts } from '@/lib/copilot/drafts';
 import { buildDrugMatcher } from '@/lib/copilot/markdown';
 import type { Depth } from '@/lib/copilot/types';
 
@@ -43,19 +43,26 @@ export function InfusionConsult({
   // DRUG_DB is static, so the drug-name matcher is built once.
   const [drugMatcher] = useState(buildDrugMatcher);
 
-  // A new prefill fills the home box during render, so it shows in the same render that makes the tab visible
+  // A new prefill goes into the home box during render, so it shows in the same render that makes the tab visible
   // when home is on screen; leaving an open thread for the home screen happens just after, in the effect below.
+  // It never costs the user work: unsent text in the home box is kept (the new text goes below it), and an
+  // answer still being written is left to finish. The prefill then waits in the home box (`heldToken` is
+  // its token), with a note saying so, until the user presses New question.
   const [prefillToken, setPrefillToken] = useState<number | null>(null);
+  const [heldToken, setHeldToken] = useState<number | null>(null);
   if (prefillScenario && prefillScenario.token !== prefillToken) {
     setPrefillToken(prefillScenario.token);
-    setDrafts(d => withDraft(d, HOME_DRAFT, prefillScenario.scenario));
+    setDrafts(d => withDraft(d, HOME_DRAFT, withHandedOver(draftAt(d, HOME_DRAFT), prefillScenario.scenario)));
+    setHeldToken(busy ? prefillScenario.token : null);
   }
+  // Once the home screen is showing, the waiting question is in view and the note has done its job.
+  if (heldToken !== null && activeThread === null) setHeldToken(null);
   const handledPrefill = useRef<number | null>(null);
   useEffect(() => {
     if (prefillToken === null || handledPrefill.current === prefillToken) return;
     handledPrefill.current = prefillToken;
-    newQuestion();
-  }, [prefillToken, newQuestion]);
+    if (heldToken !== prefillToken) newQuestion();
+  }, [prefillToken, heldToken, newQuestion]);
 
   // The docked box sits over the bottom of the window while the thread scrolls. Reserving its height as the
   // page's bottom scroll padding makes anything the browser brings into view (keyboard focus, scrollIntoView,
@@ -159,6 +166,11 @@ export function InfusionConsult({
             className="sticky bottom-0 z-10 pb-4 pt-6"
             style={{ background: 'linear-gradient(to bottom, transparent, var(--cc-ink) 1.5rem)' }}
           >
+            {heldToken !== null && (
+              <p role="status" className="mb-2 px-1 text-[13px] text-slate-400">
+                Your question is saved under New question.
+              </p>
+            )}
             <div className="rounded-xl bg-[#121212]">{composer('docked')}</div>
           </div>
         </>

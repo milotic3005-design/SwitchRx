@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { draftAt, draftKey, HOME_DRAFT, homeDraftOnly, withDraft, type Drafts } from './drafts';
+import { draftAt, draftKey, HOME_DRAFT, homeDraftOnly, withDraft, withHandedOver, type Drafts } from './drafts';
 
 describe('draftKey', () => {
   it('is the open thread id, or the home key on the home screen', () => {
@@ -118,5 +118,31 @@ describe('one draft per place', () => {
     expect(b.text).toBe('Follow-up for A');
     b.submit();
     expect(b.text).toBe('');
+  });
+});
+
+describe('withHandedOver', () => {
+  it('uses the handed-over text when the box is empty or blank', () => {
+    expect(withHandedOver('', 'Vancomycin: ')).toBe('Vancomycin: ');
+    expect(withHandedOver('  \n ', 'zzqx')).toBe('zzqx');
+  });
+
+  it('keeps unsent text and adds the handed-over text on a new line below it', () => {
+    expect(withHandedOver('65 kg, CrCl 35, starting infliximab', 'Vancomycin: ')).toBe(
+      '65 kg, CrCl 35, starting infliximab\nVancomycin: ',
+    );
+    // Trailing blank space of the unsent text does not pile up between the two.
+    expect(withHandedOver('first question  \n\n', 'second')).toBe('first question\nsecond');
+  });
+
+  it('does not add the same text twice', () => {
+    expect(withHandedOver('zzqx', 'zzqx')).toBe('zzqx');
+    expect(withHandedOver('first\nVancomycin: ', 'Vancomycin: ')).toBe('first\nVancomycin: ');
+    // A different question that merely ends the same way is still added.
+    expect(withHandedOver('not zzqx', 'zzqx')).toBe('not zzqx\nzzqx');
+  });
+
+  it('leaves the box alone when nothing is handed over', () => {
+    expect(withHandedOver('typed', '')).toBe('typed');
   });
 });

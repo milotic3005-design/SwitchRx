@@ -26,3 +26,14 @@ export function withDraft(drafts: Drafts, key: string, text: string): Drafts {
 
 /** Only the home screen's draft, for when every thread is gone. */
 export const homeDraftOnly = (drafts: Drafts): Drafts => withDraft({}, HOME_DRAFT, draftAt(drafts, HOME_DRAFT));
+
+/**
+ * The home box's text after another tab hands a question over (the search, an "Ask Copilot" button).
+ * Unsent text is kept, with the new text on a new line below it; the same text is never added twice.
+ */
+export function withHandedOver(existing: string, incoming: string): string {
+  if (!incoming) return existing;
+  if (existing.trim() === '') return incoming;
+  if (existing === incoming || existing.endsWith(`\n${incoming}`)) return existing;
+  return `${existing.trimEnd()}\n${incoming}`;
+}
