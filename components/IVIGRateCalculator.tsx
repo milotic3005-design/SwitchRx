@@ -472,18 +472,21 @@ export function IVIGRateCalculator() {
                   <span className="text-slate-400 text-xs">Titration Duration</span>
                   <span className="text-white font-medium text-sm">{Math.round(dosageData.titrationDurationMins)} min</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-xs">Max Target Rate</span>
-                  <span className="text-white font-medium text-sm">
-                    {dosageData.steps[dosageData.steps.length - 1]?.rateMlHr || '--'} mL/hr
-                  </span>
+                <div className="pt-3 border-t border-violet-500/20">
+                  <div className="answer-label">Max Target Rate</div>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="answer-value text-white">
+                      {dosageData.steps[dosageData.steps.length - 1]?.rateMlHr || '--'}
+                    </span>
+                    <span className="answer-unit">mL/hr</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-violet-500/20">
-                  <span className="text-violet-200 text-xs font-medium">Est. Completion</span>
-                  <span className="text-white font-bold text-sm">
+                <div>
+                  <div className="answer-label">Est. Completion</div>
+                  <div className="answer-value text-white">
                     {Math.floor(Math.round(dosageData.totalDurationMins) / 60)}h{' '}
                     {Math.round(dosageData.totalDurationMins) % 60}m
-                  </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -534,7 +537,7 @@ export function IVIGRateCalculator() {
                       </td>
                       <td className="px-5 py-2 sm:py-4 text-left block sm:table-cell bg-white/5 sm:bg-transparent">
                         <div className="sm:hidden text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Rate</div>
-                        <div className="font-mono text-lg">
+                        <div className="font-mono answer-key">
                           <span className={step.isFinal ? 'text-violet-300' : 'text-white'}>
                             {step.rateMlHr.toFixed(1)}
                           </span>

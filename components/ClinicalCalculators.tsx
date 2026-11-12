@@ -1298,7 +1298,7 @@ function CADDCalculator() {
                     <span className="text-[10px] text-emerald-400 uppercase tracking-wide">Rounded to 10 mL</span>
                   </td>
                   {DAYS.map(d => (
-                    <td key={d} className="px-4 py-3 text-center border-l border-white/5 text-white font-bold text-lg">
+                    <td key={d} className="px-4 py-3 text-center border-l border-white/5 text-white answer-key">
                       {getPracticalBagVol(d)}
                     </td>
                   ))}
@@ -1318,8 +1318,8 @@ function CADDCalculator() {
                       : `${Math.round(amt).toLocaleString()} ${massUnit}`;
                     return (
                       <td key={d} className="px-4 py-3 text-center border-l border-white/5 align-top">
-                        <span className="text-emerald-400 font-bold text-base block">{display}</span>
-                        <span className="text-[10px] text-slate-500 block">{Math.round(amt).toLocaleString()} {massUnit}</span>
+                        <span className="text-emerald-400 answer-key block whitespace-nowrap">{display}</span>
+                        <span className="text-[10px] text-slate-500 block whitespace-nowrap">{Math.round(amt).toLocaleString()} {massUnit}</span>
                       </td>
                     );
                   })}

@@ -917,11 +917,12 @@ export function InfusionRateCalculator() {
                     {Math.round(summary.titrationMin)} min
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 text-xs">Final pump rate</span>
-                  <span className="text-white font-medium text-sm">
-                    {summary.finalRateMlHr.toFixed(1)} mL/hr
-                  </span>
+                <div className="pt-3 border-t border-violet-500/20">
+                  <div className="answer-label">Final pump rate</div>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="answer-value text-white">{summary.finalRateMlHr.toFixed(1)}</span>
+                    <span className="answer-unit">mL/hr</span>
+                  </div>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-violet-500/20">
                   <span className="text-violet-200 text-xs font-medium">Est. Completion</span>
@@ -992,7 +993,7 @@ export function InfusionRateCalculator() {
                         <div className="sm:hidden text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">
                           Pump Rate
                         </div>
-                        <div className="font-mono text-lg">
+                        <div className="font-mono answer-key">
                           <span className={s.isFinal ? 'text-violet-300' : 'text-white'}>
                             {s.rateMlHr.toFixed(1)}
                           </span>

@@ -103,16 +103,20 @@ function VolumeLedger({
           <span className="text-[13px] font-semibold text-slate-200 tabular-nums">{r.value}</span>
         </div>
       ))}
-      <div className="flex items-center justify-between px-4 py-3 bg-white/[0.04]">
-        <span className="text-[13px] font-bold text-white">Final volume in bag</span>
-        <span className="text-base font-bold text-white tabular-nums">{fmt(finalVolume)} mL</span>
+      <div className="px-4 py-3 bg-white/[0.04]">
+        <div className="answer-label">Final volume in bag</div>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="answer-value text-white">{fmt(finalVolume)}</span>
+          <span className="answer-unit">mL</span>
+        </div>
       </div>
       {finalConcentration !== null && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-white/5">
-          <span className="text-[13px] text-slate-400">Final concentration</span>
-          <span className="text-[13px] font-semibold text-slate-200 tabular-nums">
-            {fmt(finalConcentration, 2)} {unitLabel}
-          </span>
+        <div className="px-4 py-3 border-t border-white/5">
+          <div className="answer-label">Final concentration</div>
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="answer-value text-white">{fmt(finalConcentration, 2)}</span>
+            <span className="answer-unit">{unitLabel}</span>
+          </div>
         </div>
       )}
     </div>
