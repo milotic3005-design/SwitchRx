@@ -247,7 +247,7 @@ function ElastomericStabilityTable({ stability }: { stability: ElastomericStabil
         </p>
       )}
       <p className="text-[10px] text-slate-600">
-        Chemical stability (not sterility) in SMARTeZ<span className="align-super text-[7px]">®</span>/EPIC Medical elastomeric pumps. Source: {MCK_ELASTOMERIC_SOURCE}. d = days, h = hours.
+        Chemical stability (not sterility) in SMARTeZ®/EPIC Medical elastomeric pumps. Source: {MCK_ELASTOMERIC_SOURCE}. d = days, h = hours.
       </p>
     </div>
   );
@@ -552,7 +552,7 @@ function DrugDetailModal({ drug, onClose }: { drug: Drug; onClose: () => void })
               {elastomeric && (
                 <div className="mt-4">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                    Elastomeric pump — SMARTeZ<span className="align-super text-[8px]">®</span> / EPIC Medical
+                    Elastomeric pump — SMARTeZ® / EPIC Medical
                   </p>
                   <ElastomericStabilityTable stability={elastomeric} />
                 </div>

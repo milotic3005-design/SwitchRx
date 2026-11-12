@@ -809,7 +809,7 @@ export function IDSAAntibioticAdvisor() {
                                 prose-headings:font-semibold prose-headings:text-white
                                 prose-h2:text-[18px] prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2.5 prose-h2:border-b prose-h2:border-emerald-500/30 prose-h2:text-emerald-300 prose-h2:tracking-wide first:prose-h2:mt-0
                                 prose-h3:text-[14px] prose-h3:mt-5 prose-h3:mb-2 prose-h3:text-blue-300 prose-h3:uppercase prose-h3:tracking-wider first:prose-h3:mt-0
-                                prose-h4:text-[12px] prose-h4:mt-4 prose-h4:mb-2 prose-h4:text-slate-300 prose-h4:uppercase prose-h4:tracking-wider
+                                prose-h4:text-[13px] prose-h4:mt-4 prose-h4:mb-2 prose-h4:text-slate-300 prose-h4:uppercase prose-h4:tracking-wider
                                 prose-p:my-3 prose-p:leading-7 prose-p:text-slate-300
                                 prose-ul:my-3 prose-ol:my-3 prose-li:my-2 prose-li:leading-relaxed prose-li:text-slate-300
                                 prose-strong:text-white

@@ -67,7 +67,7 @@ export function BreakRoom() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="text-[16px] font-semibold" style={{ color: 'var(--cc-gold-warm)' }}>{g.title}</h3>
-                  <span className="cc-eyebrow" style={{ fontSize: 9, letterSpacing: 2, color: 'var(--cc-faint)' }}>{g.tag}</span>
+                  <span className="cc-eyebrow" style={{ letterSpacing: 2, color: 'var(--cc-faint)' }}>{g.tag}</span>
                 </div>
                 <p className="text-[13px] text-slate-400 mt-1 leading-relaxed">{g.blurb}</p>
               </div>

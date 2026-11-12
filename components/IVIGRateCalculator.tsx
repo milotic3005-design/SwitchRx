@@ -587,14 +587,14 @@ export function IVIGRateCalculator() {
                     <XAxis
                       dataKey="time"
                       stroke="rgba(255,255,255,0.2)"
-                      tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }}
+                      tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 13 }}
                       tickFormatter={val => `${val}m`}
                       type="number"
                       domain={[0, 'dataMax']}
                     />
                     <YAxis
                       stroke="rgba(255,255,255,0.2)"
-                      tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }}
+                      tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 13 }}
                     />
                     <Tooltip
                       content={({ active, payload, label }) => {

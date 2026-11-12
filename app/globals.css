@@ -148,7 +148,7 @@ h1, h2, h3, h4, h5, h6 {
 .cc-eyebrow {
   text-transform: uppercase;
   letter-spacing: 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--cc-gold);
   font-weight: 500;
 }
@@ -156,7 +156,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Nav links — Space Grotesk, uppercase, tracked-out */
 .cc-navlink {
   font-family: var(--font-accent), sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 1.5px;
@@ -363,6 +363,24 @@ html.light .bg-blue-600, html.light .hover\:bg-blue-700:hover, html.light .bg-bl
 html.light .bg-emerald-500\/10, html.light .bg-emerald-500\/15, html.light .bg-emerald-500\/20,
 html.light .bg-emerald-500\/5, html.light .bg-emerald-500\/25, html.light .bg-emerald-500\/30 { background-color: rgba(47, 125, 118, 0.12); }
 html.light .bg-violet-500\/10, html.light .bg-violet-500\/15, html.light .bg-violet-500\/20 { background-color: rgba(109, 63, 209, 0.12); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   READABILITY FLOOR
+   No text renders below 13px. The app was authored with many 10–12px
+   labels; rather than edit some 360 places, every small text-size class is
+   raised here, the way the palette is remapped above. A new small class
+   must be added to this list: lib/ui/text-floor.test.ts fails until it is.
+   Never exempt text from the floor to fix a cramped layout; fix the layout.
+   ════════════════════════════════════════════════════════════════════════ */
+html .text-xs,
+html .text-\[7px\], html .text-\[8px\], html .text-\[9px\],
+html .text-\[10px\], html .text-\[10\.5px\],
+html .text-\[11px\], html .text-\[11\.5px\],
+html .text-\[12px\], html .text-\[12\.5px\] { font-size: 13px; }
+
+/* Uppercase labels were tracked wide to stay legible when tiny; at 13px they need less. */
+html .uppercase.tracking-wider { letter-spacing: 0.02em; }
+/* END READABILITY FLOOR */
 
 /* Mixing Guide — keep the clinical amber / rose signals (never remapped to the
    palette) but use deeper shades of the SAME hues on parchment for contrast. */
