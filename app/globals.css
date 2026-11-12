@@ -382,6 +382,22 @@ html .text-\[12px\], html .text-\[12\.5px\] { font-size: 13px; }
 html .uppercase.tracking-wider { letter-spacing: 0.02em; }
 /* END READABILITY FLOOR */
 
+/* ── Main answers ──────────────────────────────────────────────────────────
+   One style for the number a calculator exists to give: a 13px label, the
+   value at 28px, its unit at 15px. In a table the key numbers use 18px. No
+   colour is set on the value, so a text-colour utility decides it: neutral,
+   or a signal colour where the calculator computes one. */
+.answer-label { font-size: 13px; font-weight: 500; color: var(--cc-muted); }
+.answer-value { font-size: 28px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
+.answer-unit { font-size: 15px; font-weight: 500; color: var(--cc-muted); }
+.answer-key { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* On parchment a coloured answer keeps its hue in a deeper shade, measured at 4.5:1 or better against
+   its tinted box. Amber and rose stay amber and rose: they are clinical signals, never palette colours. */
+html.light .answer-value.text-amber-400, html.light .answer-key.text-amber-400 { color: #a34a08; }
+html.light .answer-value.text-rose-400, html.light .answer-key.text-rose-400 { color: #be123c; }
+html.light .answer-value.text-emerald-400, html.light .answer-key.text-emerald-400 { color: #256d66; }
+html.light .answer-value.text-blue-400, html.light .answer-key.text-blue-400 { color: #85631c; }
+
 /* Mixing Guide — keep the clinical amber / rose signals (never remapped to the
    palette) but use deeper shades of the SAME hues on parchment for contrast. */
 html.light .mixing-guide .text-amber-400 { color: #b45309; }

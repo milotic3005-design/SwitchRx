@@ -8,6 +8,7 @@ import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
 import { DiluentVolumeAdvisor } from './DiluentVolumeAdvisor';
 import { CALC_GROUPS, CALCULATORS, DEFAULT_CALC, LAST_CALC_KEY, isCalcId, type CalcId } from '@/lib/launcher/catalog';
 import { recordRecent } from '@/lib/launcher/recents';
+import { MainAnswer, type AnswerTone } from './ui/MainAnswer';
 
 // ── CADD drug presets ──────────────────────────────────────────────────────────
 // Concentration, KVO, concentration range, unit, and stability notes are sourced
@@ -43,30 +44,6 @@ const inputCls =
   'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-colors';
 
 const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5';
-
-function ResultBadge({
-  label, value, unit, color = 'blue',
-}: { label: string; value: string | null; unit: string; color?: string }) {
-  const colorMap: Record<string, string> = {
-    blue:    'bg-blue-500/10 border-blue-500/20 text-blue-400',
-    emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
-    rose:    'bg-rose-500/10 border-rose-500/20 text-rose-400',
-    amber:   'bg-amber-500/10 border-amber-500/20 text-amber-400',
-    violet:  'bg-violet-500/10 border-violet-500/20 text-violet-400',
-  };
-  return (
-    <div className={`mt-6 p-4 rounded-xl border flex justify-between items-center ${colorMap[color]}`}>
-      <span className="text-sm font-semibold opacity-80">{label}</span>
-      {value !== null ? (
-        <span className="text-xl font-bold">
-          {value} <span className="text-sm font-normal opacity-70">{unit}</span>
-        </span>
-      ) : (
-        <span className="text-sm font-normal opacity-50 italic">Enter values above</span>
-      )}
-    </div>
-  );
-}
 
 function UnitToggle({ unit, onClick }: { unit: string; onClick: () => void }) {
   return (
@@ -610,7 +587,7 @@ function VancomycinAUCCalculator() {
               )}
             </div>
           ) : (
-            <ResultBadge label="Recommended Dose" value={null} unit="" color="violet" />
+            <MainAnswer label="Recommended Dose" value={null} />
           )}
         </>
       ) : mode === 'levels' ? (
@@ -701,7 +678,7 @@ function VancomycinAUCCalculator() {
               </div>
             </div>
           ) : (
-            <ResultBadge label="Measured AUC₂₄" value={null} unit="" color="violet" />
+            <MainAnswer label="Measured AUC₂₄" value={null} />
           )}
         </>
       ) : (
@@ -874,7 +851,7 @@ function VancomycinAUCCalculator() {
               </div>
             </div>
           ) : (
-            <ResultBadge label="Bayesian AUC₂₄" value={null} unit="" color="violet" />
+            <MainAnswer label="Bayesian AUC₂₄" value={null} />
           )}
         </>
       )}
@@ -939,7 +916,7 @@ function CrClCalculator() {
           </label>
         </div>
       </div>
-      <ResultBadge label="Est. CrCl" value={result} unit="mL/min" color="blue" />
+      <MainAnswer label="Est. CrCl" value={result} unit="mL/min" />
     </div>
   );
 }
@@ -951,6 +928,9 @@ function CrClCalculator() {
 //   • BMI + WHO category
 // Combines what used to be two separate calculators (Adjusted BW, BMI Calculator)
 // so the pharmacist only enters height and weight once.
+// The BMI category is a clinical signal, so its answer keeps a colour: underweight, normal, overweight, obese.
+const BMI_TONE = { blue: 'info', emerald: 'ok', amber: 'caution', rose: 'alert' } as const satisfies Record<string, AnswerTone>;
+
 function BodyMetricsCalculator() {
   const [ht, setHt] = useState('');
   const [wt, setWt] = useState('');
@@ -992,7 +972,7 @@ function BodyMetricsCalculator() {
     return { bmiValue: b.toFixed(1), bmiCategory: cat };
   })();
 
-  const bmiColor: 'blue' | 'emerald' | 'amber' | 'rose' = (() => {
+  const bmiColor: keyof typeof BMI_TONE = (() => {
     if (!bmiValue) return 'blue';
     const v = parseFloat(bmiValue);
     if (v < 18.5) return 'blue';
@@ -1029,14 +1009,9 @@ function BodyMetricsCalculator() {
         <span className="text-sm font-semibold text-slate-300">Female Patient</span>
       </label>
 
-      {ibwNum != null && (
-        <div className="flex justify-between text-sm px-1">
-          <span className="text-slate-500">IBW (Devine)</span>
-          <span className="text-slate-300 font-semibold">{ibwNum.toFixed(1)} kg</span>
-        </div>
-      )}
-      <ResultBadge label="Adjusted BW" value={adjResult} unit="kg" color="emerald" />
-      <ResultBadge label="BMI" value={bmiValue} unit="kg/m²" color={bmiColor} />
+      {ibwNum != null && <MainAnswer label="Ideal body weight (Devine)" value={ibwNum.toFixed(1)} unit="kg" />}
+      <MainAnswer label="Adjusted BW" value={adjResult} unit="kg" className={ibwNum != null ? 'mt-3' : 'mt-6'} />
+      <MainAnswer label="BMI" value={bmiValue} unit="kg/m²" tone={BMI_TONE[bmiColor]} className="mt-3" />
       {bmiCategory && bmiValue && (
         <p className="text-xs text-slate-400 px-1 font-medium">{bmiCategory}</p>
       )}
@@ -1082,7 +1057,7 @@ function IronDeficitCalculator() {
           <input type="number" value={TARGET_HGB} disabled className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed" />
         </div>
       </div>
-      <ResultBadge label="Total Iron Deficit" value={result} unit="mg" color="amber" />
+      <MainAnswer label="Total Iron Deficit" value={result} unit="mg" />
     </div>
   );
 }
@@ -1120,7 +1095,7 @@ function CorrectedCalciumCalculator() {
         <label className={labelCls}>Serum Albumin (g/dL)</label>
         <input type="number" step="0.1" value={alb} onChange={e => setAlb(e.target.value)} placeholder="e.g. 2.8" className={inputCls} />
       </div>
-      <ResultBadge label="Corrected Ca" value={result} unit="mg/dL" color="rose" />
+      <MainAnswer label="Corrected Ca" value={result} unit="mg/dL" />
       {flag && result && (
         <p className={`text-xs font-semibold ${flag.color} px-1`}>{flag.text} (normal 8.5–10.5 mg/dL)</p>
       )}
@@ -1805,7 +1780,7 @@ function ESADosingCalculator() {
               <span>Hgb is below 10.6 g/dL — enter the prior (≈4-week) Hgb to determine the rise and the correct adjustment.</span>
             </div>
           ) : (
-            <ResultBadge label="Recommendation" value={null} unit="" color="violet" />
+            <MainAnswer label="Recommendation" value={null} />
           )}
         </div>
       )}
@@ -1850,7 +1825,7 @@ function ESADosingCalculator() {
               </div>
             </div>
           ) : (
-            <ResultBadge label="Recommendation" value={null} unit="" color="violet" />
+            <MainAnswer label="Recommendation" value={null} />
           )}
         </div>
       )}
