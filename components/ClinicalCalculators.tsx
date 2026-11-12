@@ -513,11 +513,11 @@ function VancomycinAUCCalculator() {
             <div className="space-y-4">
               {/* Headline recommendation */}
               <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+                <div className="answer-label mb-1">
                   Recommended Maintenance Regimen
                 </div>
-                <div className="text-2xl font-bold text-white">
-                  {empiric.roundedDose} mg <span className="text-base font-medium text-slate-300">IV q{empiric.interval}h</span>
+                <div className="answer-value text-white">
+                  {empiric.roundedDose} mg <span className="answer-unit">IV q{empiric.interval}h</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   ≈ {empiric.actualDailyDose} mg/day · Loading dose{' '}
@@ -541,19 +541,19 @@ function VancomycinAUCCalculator() {
                   empiric.inRange ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-amber-500/10 border-amber-500/25'
                 }`}>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Proj. AUC₂₄</div>
-                  <div className={`text-lg font-bold ${empiric.inRange ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <div className={`text-[15px] font-semibold ${empiric.inRange ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {empiric.projAUC.toFixed(0)}
                   </div>
                   <div className="text-[10px] text-slate-500">mg·h/L</div>
                 </div>
                 <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Est. Peak</div>
-                  <div className="text-lg font-bold text-slate-200">{empiric.cmax.toFixed(1)}</div>
+                  <div className="text-[15px] font-semibold text-slate-200">{empiric.cmax.toFixed(1)}</div>
                   <div className="text-[10px] text-slate-500">mg/L</div>
                 </div>
                 <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Est. Trough</div>
-                  <div className="text-lg font-bold text-slate-200">{empiric.cmin.toFixed(1)}</div>
+                  <div className="text-[15px] font-semibold text-slate-200">{empiric.cmin.toFixed(1)}</div>
                   <div className="text-[10px] text-slate-500">mg/L</div>
                 </div>
               </div>
@@ -632,13 +632,13 @@ function VancomycinAUCCalculator() {
               <div className={`p-4 rounded-xl border ${
                 levels.inRange ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
               }`}>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                <div className="answer-label mb-1">
                   Measured AUC₂₄
                 </div>
-                <div className={`text-3xl font-bold ${
+                <div className={`answer-value ${
                   levels.inRange ? 'text-emerald-400' : levels.auc24 < VANCO_AUC_LOW ? 'text-amber-400' : 'text-rose-400'
                 }`}>
-                  {levels.auc24.toFixed(0)} <span className="text-base font-medium text-slate-400">mg·h/L</span>
+                  {levels.auc24.toFixed(0)} <span className="answer-unit">mg·h/L</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   {levels.inRange
@@ -651,11 +651,11 @@ function VancomycinAUCCalculator() {
 
               {!levels.inRange && (
                 <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+                  <div className="answer-label mb-1">
                     Suggested Adjustment (same interval)
                   </div>
-                  <div className="text-2xl font-bold text-white">
-                    {levels.newDose} mg <span className="text-base font-medium text-slate-300">IV q{levels.tau}h</span>
+                  <div className="answer-value text-white">
+                    {levels.newDose} mg <span className="answer-unit">IV q{levels.tau}h</span>
                   </div>
                   <div className="text-xs text-slate-400 mt-1">Targets AUC₂₄ ≈ 500 mg·h/L using the patient's measured clearance.</div>
                 </div>
@@ -791,13 +791,13 @@ function VancomycinAUCCalculator() {
               <div className={`p-4 rounded-xl border ${
                 bayesian.inRange ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
               }`}>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                <div className="answer-label mb-1">
                   Bayesian AUC₂₄ ({bayesian.nLevels === 1 ? '1 level + prior' : '2 levels + prior'})
                 </div>
-                <div className={`text-3xl font-bold ${
+                <div className={`answer-value ${
                   bayesian.inRange ? 'text-emerald-400' : bayesian.auc24 < VANCO_AUC_LOW ? 'text-amber-400' : 'text-rose-400'
                 }`}>
-                  {bayesian.auc24.toFixed(0)} <span className="text-base font-medium text-slate-400">mg·h/L</span>
+                  {bayesian.auc24.toFixed(0)} <span className="answer-unit">mg·h/L</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   {bayesian.inRange
@@ -810,11 +810,11 @@ function VancomycinAUCCalculator() {
 
               {!bayesian.inRange && (
                 <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+                  <div className="answer-label mb-1">
                     Suggested Adjustment (same interval)
                   </div>
-                  <div className="text-2xl font-bold text-white">
-                    {bayesian.newDose} mg <span className="text-base font-medium text-slate-300">IV q{bTau}h</span>
+                  <div className="answer-value text-white">
+                    {bayesian.newDose} mg <span className="answer-unit">IV q{bTau}h</span>
                   </div>
                   <div className="text-xs text-slate-400 mt-1">Targets AUC₂₄ ≈ 500 mg·h/L from the MAP-fit clearance.</div>
                 </div>
@@ -823,12 +823,12 @@ function VancomycinAUCCalculator() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pred. Peak</div>
-                  <div className="text-lg font-bold text-slate-200">{bayesian.cmax.toFixed(1)}</div>
+                  <div className="text-[15px] font-semibold text-slate-200">{bayesian.cmax.toFixed(1)}</div>
                   <div className="text-[10px] text-slate-500">mg/L</div>
                 </div>
                 <div className="p-3 rounded-xl border bg-white/5 border-white/10 text-center">
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Pred. Trough</div>
-                  <div className="text-lg font-bold text-slate-200">{bayesian.cmin.toFixed(1)}</div>
+                  <div className="text-[15px] font-semibold text-slate-200">{bayesian.cmin.toFixed(1)}</div>
                   <div className="text-[10px] text-slate-500">mg/L</div>
                 </div>
               </div>
@@ -1614,16 +1614,16 @@ function ESADosingCalculator() {
 
           {/* Starting dose */}
           <div className="p-4 rounded-xl border bg-violet-500/10 border-violet-500/30">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300 mb-1">
+            <div className="answer-label mb-1">
               Starting Dose — {agent.label} ({agent.brand})
             </div>
             {initDose ? (
               <>
-                <div className="text-2xl font-bold text-white">
+                <div className="answer-value text-white">
                   {agent.weightBased
                     ? `${esaNearestSyringe(initDose.raw)} mcg`
                     : esaFmtDose(initDose.rounded, agent.unit)}
-                  <span className="text-base font-medium text-slate-300"> SQ</span>
+                  <span className="answer-unit"> SQ</span>
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   {agent.initSchedule}
@@ -1716,7 +1716,7 @@ function ESADosingCalculator() {
                     <div className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider ${ESA_TEXT_COLORS[titration.color]} mb-1.5`}>
                       <ActionIcon size={14} /> Recommendation
                     </div>
-                    <div className="text-2xl font-bold text-white">{meta.label}</div>
+                    <div className="answer-value text-white">{meta.label}</div>
 
                     {/* New dose / instruction */}
                     {titration.action === 'hold' ? (
@@ -2110,7 +2110,7 @@ function HBVSerologyInterpreter() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2.5">
               <FlaskConical className={`w-5 h-5 ${verdictText[r.color]}`} />
-              <h3 className="text-lg font-bold text-white">{r.status}</h3>
+              <h3 className="text-[20px] font-bold text-white">{r.status}</h3>
             </div>
             <span className={`px-3 py-1 rounded-full text-[12px] font-bold border ${verdictCls[r.color]} ${verdictText[r.color]}`}>
               {r.riskLabel}
