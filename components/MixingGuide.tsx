@@ -20,6 +20,8 @@ import {
   BookOpen, Network, TrendingUp, Layers, CheckCircle2, Info,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { TOOL_ICONS } from '@/components/launcher/icons';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { DRUG_DB } from '@/data/drug-database';
 import type { Drug } from '@/lib/iv-reference-types';
 import { getMixingNotes, type MixingNotes } from '@/data/mixing-notes';
@@ -720,17 +722,11 @@ export function MixingGuide({ openDrug }: { openDrug?: { drugKey: string; token:
   return (
     <div className="mixing-guide pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
       {/* Page header */}
-      <div className="mb-7">
-        <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-          <div className="bg-violet-500/10 p-2.5 rounded-xl border border-violet-500/20">
-            <Beaker className="text-violet-400" size={20} strokeWidth={2} />
-          </div>
-          Mixing Guide
-        </h1>
-        <p className="text-[15px] text-slate-400 mt-2">
-          Type a drug to see how to mix it, give it, and store it — at a glance.
-        </p>
-      </div>
+      <PageHeader
+        icon={TOOL_ICONS.mixing}
+        title="Mixing Guide"
+        description="Type a drug to see how to mix it, give it, and store it — at a glance."
+      />
 
       {/* Search */}
       <div className="relative mb-4">

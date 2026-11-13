@@ -6,6 +6,8 @@ import {
   ChevronDown, ChevronRight, Pill, Droplet, Thermometer, FlaskConical, Network
 } from 'lucide-react';
 import { DRUG_DB } from '@/data/drug-database';
+import { TOOL_ICONS } from '@/components/launcher/icons';
+import { PageHeader } from '@/components/ui/PageHeader';
 import type { Drug } from '@/lib/iv-reference-types';
 import { getAntimicrobialDetails, type AntimicrobialDetails, type SpectrumCoverage } from '@/data/antimicrobial-details';
 import {
@@ -844,17 +846,11 @@ export function DrugReference({
   return (
     <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
       {/* Page header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-          <div className="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20">
-            <FlaskConical className="text-blue-400" size={20} strokeWidth={2} />
-          </div>
-          Drug Reference
-        </h1>
-        <p className="text-[15px] text-slate-400 mt-2">
-          IV compounding, infusion parameters, BUDs, and safety data for {DRUG_DB.length} medications.
-        </p>
-      </div>
+      <PageHeader
+        icon={TOOL_ICONS.drugref}
+        title="Drug Reference"
+        description={`IV compounding, infusion parameters, BUDs, and safety data for ${DRUG_DB.length} medications.`}
+      />
 
       {/* Search */}
       <div className="relative mb-5">

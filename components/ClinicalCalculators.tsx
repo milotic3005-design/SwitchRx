@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle, ArrowUp, ArrowDown, Pause, Check, Droplets, FlaskConical, ShieldAlert } from 'lucide-react';
+import { TOOL_ICONS } from '@/components/launcher/icons';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
@@ -2297,17 +2299,11 @@ export function ClinicalCalculators({ openCalc }: { openCalc?: { id: CalcId; tok
   return (
     <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full animate-in fade-in duration-500">
       {/* Page header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-          <div className="bg-violet-500/10 p-2.5 rounded-xl border border-violet-500/20">
-            <Calculator className="text-violet-400" size={20} strokeWidth={2} />
-          </div>
-          Clinical Calculators
-        </h1>
-        <p className="text-[15px] text-slate-400 mt-2">
-          Evidence-based dosing and pharmacokinetic tools for clinical decision support.
-        </p>
-      </div>
+      <PageHeader
+        icon={TOOL_ICONS.calculators}
+        title="Clinical Calculators"
+        description="Evidence-based dosing and pharmacokinetic tools for clinical decision support."
+      />
 
       {/* Calculator selector: one labelled row per group */}
       <div className="mb-8 space-y-2">

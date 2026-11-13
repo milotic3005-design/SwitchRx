@@ -11,6 +11,7 @@ import { CommandPalette } from '@/components/launcher/CommandPalette';
 import { useShortcutHint } from '@/components/launcher/hooks';
 import { Launcher } from '@/components/launcher/Launcher';
 import { TOOL_ICONS } from '@/components/launcher/icons';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { Activity, Search, Sun, Moon } from 'lucide-react';
 import { onOpenDrug, onAskCopilot } from '@/lib/cross-tab-events';
 import { DRUG_DB } from '@/data/drug-database';
@@ -133,13 +134,11 @@ export default function Home() {
   // on every nav click. This is what keeps tab switching snappy.
   const switchingTab = useMemo(() => (
     <div className="pt-32 pb-16 px-6 md:px-12 max-w-6xl mx-auto w-full">
-      <div className="mb-8">
-        <div className="cc-eyebrow mb-3">Protocols</div>
-        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--cc-gold-warm)' }}>
-          Medication Switching
-        </h1>
-        <p className="text-[15px] text-slate-400 mt-3">Evidence-based replacement therapies tailored to patient outcomes.</p>
-      </div>
+      <PageHeader
+        icon={TOOL_ICONS.switching}
+        title="Switching Protocols"
+        description="Evidence-based replacement therapies tailored to patient outcomes."
+      />
       <SwitchingProtocols />
     </div>
   ), []);

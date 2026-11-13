@@ -20,7 +20,13 @@ const read = (file: string) => readFileSync(path.join(ROOT, file), 'utf8');
 const IN_SCOPE: string[] = [];
 
 /** Tool pages whose header must be the shared PageHeader. */
-const PAGES: string[] = [];
+const PAGES: string[] = [
+  'app/page.tsx', // the Switching Protocols tab
+  'components/ClinicalCalculators.tsx',
+  'components/DrugReference.tsx',
+  'components/MixingGuide.tsx',
+  'components/BreakRoom.tsx',
+];
 
 /** Search boxes keep their own large style (spec section 2). Matched against the placeholder text. */
 const SEARCH_EXEMPT = [

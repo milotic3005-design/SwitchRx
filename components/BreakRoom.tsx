@@ -2,8 +2,10 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Wind, Zap, Sparkles, ArrowLeft, Play, RotateCcw, Trophy, Target,
-  Heart, Coffee, Spade,
+  Heart, Spade,
 } from 'lucide-react';
+import { TOOL_ICONS } from '@/components/launcher/icons';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 /**
  * The Break Room — a small arcade of quick, self-contained destress games for
@@ -39,16 +41,11 @@ export function BreakRoom() {
 
   return (
     <div className="pt-32 pb-16 px-6 md:px-12 max-w-5xl mx-auto w-full">
-      <div className="mb-8">
-        <div className="cc-eyebrow mb-3">Recharge</div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3" style={{ color: 'var(--cc-gold-warm)' }}>
-          <Coffee size={28} className="text-slate-400" strokeWidth={1.5} />
-          The Break Room
-        </h1>
-        <p className="text-[15px] text-slate-400 mt-3">
-          A 60-second reset between cases. Step away, breathe, play — then back to it.
-        </p>
-      </div>
+      <PageHeader
+        icon={TOOL_ICONS.breakroom}
+        title="Break Room"
+        description="A 60-second reset between cases. Step away, breathe, play — then back to it."
+      />
 
       {game === 'menu' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
