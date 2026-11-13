@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { TOOL_ICONS } from '@/components/launcher/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/Button';
 
 /**
  * The Break Room — a small arcade of quick, self-contained destress games for
@@ -312,17 +313,17 @@ function PulseGame() {
               <>
                 <p className="text-[14px] text-slate-200 font-medium">Tap when the ring meets the mark</p>
                 <p className="text-[12px] text-slate-400 -mt-1">Nail it perfectly to build your combo. Gold rings pay double. 3 misses ends it.</p>
-                <button onClick={start} className="btn-premium px-6 py-2.5 rounded-full inline-flex items-center gap-2 mt-1">
+                <Button variant="primary" onClick={start} className="mt-1">
                   <Play size={15} /> Start
-                </button>
+                </Button>
               </>
             ) : (
               <>
                 <p className="text-[15px] font-semibold" style={{ color: 'var(--cc-gold-warm)' }}>Score {score}</p>
                 <p className="text-[12px] text-slate-300">Best combo this run: <span className="text-amber-300 font-semibold">{g.current.bestCombo}x</span> · Best score: <span className="text-amber-300 font-semibold">{best}</span></p>
-                <button onClick={start} className="btn-premium px-5 py-2 rounded-full inline-flex items-center gap-2 mt-1">
+                <Button variant="primary" onClick={start} className="mt-1">
                   <RotateCcw size={14} /> Again
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -409,9 +410,9 @@ function BoxBreathing() {
 
       <div className="mt-7 flex items-center gap-3">
         {!running ? (
-          <button onClick={start} className="btn-premium px-6 py-2.5 rounded-full inline-flex items-center gap-2">
+          <Button variant="primary" onClick={start}>
             <Play size={15} /> Begin
-          </button>
+          </Button>
         ) : (
           <button onClick={stop} className="glass-card px-6 py-2.5 rounded-full inline-flex items-center gap-2 border border-white/10 text-slate-200 hover:bg-white/5">
             Finish
@@ -665,17 +666,17 @@ function PillPop() {
             {phase === 'idle' ? (
               <>
                 <p className="text-[14px] text-slate-200 font-medium">Pop as many capsules as you can in 30 seconds</p>
-                <button onClick={start} className="btn-premium px-6 py-2.5 rounded-full inline-flex items-center gap-2">
+                <Button variant="primary" onClick={start}>
                   <Play size={15} /> Start
-                </button>
+                </Button>
               </>
             ) : (
               <>
                 <p className="text-[15px] font-semibold" style={{ color: 'var(--cc-gold-warm)' }}>Time! You popped {score}.</p>
                 <p className="text-[12px] text-slate-300">Best: <span className="text-amber-300 font-semibold">{best}</span></p>
-                <button onClick={start} className="btn-premium px-5 py-2 rounded-full inline-flex items-center gap-2 mt-1">
+                <Button variant="primary" onClick={start} className="mt-1">
                   <RotateCcw size={14} /> Again
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -1054,9 +1055,9 @@ function Solitaire() {
           Draw {drawThree ? 3 : 1}
         </button>
         {canAuto && (
-          <button onClick={() => { idleRef.current = 0; setAuto(true); }} className="btn-premium px-4 py-1.5 rounded-full text-[12px]">
+          <Button variant="primary" size="sm" onClick={() => { idleRef.current = 0; setAuto(true); }}>
             Auto-finish
-          </button>
+          </Button>
         )}
       </div>
 
@@ -1143,9 +1144,9 @@ function Solitaire() {
           <div className="text-[13px] text-slate-300 mt-1 tabular-nums">
             {fmtClock(elapsed)} · {moves} moves
           </div>
-          <button onClick={newGame} className="btn-premium px-5 py-2 rounded-full inline-flex items-center gap-2 mt-3">
+          <Button variant="primary" onClick={newGame} className="mt-3">
             <Play size={14} /> Deal again
-          </button>
+          </Button>
         </div>
       )}
 

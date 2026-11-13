@@ -18,6 +18,36 @@ const visibleDrugClasses = Object.fromEntries(
 import { monographs } from '@/lib/drug-monographs';
 import { ArrowRight, ArrowRightLeft, AlertTriangle, CheckCircle2, BookOpen, Activity, ShieldAlert, Info, X, Search, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
+import { SectionCard } from '@/components/ui/SectionCard';
+import { fieldClass, labelClass } from '@/components/ui/styles';
+
+const SETUP_SECTIONS = [
+  { value: 'therapy', label: 'Current Therapy' },
+  { value: 'patient', label: 'Patient Context' },
+] as const;
+
+const VIEWS = [
+  {
+    value: 'setup',
+    label: (
+      <span className="inline-flex items-center gap-2">
+        <Activity size={16} aria-hidden="true" />
+        Setup
+      </span>
+    ),
+  },
+  {
+    value: 'suggestions',
+    label: (
+      <span className="inline-flex items-center gap-2">
+        <Sparkles size={16} aria-hidden="true" />
+        Suggestions
+      </span>
+    ),
+  },
+] as const;
 
 export function SwitchingProtocols() {
   const [fromDrug, setFromDrug] = useState('');
@@ -112,61 +142,12 @@ export function SwitchingProtocols() {
 
   return (
     <div className="w-full max-w-5xl mx-auto">
-      {/* Animated Tab Bar */}
-      <div className="flex justify-center mb-8">
-        <motion.div layout className="bg-[#1a1a1a] border border-white/10 rounded-[2rem] p-2 flex flex-col gap-2 shadow-2xl relative z-20">
-          <AnimatePresence mode="popLayout">
-            {mainTab === 'setup' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, scale: 0.95 }}
-                animate={{ opacity: 1, height: 'auto', scale: 1 }}
-                exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="flex items-center justify-center gap-1 px-2 pt-1"
-              >
-                {['therapy', 'patient'].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setSubTab(t as any)}
-                    className={`relative px-5 py-2 text-[13px] font-medium rounded-full transition-colors ${subTab === t ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                  >
-                    {subTab === t && (
-                      <motion.div layoutId="sub-pill" className="absolute inset-0 bg-white/10 rounded-full" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
-                    )}
-                    <span className="relative z-10">{t === 'therapy' ? 'Current Therapy' : 'Patient Context'}</span>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-full">
-            <button
-              onClick={() => setMainTab('setup')}
-              className={`relative flex items-center gap-2 px-6 py-3 text-[14px] font-medium rounded-full transition-colors ${mainTab === 'setup' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              {mainTab === 'setup' && (
-                <motion.div layoutId="main-pill" className="absolute inset-0 bg-[#2a2a2a] rounded-full shadow-lg border border-white/5" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
-              )}
-              <span className="relative z-10 flex items-center gap-2">
-                <Activity size={16} />
-                Setup
-              </span>
-            </button>
-            <button
-              onClick={() => setMainTab('suggestions')}
-              className={`relative flex items-center gap-2 px-6 py-3 text-[14px] font-medium rounded-full transition-colors ${mainTab === 'suggestions' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              {mainTab === 'suggestions' && (
-                <motion.div layoutId="main-pill" className="absolute inset-0 bg-[#2a2a2a] rounded-full shadow-lg border border-white/5" transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
-              )}
-              <span className="relative z-10 flex items-center gap-2">
-                <Sparkles size={16} />
-                Suggestions
-              </span>
-            </button>
-          </div>
-        </motion.div>
+      {/* View and section switches */}
+      <div className="flex flex-col items-center gap-3 mb-8">
+        {mainTab === 'setup' && (
+          <Segmented options={SETUP_SECTIONS} value={subTab} onChange={setSubTab} ariaLabel="Setup section" />
+        )}
+        <Segmented options={VIEWS} value={mainTab} onChange={setMainTab} ariaLabel="View" />
       </div>
 
       {/* Content Area */}
@@ -184,18 +165,11 @@ export function SwitchingProtocols() {
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Left Side: Current Therapy */}
+                    <SectionCard icon={Activity} title="Current Therapy">
                     <div className="space-y-5">
-                      <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-3">
-                        <div className="text-blue-400">
-                          <Activity size={16} strokeWidth={1.5} />
-                        </div>
-                        <h3 className="font-medium text-slate-200 text-[14px]">Current Therapy</h3>
-                      </div>
                       
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="block text-[12px] font-medium text-slate-500" htmlFor="current-medication">Current Medication</label>
-                        </div>
+                        <label className={labelClass} htmlFor="current-medication">Current Medication</label>
                         <div className="relative">
                           <select 
                             id="current-medication" value={fromDrug}
@@ -203,7 +177,7 @@ export function SwitchingProtocols() {
                               setFromDrug(e.target.value);
                               setCurrentDose('');
                             }}
-                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                            className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                             suppressHydrationWarning
                           >
                             <option className="bg-[#121212] text-white" value="">Select a medication...</option>
@@ -217,23 +191,19 @@ export function SwitchingProtocols() {
                               </optgroup>
                             ))}
                           </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                              <ChevronDown size={14} />
-                            </div>
-                          </div>
+                          <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="current-dose">Current Dose</label>
+                          <label className={labelClass} htmlFor="current-dose">Current Dose</label>
                           <div className="relative">
                             <select 
                               id="current-dose" value={currentDose}
                               onChange={(e) => setCurrentDose(e.target.value)}
                               disabled={!fromDrug}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              className={`${fieldClass} appearance-none pr-10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
                               suppressHydrationWarning
                             >
                               <option className="bg-[#121212] text-white" value="">{fromDrug ? "Select dose..." : "Select drug first"}</option>
@@ -241,71 +211,52 @@ export function SwitchingProtocols() {
                                 <option className="bg-[#121212] text-white" key={dose} value={dose}>{dose} mg</option>
                               ))}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                                <ChevronDown size={14} />
-                              </div>
-                            </div>
+                            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="duration">Duration</label>
+                          <label className={labelClass} htmlFor="duration">Duration</label>
                           <div className="relative">
                             <select 
                               id="duration" value={duration}
                               onChange={(e) => setDuration(e.target.value)}
-                              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                              className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                               suppressHydrationWarning
                             >
                               {durations.map(d => <option className="bg-[#121212] text-white" key={d} value={d}>{d}</option>)}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                                <ChevronDown size={14} />
-                              </div>
-                            </div>
+                            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           </div>
                         </div>
                       </div>
 
                     </div>
+                    </SectionCard>
 
                     {/* Right Side: Switch To */}
+                    <SectionCard icon={ArrowRight} title="Switching Parameters">
                     <div className="space-y-5">
-                      <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-3">
-                        <div className="text-emerald-400">
-                          <ArrowRight size={16} strokeWidth={1.5} />
-                        </div>
-                        <h3 className="font-medium text-slate-200 text-[14px]">Switching Parameters</h3>
-                      </div>
 
                       <div>
-                        <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="reason">Primary Reason for Switch</label>
+                        <label className={labelClass} htmlFor="reason">Primary Reason for Switch</label>
                         <div className="relative">
                           <select 
                             id="reason" value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                            className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                             suppressHydrationWarning
                           >
                             {reasons.map(r => <option className="bg-[#121212] text-white" key={r} value={r}>{r}</option>)}
                           </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                              <ChevronDown size={14} />
-                            </div>
-                          </div>
+                          <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         </div>
                       </div>
                     </div>
+                    </SectionCard>
                   </div>
                   
                   <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
-                    <button 
-                      onClick={handleSearch}
-                      disabled={!fromDrug || isSearching}
-                      className="btn-premium px-8 py-3 rounded-xl font-medium flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
+                    <Button variant="primary" onClick={handleSearch} disabled={!fromDrug || isSearching}>
                       {isSearching ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
@@ -317,48 +268,43 @@ export function SwitchingProtocols() {
                           Find Switching Protocols
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="flex items-center gap-2 mb-5 border-b border-white/5 pb-3">
-                    <div className="text-blue-400">
-                      <Info size={16} strokeWidth={1.5} />
-                    </div>
-                    <h3 className="font-medium text-slate-200 text-[14px]">Patient Context (Optional)</h3>
-                  </div>
+                  <SectionCard icon={Info} title="Patient Context (Optional)">
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="age">Age (yrs)</label>
+                      <label className={labelClass} htmlFor="age">Age (yrs)</label>
                       <input 
                         type="number" 
                         id="age" value={age} 
                         onChange={(e) => setAge(e.target.value)} 
                         placeholder="e.g. 45"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className={fieldClass}
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="weight">Weight (kg)</label>
+                      <label className={labelClass} htmlFor="weight">Weight (kg)</label>
                       <input 
                         type="number" 
                         id="weight" value={weight} 
                         onChange={(e) => setWeight(e.target.value)} 
                         placeholder="e.g. 70"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className={fieldClass}
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="renal-function">Renal Function</label>
+                      <label className={labelClass} htmlFor="renal-function">Renal Function</label>
                       <div className="relative">
                         <select 
                           id="renal-function" value={renalFunction} 
                           onChange={(e) => setRenalFunction(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Normal">Normal</option>
@@ -367,20 +313,16 @@ export function SwitchingProtocols() {
                           <option className="bg-[#121212] text-white" value="Severe Impairment">Severe Impairment</option>
                           <option className="bg-[#121212] text-white" value="ESRD/Dialysis">ESRD / Dialysis</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
-                        </div>
+                        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="hepatic-function">Hepatic Function</label>
+                      <label className={labelClass} htmlFor="hepatic-function">Hepatic Function</label>
                       <div className="relative">
                         <select 
                           id="hepatic-function" value={hepaticFunction} 
                           onChange={(e) => setHepaticFunction(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Normal">Normal</option>
@@ -388,61 +330,53 @@ export function SwitchingProtocols() {
                           <option className="bg-[#121212] text-white" value="Moderate Impairment">Moderate Impairment (Child-Pugh B)</option>
                           <option className="bg-[#121212] text-white" value="Severe Impairment">Severe Impairment (Child-Pugh C)</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
-                        </div>
+                        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       </div>
                     </div>
                     <div className="lg:col-span-2">
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="comorbidities">Comorbidities</label>
+                      <label className={labelClass} htmlFor="comorbidities">Comorbidities</label>
                       <input 
                         type="text" 
                         id="comorbidities" value={comorbidities} 
                         onChange={(e) => setComorbidities(e.target.value)} 
                         placeholder="e.g. Diabetes, Hypertension"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className={fieldClass}
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="infection-history">History of Severe Infections</label>
+                      <label className={labelClass} htmlFor="infection-history">History of Severe Infections</label>
                       <div className="relative">
                         <select 
                           id="infection-history" value={infectionHistory} 
                           onChange={(e) => setInfectionHistory(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="No">No</option>
                           <option className="bg-[#121212] text-white" value="Yes">Yes</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
-                        </div>
+                        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="other-medications">Other Current Medications</label>
+                      <label className={labelClass} htmlFor="other-medications">Other Current Medications</label>
                       <input 
                         type="text" 
                         id="other-medications" value={otherMedications} 
                         onChange={(e) => setOtherMedications(e.target.value)} 
                         placeholder="e.g. Lisinopril, Metformin"
-                        className="appearance-none w-full px-5 py-3.5 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white placeholder:text-slate-500 transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+                        className={fieldClass}
                         suppressHydrationWarning
                       />
                     </div>
                     <div>
-                      <label className="block text-[12px] font-medium text-slate-500 mb-2" htmlFor="cyp2d6-status">CYP2D6 Status</label>
+                      <label className={labelClass} htmlFor="cyp2d6-status">CYP2D6 Status</label>
                       <div className="relative">
                         <select 
                           id="cyp2d6-status" value={cyp2d6Status} 
                           onChange={(e) => setCyp2d6Status(e.target.value)}
-                          className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+                          className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
                           suppressHydrationWarning
                         >
                           <option className="bg-[#121212] text-white" value="Unknown">Unknown</option>
@@ -451,21 +385,14 @@ export function SwitchingProtocols() {
                           <option className="bg-[#121212] text-white" value="Normal">Normal Metabolizer</option>
                           <option className="bg-[#121212] text-white" value="Ultrarapid">Ultrarapid Metabolizer</option>
                         </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                            <ChevronDown size={14} />
-                          </div>
-                        </div>
+                        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       </div>
                     </div>
                   </div>
+                  </SectionCard>
                   
                   <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
-                    <button 
-                      onClick={handleSearch}
-                      disabled={!fromDrug || isSearching}
-                      className="btn-premium px-8 py-3 rounded-xl font-medium flex items-center gap-2 cursor-pointer disabled:opacity-50 text-[15px]"
-                    >
+                    <Button variant="primary" onClick={handleSearch} disabled={!fromDrug || isSearching}>
                       {isSearching ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
@@ -477,7 +404,7 @@ export function SwitchingProtocols() {
                           Find Switching Protocols
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

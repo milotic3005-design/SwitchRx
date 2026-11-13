@@ -30,6 +30,8 @@ const IN_SCOPE: string[] = [
   'components/InfusionRateCalculator.tsx',
   'components/DiluentVolumeAdvisor.tsx',
   'components/IDSAAntibioticAdvisor.tsx',
+  'components/SwitchingProtocols.tsx',
+  'components/BreakRoom.tsx',
 ];
 
 /** Tool pages whose header must be the shared PageHeader. */
