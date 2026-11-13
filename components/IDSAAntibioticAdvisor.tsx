@@ -12,6 +12,9 @@ import {
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
+import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
+import { fieldClass, labelClass } from '@/components/ui/styles';
 
 type GroundingSource = { uri: string; title: string };
 
@@ -238,10 +241,22 @@ const emptyInput: PatientInput = {
   clinicalNotes: '',
 };
 
-const inputCls =
-  'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-colors';
+const SEXES = [
+  { value: 'M', label: 'Male' },
+  { value: 'F', label: 'Female' },
+] as const;
 
-const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5';
+const PREGNANCY = [
+  { value: 'no', label: 'Not pregnant' },
+  { value: 'yes', label: 'Yes — pregnant' },
+] as const;
+
+const HEPATIC = (['Normal', 'Child-Pugh A', 'Child-Pugh B', 'Child-Pugh C'] as const).map(h => ({ value: h, label: h }));
+
+const SEVERITIES = (['Mild', 'Moderate', 'Severe'] as const).map(s => ({ value: s, label: s }));
+
+/** A switch that fills its row, its options sharing the width. */
+const FILL = 'w-full [&>button]:flex-1';
 
 // ─── Build a structured user-facing prompt from the form values ────
 function buildClinicalPrompt(p: PatientInput): string {
@@ -530,7 +545,7 @@ export function IDSAAntibioticAdvisor() {
       {/* Input form */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Age (yrs)</label>
+          <label className={labelClass}>Age (yrs)</label>
           <input
             type="number"
             inputMode="numeric"
@@ -538,105 +553,77 @@ export function IDSAAntibioticAdvisor() {
             max={120}
             value={input.age}
             onChange={e => setField('age', e.target.value)}
-            className={inputCls}
+            className={fieldClass}
             placeholder="e.g. 65"
           />
         </div>
         <div>
-          <label className={labelCls}>Weight (kg)</label>
+          <label className={labelClass}>Weight (kg)</label>
           <input
             type="number"
             inputMode="decimal"
             min={0}
             value={input.weight}
             onChange={e => setField('weight', e.target.value)}
-            className={inputCls}
+            className={fieldClass}
             placeholder="e.g. 80"
           />
         </div>
         <div>
-          <label className={labelCls}>Sex</label>
-          <div className="flex gap-2">
-            {(['M', 'F'] as const).map(s => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setField('sex', s)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  input.sex === s
-                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                }`}
-              >
-                {s === 'M' ? 'Male' : 'Female'}
-              </button>
-            ))}
-          </div>
+          <label className={labelClass}>Sex</label>
+          <Segmented options={SEXES} value={input.sex} onChange={v => setField('sex', v)} ariaLabel="Sex" className={FILL} />
         </div>
         <div>
-          <label className={labelCls}>
+          <label className={labelClass}>
             Pregnant? {input.sex !== 'F' && <span className="text-slate-600 normal-case font-normal">(female only)</span>}
           </label>
-          <button
-            type="button"
+          <Segmented
+            options={PREGNANCY}
+            value={input.pregnant ? 'yes' : 'no'}
+            onChange={v => setField('pregnant', v === 'yes')}
+            ariaLabel="Pregnant"
             disabled={input.sex !== 'F'}
-            onClick={() => setField('pregnant', !input.pregnant)}
-            className={`w-full py-2.5 rounded-xl text-sm font-medium border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-              input.pregnant
-                ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-            }`}
-          >
-            {input.pregnant ? 'Yes — pregnant' : 'Not pregnant'}
-          </button>
+            className={FILL}
+          />
         </div>
 
         <div>
-          <label className={labelCls}>SCr (mg/dL)</label>
+          <label className={labelClass}>SCr (mg/dL)</label>
           <input
             type="number"
             inputMode="decimal"
             step="0.1"
             value={input.scr}
             onChange={e => setField('scr', e.target.value)}
-            className={inputCls}
+            className={fieldClass}
             placeholder="e.g. 1.2"
           />
         </div>
         <div>
-          <label className={labelCls}>CrCl (mL/min)</label>
+          <label className={labelClass}>CrCl (mL/min)</label>
           <input
             type="number"
             inputMode="decimal"
             value={input.crcl}
             onChange={e => setField('crcl', e.target.value)}
-            className={inputCls}
+            className={fieldClass}
             placeholder="e.g. 65"
           />
         </div>
 
         <div className="md:col-span-2">
-          <label className={labelCls}>Hepatic function</label>
-          <div className="grid grid-cols-4 gap-2">
-            {(['Normal', 'Child-Pugh A', 'Child-Pugh B', 'Child-Pugh C'] as const).map(h => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => setField('hepatic', h)}
-                className={`py-2 rounded-xl text-[12px] font-medium border transition-colors ${
-                  input.hepatic === h
-                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                }`}
-              >
-                {h}
-              </button>
-            ))}
-          </div>
+          <label className={labelClass}>Hepatic function</label>
+          <Segmented
+            options={HEPATIC}
+            value={input.hepatic}
+            onChange={v => setField('hepatic', v)}
+            ariaLabel="Hepatic function"
+            className={FILL}
+          />
         </div>
 
         <div className="md:col-span-2">
-          <label className={labelCls}>Allergies</label>
+          <label className={labelClass}>Allergies</label>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {COMMON_ALLERGIES.map(a => (
               <button
@@ -657,19 +644,19 @@ export function IDSAAntibioticAdvisor() {
             type="text"
             value={input.allergyOther}
             onChange={e => setField('allergyOther', e.target.value)}
-            className={inputCls}
+            className={fieldClass}
             placeholder="Other allergies (free text)"
           />
         </div>
 
         <div className="md:col-span-2">
-          <label className={labelCls}>
+          <label className={labelClass}>
             Diagnosis <span className="text-rose-400">*</span>
           </label>
           <select
             value={input.diagnosis}
             onChange={e => setField('diagnosis', e.target.value)}
-            className={inputCls + ' cursor-pointer'}
+            className={fieldClass + ' cursor-pointer'}
           >
             {COMMON_DIAGNOSES.map(d => (
               <option key={d} value={d} className="bg-[#121212]">{d}</option>
@@ -680,33 +667,24 @@ export function IDSAAntibioticAdvisor() {
               type="text"
               value={input.diagnosisOther}
               onChange={e => setField('diagnosisOther', e.target.value)}
-              className={inputCls + ' mt-2'}
+              className={fieldClass + ' mt-2'}
               placeholder="Specify diagnosis"
             />
           )}
         </div>
 
         <div>
-          <label className={labelCls}>Severity</label>
-          <div className="grid grid-cols-3 gap-2">
-            {(['Mild', 'Moderate', 'Severe'] as const).map(s => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setField('severity', s)}
-                className={`py-2 rounded-xl text-[12px] font-medium border transition-colors ${
-                  input.severity === s
-                    ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
-                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <label className={labelClass}>Severity</label>
+          <Segmented
+            options={SEVERITIES}
+            value={input.severity}
+            onChange={v => setField('severity', v)}
+            ariaLabel="Severity"
+            className={FILL}
+          />
         </div>
         <div>
-          <label className={labelCls}>&nbsp;</label>
+          <label className={labelClass}>&nbsp;</label>
           <div className="text-[11px] text-slate-500 leading-snug pt-1">
             Severe disease may exceed outpatient OPAT scope — advisor will flag if inpatient
             management is more appropriate.
@@ -714,34 +692,30 @@ export function IDSAAntibioticAdvisor() {
         </div>
 
         <div className="md:col-span-2">
-          <label className={labelCls}>
+          <label className={labelClass}>
             <span className="inline-flex items-center gap-1"><Microscope size={11} /> Culture / sensitivity data</span>
           </label>
           <textarea
             value={input.cultures}
             onChange={e => setField('cultures', e.target.value)}
-            className={inputCls + ' min-h-[80px] resize-y'}
+            className={fieldClass + ' min-h-[80px] resize-y'}
             placeholder="e.g. Blood cx: MSSA, susceptible to cefazolin, oxacillin, vancomycin. MIC vancomycin 1 mg/L."
           />
         </div>
 
         <div className="md:col-span-2">
-          <label className={labelCls}>Additional clinical context (optional)</label>
+          <label className={labelClass}>Additional clinical context (optional)</label>
           <textarea
             value={input.clinicalNotes}
             onChange={e => setField('clinicalNotes', e.target.value)}
-            className={inputCls + ' min-h-[60px] resize-y'}
+            className={fieldClass + ' min-h-[60px] resize-y'}
             placeholder="e.g. HD-dependent, on warfarin, recent C. diff, prior IV access challenges"
           />
         </div>
       </div>
 
       {/* Submit */}
-      <button
-        onClick={handleSubmit}
-        disabled={!canSubmit}
-        className="self-end bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-sm"
-      >
+      <Button variant="primary" onClick={handleSubmit} disabled={!canSubmit} className="self-end">
         {isLoading ? (
           <>
             <Loader2 size={18} className="animate-spin" />
@@ -753,7 +727,7 @@ export function IDSAAntibioticAdvisor() {
             Generate OPAT Recommendation
           </>
         )}
-      </button>
+      </Button>
 
       {/* Output */}
       {(output || isLoading || error) && (
@@ -963,7 +937,7 @@ export function IDSAAntibioticAdvisor() {
               onKeyDown={e => e.key === 'Enter' && handleChatSend()}
               placeholder="Ask a follow-up about this case…"
               disabled={isChatLoading}
-              className="flex-1 px-4 py-3 border border-white/10 rounded-xl focus:ring-1 focus:ring-blue-500/30 focus:border-blue-500/50 outline-none bg-white/5 text-[14px] text-slate-200 placeholder:text-slate-500 disabled:opacity-50"
+              className={`${fieldClass} flex-1 disabled:opacity-50`}
             />
             <button
               onClick={handleChatSend}

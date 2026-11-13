@@ -18,3 +18,7 @@ export const primaryButtonClass =
 
 /** A field whose number is the point of the card, such as IVIG's patient weight: the field style at 30px. */
 export const largeFieldClass = fieldClass.replace('text-base font-medium', 'text-3xl font-light');
+
+/** The primary look at a compact size, for a main action that sits inside a field, such as the Diluent search's Check. */
+export const smallPrimaryButtonClass =
+  'btn-premium inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-1.5 font-bold disabled:cursor-not-allowed disabled:opacity-40';

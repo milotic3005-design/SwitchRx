@@ -11,10 +11,8 @@ import {
   BAG_STEP_UP_THRESHOLD_ML, BAG_STEP_UP_TARGET_ML,
   type DiluentVolumeEntry, type PrepMethod, type LabelScan,
 } from '@/data/diluent-volume';
-
-const inputCls =
-  'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-colors';
-const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5';
+import { Button } from '@/components/ui/Button';
+import { fieldClass, labelClass } from '@/components/ui/styles';
 
 const TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/25',   text: 'text-amber-300',   dot: 'bg-amber-400' },
@@ -302,20 +300,20 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div>
-              <label className={labelCls} htmlFor="dv-bag">Bag size</label>
+              <label className={labelClass} htmlFor="dv-bag">Bag size</label>
               {entry.bagSizes.length > 1 ? (
                 <select
                   id="dv-bag"
                   value={bagVolume}
                   onChange={e => setBag(parseFloat(e.target.value))}
-                  className={inputCls}
+                  className={fieldClass}
                 >
                   {entry.bagSizes.map(b => (
                     <option key={b} value={b}>{b} mL</option>
                   ))}
                 </select>
               ) : (
-                <input id="dv-bag" readOnly value={`${fmt(bagVolume)} mL`} className={`${inputCls} opacity-70`} />
+                <input id="dv-bag" readOnly value={`${fmt(bagVolume)} mL`} className={`${fieldClass} opacity-70`} />
               )}
               {recommendation.steppedUp && bag === null && (
                 <p className="text-[11px] text-amber-400/90 mt-1">
@@ -326,7 +324,7 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
               )}
             </div>
             <div>
-              <label className={labelCls} htmlFor="dv-dose">
+              <label className={labelClass} htmlFor="dv-dose">
                 Dose ({isIron ? 'mg iron' : 'mg'}) <span className="text-slate-600 normal-case font-medium">optional</span>
               </label>
               <input
@@ -337,11 +335,11 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
                 value={dose}
                 onChange={e => setDose(e.target.value)}
                 placeholder="e.g. 400"
-                className={inputCls}
+                className={fieldClass}
               />
             </div>
             <div>
-              <label className={labelCls} htmlFor="dv-vol">Drug volume (mL)</label>
+              <label className={labelClass} htmlFor="dv-vol">Drug volume (mL)</label>
               <input
                 id="dv-vol"
                 type="number"
@@ -350,7 +348,7 @@ function CuratedResult({ entry }: { entry: DiluentVolumeEntry }) {
                 value={shownVolume}
                 onChange={e => { setVolumeTouched(true); setVolume(e.target.value); }}
                 placeholder="e.g. 20"
-                className={inputCls}
+                className={fieldClass}
               />
               {!volumeTouched && derivedVolume !== null && (
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -637,7 +635,7 @@ export function DiluentVolumeAdvisor() {
 
       {/* Search */}
       <div ref={boxRef} className="relative">
-        <label className={labelCls} htmlFor="dv-search">Drug name</label>
+        <label className={labelClass} htmlFor="dv-search">Drug name</label>
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
           <input
@@ -652,25 +650,27 @@ export function DiluentVolumeAdvisor() {
             }}
             placeholder="Generic or brand name — e.g. Actemra, infliximab, Entyvio"
             autoComplete="off"
-            className="w-full pl-11 pr-24 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50"
+            className="w-full pl-11 pr-36 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50"
           />
           {query && (
             <button
               onClick={clear}
               aria-label="Clear"
-              className="absolute right-[86px] top-1/2 -translate-y-1/2 p-1 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              className="absolute right-[112px] top-1/2 -translate-y-1/2 p-1 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={submit}
             disabled={!query.trim() || scanning}
-            className="absolute right-2 top-1/2 -translate-y-1/2 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed text-[12px] font-bold text-white transition-colors flex items-center gap-1.5"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
           >
             {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
             Check
-          </button>
+          </Button>
         </div>
 
         {/* Type-ahead */}

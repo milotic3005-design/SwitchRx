@@ -4,7 +4,14 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Calculator } from 'lucide-react';
 import { describe, it, expect } from 'vitest';
-import { fieldClass, labelClass, largeFieldClass, primaryButtonClass, quietButtonClass } from '@/components/ui/styles';
+import {
+  fieldClass,
+  labelClass,
+  largeFieldClass,
+  primaryButtonClass,
+  quietButtonClass,
+  smallPrimaryButtonClass,
+} from '@/components/ui/styles';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Segmented } from '@/components/ui/Segmented';
@@ -21,6 +28,8 @@ const IN_SCOPE: string[] = [
   'components/ClinicalCalculators.tsx',
   'components/IVIGRateCalculator.tsx',
   'components/InfusionRateCalculator.tsx',
+  'components/DiluentVolumeAdvisor.tsx',
+  'components/IDSAAntibioticAdvisor.tsx',
 ];
 
 /** Tool pages whose header must be the shared PageHeader. */
@@ -118,12 +127,20 @@ describe('Match: the shared pieces', () => {
   });
 
   it('Button gives each variant its class and keeps the caller’s classes after it', () => {
-    const primary = renderToStaticMarkup(createElement(Button, { variant: 'primary', className: 'px-3.5' }, 'Check'));
+    const primary = renderToStaticMarkup(createElement(Button, { variant: 'primary', className: 'absolute' }, 'Find'));
     const quiet = renderToStaticMarkup(createElement(Button, { variant: 'quiet', disabled: true }, 'Copy'));
-    expect(primary).toContain(`class="${primaryButtonClass} px-3.5"`);
+    expect(primary).toContain(`class="${primaryButtonClass} absolute"`);
     expect(primary).toContain('type="button"');
     expect(quiet).toContain(`class="${quietButtonClass}"`);
     expect(quiet).toContain('disabled=""');
+  });
+
+  it('Button has a small primary size whose padding replaces the large one rather than fighting it', () => {
+    const small = renderToStaticMarkup(createElement(Button, { variant: 'primary', size: 'sm' }, 'Check'));
+    expect(small).toContain(`class="${smallPrimaryButtonClass}"`);
+    expect(smallPrimaryButtonClass).toContain('btn-premium');
+    expect(smallPrimaryButtonClass).toContain('px-3.5 py-1.5');
+    expect(smallPrimaryButtonClass).not.toMatch(/px-6|py-3(?!\.)/);
   });
 
   const units = [
