@@ -15,3 +15,6 @@ export const quietButtonClass =
 /** The main action of a screen, in the gold `btn-premium` look. One per screen. */
 export const primaryButtonClass =
   'btn-premium inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50';
+
+/** A field whose number is the point of the card, such as IVIG's patient weight: the field style at 30px. */
+export const largeFieldClass = fieldClass.replace('text-base font-medium', 'text-3xl font-light');

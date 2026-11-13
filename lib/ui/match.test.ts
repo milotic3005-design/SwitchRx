@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Calculator } from 'lucide-react';
 import { describe, it, expect } from 'vitest';
-import { fieldClass, labelClass, primaryButtonClass, quietButtonClass } from '@/components/ui/styles';
+import { fieldClass, labelClass, largeFieldClass, primaryButtonClass, quietButtonClass } from '@/components/ui/styles';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Segmented } from '@/components/ui/Segmented';
@@ -19,6 +19,8 @@ const read = (file: string) => readFileSync(path.join(ROOT, file), 'utf8');
 /** Tools whose fields, primary buttons and switches must come from components/ui. */
 const IN_SCOPE: string[] = [
   'components/ClinicalCalculators.tsx',
+  'components/IVIGRateCalculator.tsx',
+  'components/InfusionRateCalculator.tsx',
 ];
 
 /** Tool pages whose header must be the shared PageHeader. */
@@ -99,6 +101,13 @@ describe('Match: the shared pieces', () => {
     expect(quietButtonClass).toContain('bg-white/5');
   });
 
+  it('makes the large number field the shared field with large, light text and nothing else changed', () => {
+    expect(largeFieldClass).toContain('bg-black/30');
+    expect(largeFieldClass).toContain('text-3xl font-light');
+    expect(largeFieldClass).not.toContain('text-base');
+    expect(largeFieldClass.replace('text-3xl font-light', 'text-base font-medium')).toBe(fieldClass);
+  });
+
   it('PageHeader renders one h1 with the title, and the description', () => {
     const html = renderToStaticMarkup(
       createElement(PageHeader, { icon: Calculator, title: 'Clinical Calculators', description: 'Dosing tools.' }),
@@ -159,5 +168,13 @@ describe('Match: the shared pieces', () => {
     expect(neutral).toContain('Condition');
     expect(neutral).toContain('bg-white/5');
     expect(violet).toContain('bg-violet-500/10');
+    expect(violet).toMatch(/text-violet-300[^>]*>Administration Summary</);
+  });
+
+  it('SectionCard puts an action at the right of its header row', () => {
+    const html = renderToStaticMarkup(
+      SectionCard({ icon: Calculator, title: 'Titration Parameters', action: createElement('button', null, 'mg/hr'), children: 'x' }),
+    );
+    expect(html).toMatch(/justify-between[^>]*>.*Titration Parameters.*<button>mg\/hr<\/button><\/div>x/);
   });
 });

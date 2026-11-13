@@ -1,9 +1,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Calculator, Copy, Check, Info, ChevronDown, FlaskConical, Clock, ExternalLink, Search, X } from 'lucide-react';
+import { Calculator, Copy, Check, Info, ChevronDown, FlaskConical, Clock, ExternalLink, Search, X, Pill, ClipboardList } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
+import { SectionCard } from '@/components/ui/SectionCard';
+import { fieldClass, labelClass } from '@/components/ui/styles';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { canConvert, convertRates, presetRates, toMgHr, type RateUnit } from '@/lib/infusion-rate-units';
+
+const RATE_UNITS: { value: RateUnit; label: string }[] = [
+  { value: 'mg/hr', label: 'mg/hr' },
+  { value: 'mL/hr', label: 'mL/hr' },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Presets — biologic / titrated infusion regimens (mg/hr step-ups)
@@ -692,37 +701,26 @@ export function InfusionRateCalculator() {
   return (
     <div className="animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-xl font-bold text-white tracking-tight">Infusion Rate Calculator</h3>
-            <span className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide uppercase">
-              Biologic Titration
-            </span>
-          </div>
-          <p className="text-slate-500 text-xs">
-            Builds a step-up titration schedule (mg/hr → mL/hr) for nursing pump programming. Models rituximab/daratumumab-style protocols.
-          </p>
-        </div>
-        <button
-          onClick={copyToClipboard}
-          disabled={!schedule}
-          className="bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed border border-white/10 text-white px-5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all"
-        >
+      <div className="flex flex-wrap items-center gap-3 mb-8">
+        <span className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide uppercase">
+          Biologic Titration
+        </span>
+        <p className="flex-1 min-w-[16rem] text-slate-500 text-xs">
+          Builds a step-up titration schedule (mg/hr → mL/hr) for nursing pump programming. Models rituximab/daratumumab-style protocols.
+        </p>
+        <Button variant="quiet" onClick={copyToClipboard} disabled={!schedule}>
           {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
           {copied ? 'Copied for EMR!' : 'Copy Schedule'}
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* ── Left – Inputs ───────────────────────────────────────────────── */}
         <div className="md:col-span-4 space-y-4">
           {/* Preset selector */}
-          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+          <SectionCard icon={Pill} title="Drug Preset">
             {/* Search bar — filters dropdown by generic name, brand, or variant */}
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Search Preset
-            </label>
+            <label className={labelClass}>Search Preset</label>
             <div className="relative mb-4">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input
@@ -730,7 +728,7 @@ export function InfusionRateCalculator() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="e.g. rituxan, keytruda, opdivo…"
-                className="w-full pl-9 pr-9 py-2.5 bg-black/30 border border-white/10 rounded-xl text-[13px] text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-colors"
+                className={`${fieldClass} pl-9 pr-9`}
               />
               {searchQuery && (
                 <button
@@ -748,14 +746,12 @@ export function InfusionRateCalculator() {
               </div>
             )}
 
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Drug Preset
-            </label>
             <div className="relative">
               <select
+                aria-label="Drug preset"
                 value={presetId}
                 onChange={e => handlePresetChange(e.target.value)}
-                className="appearance-none w-full px-4 py-3 pr-10 border border-white/5 rounded-xl focus:ring-2 focus:ring-violet-500/60 focus:border-violet-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[13px] font-medium text-white transition-all cursor-pointer"
+                className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
               >
                 <option className="bg-[#121212]" value="custom">Custom / Manual entry</option>
                 {filteredPresetsByCategory.length === 0 ? (
@@ -782,30 +778,22 @@ export function InfusionRateCalculator() {
               </div>
             )}
             <div className="mt-4">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Drug name (label only)
-              </label>
+              <label className={labelClass}>Drug name (label only)</label>
               <input
                 type="text"
                 value={drugName}
                 onChange={e => setDrugName(e.target.value)}
                 placeholder="e.g. Rituximab"
-                className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                className={fieldClass}
               />
             </div>
-          </div>
+          </SectionCard>
 
           {/* Bag composition */}
-          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <div className="flex items-center gap-2 mb-3">
-              <FlaskConical className="w-3.5 h-3.5 text-violet-400" />
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Bag Composition
-              </label>
-            </div>
+          <SectionCard icon={FlaskConical} title="Bag Composition">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className={labelClass}>
                   Total Dose
                 </label>
                 <div className="relative">
@@ -814,13 +802,13 @@ export function InfusionRateCalculator() {
                     min={0}
                     value={doseMg}
                     onChange={e => setDoseMg(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-10 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    className={`${fieldClass} pr-10`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold uppercase">mg</span>
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className={labelClass}>
                   Bag Volume
                 </label>
                 <div className="relative">
@@ -829,7 +817,7 @@ export function InfusionRateCalculator() {
                     min={0}
                     value={volumeMl}
                     onChange={e => setVolumeMl(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-10 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    className={`${fieldClass} pr-10`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold uppercase">mL</span>
                 </div>
@@ -843,46 +831,31 @@ export function InfusionRateCalculator() {
                 </span>
               </div>
             )}
-          </div>
+          </SectionCard>
 
           {/* Titration parameters */}
-          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-violet-400" />
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Titration Parameters
-                </label>
-              </div>
-              {/* Start rate, step and max rate in mg/hr or mL/hr; switching converts them by the bag concentration. */}
-              <div
-                role="group"
-                aria-label="Rate unit"
-                title={canConvert(concentration) ? undefined : 'Enter dose and volume first'}
-                className="flex rounded-lg border border-white/10 bg-black/30 p-0.5"
-              >
-                {(['mg/hr', 'mL/hr'] as const).map(u => (
-                  <button
-                    key={u}
-                    type="button"
-                    aria-pressed={rateUnit === u}
-                    disabled={!canConvert(concentration)}
-                    onClick={() => switchRateUnit(u)}
-                    className={`rounded-md px-2.5 py-1 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                      rateUnit === u ? 'bg-violet-500/20 text-violet-300' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {u}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <SectionCard
+            icon={Clock}
+            title="Titration Parameters"
+            action={
+              // Start rate, step and max rate in mg/hr or mL/hr; switching converts them by the bag concentration.
+              <span title={canConvert(concentration) ? undefined : 'Enter dose and volume first'}>
+                <Segmented
+                  options={RATE_UNITS}
+                  value={rateUnit}
+                  onChange={switchRateUnit}
+                  ariaLabel="Rate unit"
+                  disabled={!canConvert(concentration)}
+                />
+              </span>
+            }
+          >
             {!canConvert(concentration) && (
               <p className="mb-3 text-[13px] text-slate-500">Enter dose and volume first to switch between mg/hr and mL/hr.</p>
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className={labelClass}>
                   Start Rate
                 </label>
                 <div className="relative">
@@ -891,13 +864,13 @@ export function InfusionRateCalculator() {
                     min={0}
                     value={startRate}
                     onChange={e => setStartRate(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-14 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    className={`${fieldClass} pr-14`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{rateUnit}</span>
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className={labelClass}>
                   Max Rate
                 </label>
                 <div className="relative">
@@ -906,13 +879,13 @@ export function InfusionRateCalculator() {
                     min={0}
                     value={maxRate}
                     onChange={e => setMaxRate(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-14 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    className={`${fieldClass} pr-14`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{rateUnit}</span>
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className={labelClass}>
                   Step ↑ by
                 </label>
                 <div className="relative">
@@ -921,13 +894,13 @@ export function InfusionRateCalculator() {
                     min={0}
                     value={stepIncrement}
                     onChange={e => setStepIncrement(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-14 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    className={`${fieldClass} pr-14`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{rateUnit}</span>
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                <label className={labelClass}>
                   Interval
                 </label>
                 <div className="relative">
@@ -936,7 +909,7 @@ export function InfusionRateCalculator() {
                     min={0}
                     value={intervalMin}
                     onChange={e => setIntervalMin(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-12 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    className={`${fieldClass} pr-12`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold uppercase">min</span>
                 </div>
@@ -945,14 +918,11 @@ export function InfusionRateCalculator() {
             <p className="mt-3 pt-3 border-t border-white/5 text-[10px] text-slate-500 italic leading-relaxed">
               Set <span className="text-slate-400 font-semibold">Step</span> = 0 for a fixed-rate (no titration) infusion.
             </p>
-          </div>
+          </SectionCard>
 
           {/* Summary card */}
           {summary && schedule && (
-            <div className="bg-violet-500/10 rounded-2xl p-5 border border-violet-500/20 shadow-inner">
-              <h4 className="text-violet-300 text-xs font-semibold mb-3 uppercase tracking-wider">
-                Administration Summary
-              </h4>
+            <SectionCard icon={ClipboardList} title="Administration Summary" tone="violet">
               <div className="space-y-2.5">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400 text-xs">Steps in schedule</span>
@@ -979,7 +949,7 @@ export function InfusionRateCalculator() {
                   </span>
                 </div>
               </div>
-            </div>
+            </SectionCard>
           )}
         </div>
 

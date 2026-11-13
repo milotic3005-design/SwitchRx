@@ -1,10 +1,25 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Calculator, Copy, Check, Info, ExternalLink, FileText } from 'lucide-react';
+import { Calculator, Copy, Check, Info, ExternalLink, FileText, Stethoscope, Scale, Syringe, ClipboardList } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
+import { SectionCard } from '@/components/ui/SectionCard';
+import { largeFieldClass } from '@/components/ui/styles';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type ConditionType = 'PI' | 'MMN' | 'CIDP';
+
+const CONDITIONS: { value: ConditionType; label: string }[] = [
+  { value: 'PI', label: 'PI' },
+  { value: 'MMN', label: 'MMN' },
+  { value: 'CIDP', label: 'CIDP' },
+];
+
+const WEIGHT_UNITS = [
+  { value: 'kg', label: 'kg' },
+  { value: 'lbs', label: 'lbs' },
+] as const;
 
 type ProtocolStep = {
   step: number;
@@ -290,51 +305,31 @@ export function IVIGRateCalculator() {
 
   return (
     <div className="animate-in fade-in duration-300">
-      <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="text-xl font-bold text-white tracking-tight">IVIG Rate Calculator</h3>
-            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide uppercase">
-              Gammagard 10% Protocol
-            </span>
-          </div>
-          <p className="text-slate-500 text-xs">
-            Protocol-based titration for nursing administration and documentation.
-          </p>
-        </div>
-        <button
-          onClick={copyToClipboard}
-          disabled={!dosageData}
-          className="bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed border border-white/10 text-white px-5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all"
-        >
+      <div className="flex flex-wrap items-center gap-3 mb-8">
+        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide uppercase">
+          Gammagard 10% Protocol
+        </span>
+        <p className="flex-1 min-w-[16rem] text-slate-500 text-xs">
+          Protocol-based titration for nursing administration and documentation.
+        </p>
+        <Button variant="quiet" onClick={copyToClipboard} disabled={!dosageData}>
           {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
           {copied ? 'Copied for EMR!' : 'Copy Chart for EMR'}
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left – inputs */}
         <div className="md:col-span-4 space-y-4">
           {/* Condition */}
-          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Condition
-            </label>
-            <div className="flex bg-black/20 p-1 rounded-xl border border-white/5">
-              {(['PI', 'MMN', 'CIDP'] as ConditionType[]).map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setCondition(opt)}
-                  className={`flex-1 py-2 px-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                    condition === opt
-                      ? 'bg-violet-500/80 text-white shadow-md border border-violet-400/30'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
+          <SectionCard icon={Stethoscope} title="Condition">
+            <Segmented
+              options={CONDITIONS}
+              value={condition}
+              onChange={setCondition}
+              ariaLabel="Condition"
+              className="w-full [&>button]:flex-1"
+            />
             <div className="mt-4 pt-4 border-t border-white/5">
               <span className="text-sm font-semibold text-slate-200 block mb-1">
                 {Protocols[condition].name}
@@ -343,46 +338,30 @@ export function IVIGRateCalculator() {
                 {Protocols[condition].dosingInfo}
               </p>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Weight */}
-          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <label htmlFor="ivig-weight" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-              Patient Weight
-            </label>
-            <div className="relative flex items-center justify-between">
+          <SectionCard icon={Scale} title="Patient Weight">
+            <div className="relative">
               <input
                 id="ivig-weight"
+                aria-label="Patient weight"
                 type="number"
                 min="1"
                 step="0.1"
                 value={inputWeight}
                 onChange={e => setInputWeight(e.target.value === '' ? '' : Number(e.target.value))}
-                className="bg-transparent text-4xl font-light text-white w-full border-none focus:outline-none focus:ring-0 selection:bg-blue-500/30 placeholder-white/20"
+                className={`${largeFieldClass} pr-24`}
                 placeholder="0"
               />
-              <div className="flex bg-black/40 rounded-lg p-1 border border-white/10 shadow-inner flex-shrink-0">
-                <button
-                  onClick={() => setWeightUnit('kg')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold tracking-wider transition-all duration-200 ${
-                    weightUnit === 'kg'
-                      ? 'bg-violet-500 text-white shadow-[0_2px_10px_-2px_rgba(139,92,246,0.5)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  KG
-                </button>
-                <button
-                  onClick={() => setWeightUnit('lbs')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold tracking-wider transition-all duration-200 ${
-                    weightUnit === 'lbs'
-                      ? 'bg-violet-500 text-white shadow-[0_2px_10px_-2px_rgba(139,92,246,0.5)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  LBS
-                </button>
-              </div>
+              <Segmented
+                size="sm"
+                options={WEIGHT_UNITS}
+                value={weightUnit}
+                onChange={setWeightUnit}
+                ariaLabel="Weight unit"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2"
+              />
             </div>
             {weightUnit === 'lbs' && inputWeight !== '' && (
               <div className="mt-2 text-violet-400/80 text-xs font-medium">
@@ -392,30 +371,29 @@ export function IVIGRateCalculator() {
             <div className="mt-4 pt-4 border-t border-white/5">
               <p className="text-[11px] text-slate-500 italic">Calculated at 0.5 mL/kg/hr initial step</p>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Total dose */}
-          <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <div className="flex justify-between items-start mb-3">
-              <label htmlFor="ivig-dose" className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Total Dose
-              </label>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider">Optional</span>
-            </div>
-            <div className="relative flex items-center">
+          <SectionCard
+            icon={Syringe}
+            title="Total Dose"
+            action={<span className="text-[10px] text-slate-500 uppercase tracking-wider">Optional</span>}
+          >
+            <div className="relative">
               <input
                 id="ivig-dose"
+                aria-label="Total dose in grams"
                 type="number"
                 min="1"
                 step="0.1"
                 value={doseGrams}
                 onChange={e => setDoseGrams(e.target.value === '' ? '' : Number(e.target.value))}
-                className="bg-transparent text-3xl font-light text-white w-full border-none focus:outline-none focus:ring-0 selection:bg-blue-500/30 placeholder-white/20"
+                className={`${largeFieldClass} pr-10`}
                 placeholder="0"
               />
-              <span className="text-xl text-slate-500 ml-2 font-light uppercase">g</span>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xl text-slate-500 font-light uppercase">g</span>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Skip Phase 4 toggle */}
           <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
@@ -455,8 +433,7 @@ export function IVIGRateCalculator() {
 
           {/* Admin summary */}
           {dosageData && dosageData.hasTotalDose && (
-            <div className="bg-violet-500/10 rounded-2xl p-5 border border-violet-500/20 shadow-inner">
-              <h4 className="text-violet-300 text-xs font-semibold mb-3 uppercase tracking-wider">Administration Summary</h4>
+            <SectionCard icon={ClipboardList} title="Administration Summary" tone="violet">
               <div className="space-y-2.5">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400 text-xs">Total Volume</span>
@@ -489,7 +466,7 @@ export function IVIGRateCalculator() {
                   </div>
                 </div>
               </div>
-            </div>
+            </SectionCard>
           )}
         </div>
 
