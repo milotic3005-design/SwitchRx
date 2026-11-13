@@ -36,7 +36,7 @@ describe('readability floor', () => {
   it('covers every text-size class below 13px in the floor block', () => {
     const classes = new Set<string>();
     for (const { text } of sources) {
-      // Any variant prefix counts, bracketed ones included (`[&_table]:text-[12px]`, `md:text-xs`).
+      // Any variant prefix counts, bracketed ones included (a `[&_table]:` or `md:` prefix before a small size).
       for (const m of text.matchAll(/(?<![\w-])((?:[^\s"'`:]+:)*)text-(?:xs|\[(\d+(?:\.\d+)?)px\])(?![\w-])/g)) {
         // text-xs is 12px in Tailwind.
         const size = m[2] === undefined ? 12 : parseFloat(m[2]);
