@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Calculator, Copy, Check, Info, ChevronDown, FlaskConical, Clock, ExternalLink, Search, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { canConvert, convertRates, presetRates, toMgHr, type RateUnit } from '@/lib/infusion-rate-units';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Presets — biologic / titrated infusion regimens (mg/hr step-ups)
@@ -477,6 +478,8 @@ export function InfusionRateCalculator() {
   const [stepIncrement, setStepIncrement] = useState<number | ''>(50);
   const [intervalMin, setIntervalMin] = useState<number | ''>(30);
   const [maxRate, setMaxRate] = useState<number | ''>(400);
+  // The unit the start rate, step and max rate are entered in. The schedule always runs on mg/hr.
+  const [rateUnit, setRateUnit] = useState<RateUnit>('mg/hr');
   const [copied, setCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -497,6 +500,13 @@ export function InfusionRateCalculator() {
 
   const totalFilteredCount = filteredPresetsByCategory.reduce((sum, g) => sum + g.items.length, 0);
 
+  // ── Bag concentration (mg/mL): converts rates between mg/hr and mL/hr ───────
+  const concentration = useMemo<number | null>(() => {
+    if (typeof doseMg !== 'number' || typeof volumeMl !== 'number') return null;
+    if (doseMg <= 0 || volumeMl <= 0) return null;
+    return doseMg / volumeMl;
+  }, [doseMg, volumeMl]);
+
   // ── Apply preset ───────────────────────────────────────────────────────────
   const handlePresetChange = (id: string) => {
     setPresetId(id);
@@ -504,21 +514,17 @@ export function InfusionRateCalculator() {
     const p = PRESETS.find(x => x.id === id);
     if (!p) return;
     setDrugName(p.label.split(' — ')[0]);
-    setStartRate(p.startRate);
-    setStepIncrement(p.stepIncrement);
+    const rates = presetRates(p, rateUnit, concentration);
+    setRateUnit(rates.unit);
+    setStartRate(rates.start);
+    setStepIncrement(rates.step);
     setIntervalMin(p.intervalMin);
-    setMaxRate(p.maxRate);
+    setMaxRate(rates.max);
     if (p.defaultDose) setDoseMg(p.defaultDose);
     if (p.defaultVolume) setVolumeMl(p.defaultVolume);
   };
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const concentration = useMemo<number | null>(() => {
-    if (typeof doseMg !== 'number' || typeof volumeMl !== 'number') return null;
-    if (doseMg <= 0 || volumeMl <= 0) return null;
-    return doseMg / volumeMl;
-  }, [doseMg, volumeMl]);
-
   const isValid = useMemo(() => {
     return (
       typeof doseMg === 'number' && doseMg > 0 &&
@@ -530,9 +536,23 @@ export function InfusionRateCalculator() {
     );
   }, [doseMg, volumeMl, startRate, maxRate, intervalMin, stepIncrement]);
 
+  // ── Switch the rate unit: the three rates are converted, so the schedule stays the same ───────
+  const switchRateUnit = (to: RateUnit) => {
+    if (to === rateUnit || !canConvert(concentration)) return;
+    const next = convertRates({ start: startRate, step: stepIncrement, max: maxRate }, rateUnit, to, concentration);
+    setStartRate(next.start);
+    setStepIncrement(next.step);
+    setMaxRate(next.max);
+    setRateUnit(to);
+  };
+
   // ── Build titration schedule ───────────────────────────────────────────────
   const schedule = useMemo<StepRow[] | null>(() => {
     if (!isValid || !concentration) return null;
+    // Rates entered in mL/hr run as their exact mg/hr; the schedule below is unit-agnostic from here.
+    const startMg = toMgHr(startRate as number, rateUnit, concentration);
+    const stepMg = toMgHr(stepIncrement as number, rateUnit, concentration);
+    const maxMg = toMgHr(maxRate as number, rateUnit, concentration);
 
     const steps: StepRow[] = [];
     let remainingVol = volumeMl as number;
@@ -541,14 +561,14 @@ export function InfusionRateCalculator() {
 
     while (remainingVol > 0.01 && stepIndex <= MAX_STEPS) {
       // current rate for this step (mg/hr)
-      const rawRate = (startRate as number) + (stepIndex - 1) * (stepIncrement as number);
-      const rateMgHr = Math.min(rawRate, maxRate as number);
-      const isMaxRate = rateMgHr >= (maxRate as number);
+      const rawRate = startMg + (stepIndex - 1) * stepMg;
+      const rateMgHr = Math.min(rawRate, maxMg);
+      const isMaxRate = rateMgHr >= maxMg;
       const rateMlHr = rateMgHr / concentration;
 
       // step duration: the titration interval — except once we reach max rate,
       // we just run until the bag is empty.
-      const stepDuration = isMaxRate || (stepIncrement as number) === 0
+      const stepDuration = isMaxRate || stepMg === 0
         ? (remainingVol / rateMlHr) * 60
         : (intervalMin as number);
 
@@ -591,7 +611,7 @@ export function InfusionRateCalculator() {
     }
 
     return steps;
-  }, [isValid, concentration, volumeMl, startRate, maxRate, stepIncrement, intervalMin]);
+  }, [isValid, concentration, volumeMl, startRate, maxRate, stepIncrement, intervalMin, rateUnit]);
 
   // ── Summary stats ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -632,7 +652,7 @@ export function InfusionRateCalculator() {
 
     let plain = `INFUSION RATE PROTOCOL — ${drugName || 'Custom'}\n`;
     plain += `Total Dose: ${doseMg} mg in ${volumeMl} mL (${fmt(concentration, 2)} mg/mL)\n`;
-    plain += `Titration: start ${startRate} mg/hr → ↑${stepIncrement} mg/hr q${intervalMin} min → max ${maxRate} mg/hr\n`;
+    plain += `Titration: start ${startRate} ${rateUnit} → ↑${stepIncrement} ${rateUnit} q${intervalMin} min → max ${maxRate} ${rateUnit}\n`;
     plain += `Estimated total time: ${Math.floor(summary.totalMin / 60)}h ${Math.round(summary.totalMin) % 60}m\n\n`;
     plain += `Step | Time Window      | Pump Rate   | mg/hr   | VTBI       | Cum. Vol\n`;
     plain += '-'.repeat(80) + '\n';
@@ -640,7 +660,7 @@ export function InfusionRateCalculator() {
     let html = `<div style="font-family: sans-serif;">
       <strong>INFUSION RATE PROTOCOL — ${drugName || 'Custom'}</strong><br/>
       <strong>Total Dose:</strong> ${doseMg} mg in ${volumeMl} mL (${fmt(concentration, 2)} mg/mL)<br/>
-      <strong>Titration:</strong> start ${startRate} mg/hr → ↑${stepIncrement} mg/hr q${intervalMin} min → max ${maxRate} mg/hr<br/>
+      <strong>Titration:</strong> start ${startRate} ${rateUnit} → ↑${stepIncrement} ${rateUnit} q${intervalMin} min → max ${maxRate} ${rateUnit}<br/>
       <strong>Estimated total time:</strong> ${Math.floor(summary.totalMin / 60)}h ${Math.round(summary.totalMin) % 60}m<br/><br/>
       <table border="1" cellpadding="6" style="border-collapse: collapse; text-align: left; font-size: 13px;">
       <thead><tr style="background:#f3f4f6;">
@@ -827,12 +847,39 @@ export function InfusionRateCalculator() {
 
           {/* Titration parameters */}
           <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-3.5 h-3.5 text-violet-400" />
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Titration Parameters
-              </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-violet-400" />
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Titration Parameters
+                </label>
+              </div>
+              {/* Start rate, step and max rate in mg/hr or mL/hr; switching converts them by the bag concentration. */}
+              <div
+                role="group"
+                aria-label="Rate unit"
+                title={canConvert(concentration) ? undefined : 'Enter dose and volume first'}
+                className="flex rounded-lg border border-white/10 bg-black/30 p-0.5"
+              >
+                {(['mg/hr', 'mL/hr'] as const).map(u => (
+                  <button
+                    key={u}
+                    type="button"
+                    aria-pressed={rateUnit === u}
+                    disabled={!canConvert(concentration)}
+                    onClick={() => switchRateUnit(u)}
+                    className={`rounded-md px-2.5 py-1 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      rateUnit === u ? 'bg-violet-500/20 text-violet-300' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
             </div>
+            {!canConvert(concentration) && (
+              <p className="mb-3 text-[13px] text-slate-500">Enter dose and volume first to switch between mg/hr and mL/hr.</p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -846,7 +893,7 @@ export function InfusionRateCalculator() {
                     onChange={e => setStartRate(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-14 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold uppercase">mg/hr</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{rateUnit}</span>
                 </div>
               </div>
               <div>
@@ -861,7 +908,7 @@ export function InfusionRateCalculator() {
                     onChange={e => setMaxRate(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-14 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold uppercase">mg/hr</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{rateUnit}</span>
                 </div>
               </div>
               <div>
@@ -876,7 +923,7 @@ export function InfusionRateCalculator() {
                     onChange={e => setStepIncrement(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-base font-medium text-white pr-14 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold uppercase">mg/hr</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">{rateUnit}</span>
                 </div>
               </div>
               <div>
