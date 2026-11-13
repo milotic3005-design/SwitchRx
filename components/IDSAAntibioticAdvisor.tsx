@@ -207,7 +207,7 @@ const COMMON_ALLERGIES = [
 ];
 
 // ─── Input form ───────────────────────────────────────────────────
-interface PatientInput {
+export interface PatientInput {
   age: string;
   weight: string;
   sex: 'M' | 'F' | '';
@@ -224,7 +224,7 @@ interface PatientInput {
   clinicalNotes: string;
 }
 
-const emptyInput: PatientInput = {
+export const emptyInput: PatientInput = {
   age: '',
   weight: '',
   sex: '',
@@ -259,7 +259,7 @@ const SEVERITIES = (['Mild', 'Moderate', 'Severe'] as const).map(s => ({ value: 
 const FILL = 'w-full [&>button]:flex-1';
 
 // ─── Build a structured user-facing prompt from the form values ────
-function buildClinicalPrompt(p: PatientInput): string {
+export function buildClinicalPrompt(p: PatientInput): string {
   const lines: string[] = ['# Patient Input', ''];
 
   // Demographics
@@ -267,7 +267,7 @@ function buildClinicalPrompt(p: PatientInput): string {
   if (p.age) demo.push(`${p.age} yo`);
   if (p.sex) demo.push(p.sex === 'M' ? 'Male' : 'Female');
   if (p.weight) demo.push(`${p.weight} kg`);
-  if (p.pregnant) demo.push('PREGNANT');
+  if (p.pregnant && p.sex === 'F') demo.push('PREGNANT');
   if (demo.length) lines.push(`**Demographics:** ${demo.join(', ')}`);
 
   // Renal
@@ -321,6 +321,17 @@ function buildClinicalPrompt(p: PatientInput): string {
   lines.push('Produce the full 4-section IDSA-aligned OPAT recommendation per your system instructions. Use web search to retrieve the most current IDSA guideline URL for this condition — verify the link before citing it.');
 
   return lines.join('\n');
+}
+
+export function updatePatientInput<K extends keyof PatientInput>(
+  prev: PatientInput,
+  field: K,
+  value: PatientInput[K],
+): PatientInput {
+  const next = { ...prev, [field]: value };
+  // Pregnancy is female-only: leaving Female clears it, so it can't stay on behind a disabled switch.
+  if (next.sex !== 'F') next.pregnant = false;
+  return next;
 }
 
 // ─── Main component ──────────────────────────────────────────────
@@ -408,7 +419,7 @@ export function IDSAAntibioticAdvisor() {
   const opatStability = useMemo<OpatDrugStability[]>(() => detectOpatStability(output), [output]);
 
   const setField = <K extends keyof PatientInput>(field: K, value: PatientInput[K]) =>
-    setInput(prev => ({ ...prev, [field]: value }));
+    setInput(prev => updatePatientInput(prev, field, value));
 
   const toggleAllergy = (a: string) =>
     setInput(prev => ({
