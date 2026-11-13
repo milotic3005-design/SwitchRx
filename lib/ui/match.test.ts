@@ -17,7 +17,9 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 const read = (file: string) => readFileSync(path.join(ROOT, file), 'utf8');
 
 /** Tools whose fields, primary buttons and switches must come from components/ui. */
-const IN_SCOPE: string[] = [];
+const IN_SCOPE: string[] = [
+  'components/ClinicalCalculators.tsx',
+];
 
 /** Tool pages whose header must be the shared PageHeader. */
 const PAGES: string[] = [
@@ -62,11 +64,11 @@ const exempt = (tag: string) =>
 
 describe('Match: tools use the shared pieces', () => {
   it.each(IN_SCOPE)('%s defines no field or label class of its own', file => {
-    expect(read(file)).not.toMatch(/const (?:inputCls|labelCls)\s*=/);
+    expect(read(file).match(/const (?:inputCls|labelCls)\s*=/)?.[0]).toBeUndefined();
   });
 
   it.each(IN_SCOPE)('%s uses the shared primary button', file => {
-    expect(read(file)).not.toContain('btn-premium');
+    expect(read(file).match(/btn-premium/g)?.length ?? 0).toBe(0);
   });
 
   it.each(IN_SCOPE)('%s styles no input or select itself', file => {
@@ -76,8 +78,8 @@ describe('Match: tools use the shared pieces', () => {
 
   it.each(PAGES)('%s renders PageHeader and no h1 of its own', file => {
     const text = read(file);
-    expect(text).toMatch(/import\s*\{[^}]*\bPageHeader\b[^}]*\}\s*from\s*['"]@\/components\/ui\/PageHeader['"]/);
-    expect(text).not.toMatch(/<h1(?![\w-])/);
+    expect(/import\s*\{[^}]*\bPageHeader\b[^}]*\}\s*from\s*['"]@\/components\/ui\/PageHeader['"]/.test(text)).toBe(true);
+    expect(text.match(/<h1(?![\w-])/g)?.length ?? 0).toBe(0);
   });
 
   it('finds every field tag, even one whose handler contains an arrow', () => {
@@ -135,6 +137,18 @@ describe('Match: the shared pieces', () => {
   it('Segmented presses nothing before a choice, and disables every option when disabled', () => {
     expect(segmented('')).not.toContain('aria-pressed="true"');
     expect(segmented('kg', true).match(/disabled=""/g)).toHaveLength(2);
+  });
+
+  it('Segmented takes a two-line label and shrinks to its options unless told to fill', () => {
+    const agents = [
+      { value: 'a', label: createElement('span', null, 'Darbepoetin alfa', createElement('span', null, 'Aranesp')) },
+      { value: 'b', label: 'Epoetin' },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Segmented<string>, { options: agents, value: 'a', onChange: () => {}, ariaLabel: 'ESA agent' }),
+    );
+    expect(html).toContain('<span>Darbepoetin alfa<span>Aranesp</span></span>');
+    expect(html).toMatch(/role="group"[^>]*class="inline-flex /);
   });
 
   it('SectionCard shows its title and switches to the violet tint', () => {

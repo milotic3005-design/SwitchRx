@@ -4,6 +4,9 @@ import { useEffect, useState, useSyncExternalStore, type ComponentType } from 'r
 import { Calculator, SlidersHorizontal, ListChecks, ChevronDown, Activity, AlertTriangle, ArrowUp, ArrowDown, Pause, Check, Droplets, FlaskConical, ShieldAlert } from 'lucide-react';
 import { TOOL_ICONS } from '@/components/launcher/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Segmented } from '@/components/ui/Segmented';
+import { Button } from '@/components/ui/Button';
+import { fieldClass, labelClass } from '@/components/ui/styles';
 import { IVIGRateCalculator } from './IVIGRateCalculator';
 import { InfusionRateCalculator } from './InfusionRateCalculator';
 import { IDSAAntibioticAdvisor } from './IDSAAntibioticAdvisor';
@@ -42,22 +45,22 @@ const CADD_PRESETS: Record<string, CADDPreset> = {
 const DAYS = [1, 2, 3, 4, 5];
 
 // ── Shared style helpers ───────────────────────────────────────────────────────
-const inputCls =
-  'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 transition-colors';
+// A unit switch sits inside its field, on the right; the field reserves room for it with pr-24.
+const HEIGHT_UNITS = [{ value: 'cm', label: 'cm' }, { value: 'in', label: 'in' }];
+const WEIGHT_UNITS = [{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }];
+const IN_FIELD = 'absolute right-1.5 top-1/2 -translate-y-1/2';
 
-const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5';
+const VANCO_MODES = [
+  { value: 'empiric', label: 'Empiric' },
+  { value: 'levels', label: 'From Levels' },
+  { value: 'bayesian', label: 'Bayesian (MAP)' },
+] as const;
 
-function UnitToggle({ unit, onClick }: { unit: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-white/10 hover:bg-white/15 text-slate-300 text-[10px] font-bold rounded-lg transition-colors uppercase"
-    >
-      {unit}
-    </button>
-  );
-}
+const ESA_MODES = [
+  { value: 'initiation', label: 'Initiation' },
+  { value: 'titration', label: 'Dose Titration' },
+  { value: 'iron', label: 'Iron Repletion' },
+] as const;
 
 // ── Vancomycin AUC-guided Dosing ────────────────────────────────────────────────
 // Implements the 2020 ASHP/IDSA/PIDS/SIDP consensus methodology: AUC24/MIC
@@ -457,50 +460,37 @@ function VancomycinAUCCalculator() {
       </div>
 
       {/* Mode toggle */}
-      <div className="flex gap-2">
-        {([
-          ['empiric', 'Empiric'],
-          ['levels', 'From Levels'],
-          ['bayesian', 'Bayesian (MAP)'],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setMode(id)}
-            className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
-              mode === id
-                ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
-                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        options={VANCO_MODES}
+        value={mode}
+        onChange={setMode}
+        ariaLabel="Vancomycin dosing mode"
+        className="w-full [&>button]:flex-1"
+      />
 
       {mode === 'empiric' ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>Age (yrs)</label>
-              <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="65" className={inputCls} />
+              <label className={labelClass}>Age (yrs)</label>
+              <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="65" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>SCr (mg/dL)</label>
-              <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="1.0" className={inputCls} />
+              <label className={labelClass}>SCr (mg/dL)</label>
+              <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="1.0" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Height</label>
+              <label className={labelClass}>Height</label>
               <div className="relative">
-                <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '175' : '69'} className={`${inputCls} pr-12`} />
-                <UnitToggle unit={htUnit} onClick={() => setHtUnit(u => (u === 'cm' ? 'in' : 'cm'))} />
+                <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '175' : '69'} className={`${fieldClass} pr-24`} />
+                <Segmented size="sm" options={HEIGHT_UNITS} value={htUnit} onChange={setHtUnit} ariaLabel="Height unit" className={IN_FIELD} />
               </div>
             </div>
             <div>
-              <label className={labelCls}>Weight</label>
+              <label className={labelClass}>Weight</label>
               <div className="relative">
-                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '80' : '176'} className={`${inputCls} pr-12`} />
-                <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => (u === 'kg' ? 'lb' : 'kg'))} />
+                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '80' : '176'} className={`${fieldClass} pr-24`} />
+                <Segmented size="sm" options={WEIGHT_UNITS} value={wtUnit} onChange={setWtUnit} ariaLabel="Weight unit" className={IN_FIELD} />
               </div>
             </div>
             <div className="flex items-end pb-1">
@@ -596,32 +586,32 @@ function VancomycinAUCCalculator() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>Dose given (mg)</label>
-              <input type="number" value={doseGiven} onChange={e => setDoseGiven(e.target.value)} placeholder="1000" className={inputCls} />
+              <label className={labelClass}>Dose given (mg)</label>
+              <input type="number" value={doseGiven} onChange={e => setDoseGiven(e.target.value)} placeholder="1000" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Interval τ (h)</label>
-              <input type="number" value={interval2} onChange={e => setInterval2(e.target.value)} placeholder="12" className={inputCls} />
+              <label className={labelClass}>Interval τ (h)</label>
+              <input type="number" value={interval2} onChange={e => setInterval2(e.target.value)} placeholder="12" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Infusion (h)</label>
-              <input type="number" step="0.5" value={infDur} onChange={e => setInfDur(e.target.value)} placeholder="1" className={inputCls} />
+              <label className={labelClass}>Infusion (h)</label>
+              <input type="number" step="0.5" value={infDur} onChange={e => setInfDur(e.target.value)} placeholder="1" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Peak (mg/L)</label>
-              <input type="number" step="0.1" value={peak} onChange={e => setPeak(e.target.value)} placeholder="25" className={inputCls} />
+              <label className={labelClass}>Peak (mg/L)</label>
+              <input type="number" step="0.1" value={peak} onChange={e => setPeak(e.target.value)} placeholder="25" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Peak time (h post-inf)</label>
-              <input type="number" step="0.1" value={peakTime} onChange={e => setPeakTime(e.target.value)} placeholder="1" className={inputCls} />
+              <label className={labelClass}>Peak time (h post-inf)</label>
+              <input type="number" step="0.1" value={peakTime} onChange={e => setPeakTime(e.target.value)} placeholder="1" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Trough (mg/L)</label>
-              <input type="number" step="0.1" value={trough} onChange={e => setTrough(e.target.value)} placeholder="10" className={inputCls} />
+              <label className={labelClass}>Trough (mg/L)</label>
+              <input type="number" step="0.1" value={trough} onChange={e => setTrough(e.target.value)} placeholder="10" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Trough time (h post-inf)</label>
-              <input type="number" step="0.1" value={troughTime} onChange={e => setTroughTime(e.target.value)} placeholder="11" className={inputCls} />
+              <label className={labelClass}>Trough time (h post-inf)</label>
+              <input type="number" step="0.1" value={troughTime} onChange={e => setTroughTime(e.target.value)} placeholder="11" className={fieldClass} />
             </div>
           </div>
           <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -696,12 +686,12 @@ function VancomycinAUCCalculator() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>Age (yrs)</label>
-              <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="65" className={inputCls} />
+              <label className={labelClass}>Age (yrs)</label>
+              <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="65" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>SCr (mg/dL)</label>
-              <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="1.0" className={inputCls} />
+              <label className={labelClass}>SCr (mg/dL)</label>
+              <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="1.0" className={fieldClass} />
             </div>
             <div className="flex items-end pb-1">
               <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors">
@@ -710,33 +700,33 @@ function VancomycinAUCCalculator() {
               </label>
             </div>
             <div>
-              <label className={labelCls}>Height</label>
+              <label className={labelClass}>Height</label>
               <div className="relative">
-                <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '175' : '69'} className={`${inputCls} pr-12`} />
-                <UnitToggle unit={htUnit} onClick={() => setHtUnit(u => (u === 'cm' ? 'in' : 'cm'))} />
+                <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '175' : '69'} className={`${fieldClass} pr-24`} />
+                <Segmented size="sm" options={HEIGHT_UNITS} value={htUnit} onChange={setHtUnit} ariaLabel="Height unit" className={IN_FIELD} />
               </div>
             </div>
             <div>
-              <label className={labelCls}>Weight</label>
+              <label className={labelClass}>Weight</label>
               <div className="relative">
-                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '80' : '176'} className={`${inputCls} pr-12`} />
-                <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => (u === 'kg' ? 'lb' : 'kg'))} />
+                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '80' : '176'} className={`${fieldClass} pr-24`} />
+                <Segmented size="sm" options={WEIGHT_UNITS} value={wtUnit} onChange={setWtUnit} ariaLabel="Weight unit" className={IN_FIELD} />
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>Current dose (mg)</label>
-              <input type="number" value={bDose} onChange={e => setBDose(e.target.value)} placeholder="1000" className={inputCls} />
+              <label className={labelClass}>Current dose (mg)</label>
+              <input type="number" value={bDose} onChange={e => setBDose(e.target.value)} placeholder="1000" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Interval τ (h)</label>
-              <input type="number" value={bTau} onChange={e => setBTau(e.target.value)} placeholder="12" className={inputCls} />
+              <label className={labelClass}>Interval τ (h)</label>
+              <input type="number" value={bTau} onChange={e => setBTau(e.target.value)} placeholder="12" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Infusion (h)</label>
-              <input type="number" step="0.5" value={bInf} onChange={e => setBInf(e.target.value)} placeholder="1" className={inputCls} />
+              <label className={labelClass}>Infusion (h)</label>
+              <input type="number" step="0.5" value={bInf} onChange={e => setBInf(e.target.value)} placeholder="1" className={fieldClass} />
             </div>
           </div>
 
@@ -756,23 +746,23 @@ function VancomycinAUCCalculator() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className={labelCls}>Level 1 (mg/L)</label>
-                <input type="number" step="0.1" value={bConc1} onChange={e => setBConc1(e.target.value)} placeholder="12 (trough)" className={inputCls} />
+                <label className={labelClass}>Level 1 (mg/L)</label>
+                <input type="number" step="0.1" value={bConc1} onChange={e => setBConc1(e.target.value)} placeholder="12 (trough)" className={fieldClass} />
               </div>
               <div>
-                <label className={labelCls}>Time after inf. end (h)</label>
-                <input type="number" step="0.1" value={bTime1} onChange={e => setBTime1(e.target.value)} placeholder="11" className={inputCls} />
+                <label className={labelClass}>Time after inf. end (h)</label>
+                <input type="number" step="0.1" value={bTime1} onChange={e => setBTime1(e.target.value)} placeholder="11" className={fieldClass} />
               </div>
             </div>
             {bUseTwo && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Level 2 (mg/L)</label>
-                  <input type="number" step="0.1" value={bConc2} onChange={e => setBConc2(e.target.value)} placeholder="25 (peak)" className={inputCls} />
+                  <label className={labelClass}>Level 2 (mg/L)</label>
+                  <input type="number" step="0.1" value={bConc2} onChange={e => setBConc2(e.target.value)} placeholder="25 (peak)" className={fieldClass} />
                 </div>
                 <div>
-                  <label className={labelCls}>Time after inf. end (h)</label>
-                  <input type="number" step="0.1" value={bTime2} onChange={e => setBTime2(e.target.value)} placeholder="1" className={inputCls} />
+                  <label className={labelClass}>Time after inf. end (h)</label>
+                  <input type="number" step="0.1" value={bTime2} onChange={e => setBTime2(e.target.value)} placeholder="1" className={fieldClass} />
                 </div>
               </div>
             )}
@@ -895,21 +885,21 @@ function CrClCalculator() {
       </p>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Age (yrs)</label>
-          <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="e.g. 65" className={inputCls} />
+          <label className={labelClass}>Age (yrs)</label>
+          <input type="number" value={age} onChange={e => setAge(e.target.value)} placeholder="e.g. 65" className={fieldClass} />
         </div>
         <div>
-          <label className={labelCls}>Weight</label>
+          <label className={labelClass}>Weight</label>
           <div className="relative">
-            <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '70' : '154'} className={`${inputCls} pr-12`} />
-            <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => u === 'kg' ? 'lb' : 'kg')} />
+            <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '70' : '154'} className={`${fieldClass} pr-24`} />
+            <Segmented size="sm" options={WEIGHT_UNITS} value={wtUnit} onChange={setWtUnit} ariaLabel="Weight unit" className={IN_FIELD} />
           </div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4 items-end">
         <div>
-          <label className={labelCls}>SCr (mg/dL)</label>
-          <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="e.g. 1.2" className={inputCls} />
+          <label className={labelClass}>SCr (mg/dL)</label>
+          <input type="number" step="0.1" value={scr} onChange={e => setScr(e.target.value)} placeholder="e.g. 1.2" className={fieldClass} />
         </div>
         <div className="pb-1">
           <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors">
@@ -992,17 +982,17 @@ function BodyMetricsCalculator() {
       </p>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Height</label>
+          <label className={labelClass}>Height</label>
           <div className="relative">
-            <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '170' : '67'} className={`${inputCls} pr-12`} />
-            <UnitToggle unit={htUnit} onClick={() => setHtUnit(u => u === 'cm' ? 'in' : 'cm')} />
+            <input type="number" value={ht} onChange={e => setHt(e.target.value)} placeholder={htUnit === 'cm' ? '170' : '67'} className={`${fieldClass} pr-24`} />
+            <Segmented size="sm" options={HEIGHT_UNITS} value={htUnit} onChange={setHtUnit} ariaLabel="Height unit" className={IN_FIELD} />
           </div>
         </div>
         <div>
-          <label className={labelCls}>Actual Wt</label>
+          <label className={labelClass}>Actual Wt</label>
           <div className="relative">
-            <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '90' : '198'} className={`${inputCls} pr-12`} />
-            <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => u === 'kg' ? 'lb' : 'kg')} />
+            <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '90' : '198'} className={`${fieldClass} pr-24`} />
+            <Segmented size="sm" options={WEIGHT_UNITS} value={wtUnit} onChange={setWtUnit} ariaLabel="Weight unit" className={IN_FIELD} />
           </div>
         </div>
       </div>
@@ -1043,20 +1033,20 @@ function IronDeficitCalculator() {
         Calculates total iron deficit using the Ganzoni equation (target Hgb fixed at {TARGET_HGB} g/dL).
       </p>
       <div>
-        <label className={labelCls}>Weight</label>
+        <label className={labelClass}>Weight</label>
         <div className="relative">
-          <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '75' : '165'} className={`${inputCls} pr-12`} />
-          <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => u === 'kg' ? 'lb' : 'kg')} />
+          <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '75' : '165'} className={`${fieldClass} pr-24`} />
+          <Segmented size="sm" options={WEIGHT_UNITS} value={wtUnit} onChange={setWtUnit} ariaLabel="Weight unit" className={IN_FIELD} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>Actual Hgb</label>
-          <input type="number" step="0.1" value={hgb} onChange={e => setHgb(e.target.value)} placeholder="e.g. 9.5" className={inputCls} />
+          <label className={labelClass}>Actual Hgb</label>
+          <input type="number" step="0.1" value={hgb} onChange={e => setHgb(e.target.value)} placeholder="e.g. 9.5" className={fieldClass} />
         </div>
         <div>
-          <label className={labelCls}>Target Hgb</label>
-          <input type="number" value={TARGET_HGB} disabled className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed" />
+          <label className={labelClass}>Target Hgb</label>
+          <input type="number" value={TARGET_HGB} disabled className={`${fieldClass} disabled:text-slate-500 disabled:cursor-not-allowed`} />
         </div>
       </div>
       <MainAnswer label="Total Iron Deficit" value={result} unit="mg" />
@@ -1090,12 +1080,12 @@ function CorrectedCalciumCalculator() {
         Adjusts serum calcium for low albumin levels. Formula: Ca + 0.8 × (4.0 − Albumin).
       </p>
       <div>
-        <label className={labelCls}>Serum Calcium (mg/dL)</label>
-        <input type="number" step="0.1" value={ca} onChange={e => setCa(e.target.value)} placeholder="e.g. 8.2" className={inputCls} />
+        <label className={labelClass}>Serum Calcium (mg/dL)</label>
+        <input type="number" step="0.1" value={ca} onChange={e => setCa(e.target.value)} placeholder="e.g. 8.2" className={fieldClass} />
       </div>
       <div>
-        <label className={labelCls}>Serum Albumin (g/dL)</label>
-        <input type="number" step="0.1" value={alb} onChange={e => setAlb(e.target.value)} placeholder="e.g. 2.8" className={inputCls} />
+        <label className={labelClass}>Serum Albumin (g/dL)</label>
+        <input type="number" step="0.1" value={alb} onChange={e => setAlb(e.target.value)} placeholder="e.g. 2.8" className={fieldClass} />
       </div>
       <MainAnswer label="Corrected Ca" value={result} unit="mg/dL" />
       {flag && result && (
@@ -1139,9 +1129,6 @@ function CADDCalculator() {
     return Math.ceil((drugV + kvoV + lineVol) / 10) * 10;
   };
 
-  const tableInputCls =
-    'w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors';
-
   return (
     <div className="animate-in fade-in duration-300 flex flex-col lg:flex-row gap-8">
       {/* Left – parameters */}
@@ -1153,23 +1140,19 @@ function CADDCalculator() {
 
         {/* Drug preset */}
         <div>
-          <label className={labelCls}>Antibiotic Preset</label>
+          <label className={labelClass}>Antibiotic Preset</label>
           <div className="relative">
             <select
               value={selectedDrug}
               onChange={handleDrugChange}
-              className="appearance-none w-full px-5 py-3.5 pr-12 border border-white/5 rounded-full focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-500/60 outline-none bg-[#161616] hover:bg-[#1e1e1e] text-[14px] font-medium text-white transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] cursor-pointer"
+              className={`${fieldClass} appearance-none pr-10 cursor-pointer`}
             >
               <option className="bg-[#121212] text-white" value="">Custom / None</option>
               {Object.keys(CADD_PRESETS).sort().map(name => (
                 <option className="bg-[#121212] text-white" key={name} value={name}>{name}</option>
               ))}
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center justify-center">
-              <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-slate-400 shadow-sm border border-white/5">
-                <ChevronDown size={14} />
-              </div>
-            </div>
+            <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
 
           {/* Workbook values for the selected drug */}
@@ -1196,30 +1179,30 @@ function CADDCalculator() {
         {/* Dose & Freq */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Dose ({massUnit})</label>
-            <input type="number" value={dose} onChange={e => setDose(parseFloat(e.target.value) || 0)} className={tableInputCls} />
+            <label className={labelClass}>Dose ({massUnit})</label>
+            <input type="number" value={dose} onChange={e => setDose(parseFloat(e.target.value) || 0)} className={fieldClass} />
           </div>
           <div>
-            <label className={labelCls}>Freq (q_hr)</label>
-            <input type="number" value={freq} onChange={e => setFreq(parseFloat(e.target.value) || 0)} className={tableInputCls} />
+            <label className={labelClass}>Freq (q_hr)</label>
+            <input type="number" value={freq} onChange={e => setFreq(parseFloat(e.target.value) || 0)} className={fieldClass} />
           </div>
         </div>
 
         {/* Concentration */}
         <div>
-          <label className={labelCls}>Concentration ({concUnit})</label>
-          <input type="number" step="0.01" value={conc} onChange={e => setConc(parseFloat(e.target.value) || 0)} className={tableInputCls} />
+          <label className={labelClass}>Concentration ({concUnit})</label>
+          <input type="number" step="0.01" value={conc} onChange={e => setConc(parseFloat(e.target.value) || 0)} className={fieldClass} />
         </div>
 
         {/* KVO & Line Vol */}
         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/10">
           <div>
-            <label className={labelCls}>KVO (mL/hr)</label>
-            <input type="number" step="0.1" value={kvo} onChange={e => setKvo(parseFloat(e.target.value) || 0)} className={tableInputCls} />
+            <label className={labelClass}>KVO (mL/hr)</label>
+            <input type="number" step="0.1" value={kvo} onChange={e => setKvo(parseFloat(e.target.value) || 0)} className={fieldClass} />
           </div>
           <div>
-            <label className={labelCls}>Line Vol (mL)</label>
-            <input type="number" value={lineVol} onChange={e => setLineVol(parseFloat(e.target.value) || 0)} className={tableInputCls} />
+            <label className={labelClass}>Line Vol (mL)</label>
+            <input type="number" value={lineVol} onChange={e => setLineVol(parseFloat(e.target.value) || 0)} className={fieldClass} />
           </div>
         </div>
 
@@ -1560,46 +1543,31 @@ function ESADosingCalculator() {
       </div>
 
       {/* Mode toggle */}
-      <div className="flex gap-2">
-        {([
-          ['initiation', 'Initiation'],
-          ['titration', 'Dose Titration'],
-          ['iron', 'Iron Repletion'],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setMode(id)}
-            className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
-              mode === id
-                ? 'bg-violet-500/15 border-violet-500/40 text-violet-200'
-                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        options={ESA_MODES}
+        value={mode}
+        onChange={setMode}
+        ariaLabel="ESA dosing mode"
+        className="w-full [&>button]:flex-1"
+      />
 
       {/* Agent toggle (initiation + titration) */}
       {mode !== 'iron' && (
-        <div className="flex gap-2">
-          {(Object.keys(ESA_AGENTS) as EsaAgentId[]).map(id => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setAgentId(id)}
-              className={`flex-1 py-2 rounded-xl text-[12px] font-semibold border transition-colors ${
-                agentId === id
-                  ? 'bg-white/10 border-white/25 text-white'
-                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-              }`}
-            >
-              {ESA_AGENTS[id].label}
-              <span className="block text-[10px] font-normal opacity-70">{ESA_AGENTS[id].brand} · {ESA_AGENTS[id].note}</span>
-            </button>
-          ))}
-        </div>
+        <Segmented
+          options={(Object.keys(ESA_AGENTS) as EsaAgentId[]).map(id => ({
+            value: id,
+            label: (
+              <>
+                {ESA_AGENTS[id].label}
+                <span className="block font-normal opacity-70">{ESA_AGENTS[id].brand} · {ESA_AGENTS[id].note}</span>
+              </>
+            ),
+          }))}
+          value={agentId}
+          onChange={setAgentId}
+          ariaLabel="ESA agent"
+          className="w-full [&>button]:flex-1"
+        />
       )}
 
       {/* ── INITIATION ── */}
@@ -1607,10 +1575,10 @@ function ESADosingCalculator() {
         <div className="space-y-4">
           {agent.weightBased ? (
             <div className="max-w-xs">
-              <label className={labelCls}>Weight</label>
+              <label className={labelClass}>Weight</label>
               <div className="relative">
-                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '70' : '154'} className={`${inputCls} pr-12`} />
-                <UnitToggle unit={wtUnit} onClick={() => setWtUnit(u => (u === 'kg' ? 'lb' : 'kg'))} />
+                <input type="number" value={wt} onChange={e => setWt(e.target.value)} placeholder={wtUnit === 'kg' ? '70' : '154'} className={`${fieldClass} pr-24`} />
+                <Segmented size="sm" options={WEIGHT_UNITS} value={wtUnit} onChange={setWtUnit} ariaLabel="Weight unit" className={IN_FIELD} />
               </div>
             </div>
           ) : (
@@ -1698,16 +1666,16 @@ function ESADosingCalculator() {
           </p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>Current Hgb (g/dL)</label>
-              <input type="number" step="0.1" value={curHgb} onChange={e => setCurHgb(e.target.value)} placeholder="9.8" className={inputCls} />
+              <label className={labelClass}>Current Hgb (g/dL)</label>
+              <input type="number" step="0.1" value={curHgb} onChange={e => setCurHgb(e.target.value)} placeholder="9.8" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Prior Hgb (g/dL)</label>
-              <input type="number" step="0.1" value={priorHgb} onChange={e => setPriorHgb(e.target.value)} placeholder="9.2" className={inputCls} />
+              <label className={labelClass}>Prior Hgb (g/dL)</label>
+              <input type="number" step="0.1" value={priorHgb} onChange={e => setPriorHgb(e.target.value)} placeholder="9.2" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Current dose ({agent.unit})</label>
-              <input type="number" value={curDose} onChange={e => setCurDose(e.target.value)} placeholder={agent.unit === 'mcg' ? '40' : '10000'} className={inputCls} />
+              <label className={labelClass}>Current dose ({agent.unit})</label>
+              <input type="number" value={curDose} onChange={e => setCurDose(e.target.value)} placeholder={agent.unit === 'mcg' ? '40' : '10000'} className={fieldClass} />
             </div>
           </div>
 
@@ -1799,12 +1767,12 @@ function ESADosingCalculator() {
           </p>
           <div className="grid grid-cols-2 gap-4 max-w-md">
             <div>
-              <label className={labelCls}>TSAT / Fe Sat (%)</label>
-              <input type="number" step="1" value={tsat} onChange={e => setTsat(e.target.value)} placeholder="18" className={inputCls} />
+              <label className={labelClass}>TSAT / Fe Sat (%)</label>
+              <input type="number" step="1" value={tsat} onChange={e => setTsat(e.target.value)} placeholder="18" className={fieldClass} />
             </div>
             <div>
-              <label className={labelCls}>Ferritin (ng/mL)</label>
-              <input type="number" value={ferritin} onChange={e => setFerritin(e.target.value)} placeholder="90" className={inputCls} />
+              <label className={labelClass}>Ferritin (ng/mL)</label>
+              <input type="number" value={ferritin} onChange={e => setFerritin(e.target.value)} placeholder="90" className={fieldClass} />
             </div>
           </div>
 
@@ -2034,26 +2002,17 @@ function SeroSelect({
   ];
   return (
     <div>
-      <label className={labelCls}>
+      <label className={labelClass}>
         {label}{required && <span className="text-rose-400 ml-1" title="Required">*</span>}
       </label>
       {sub && <p className="text-[11px] text-slate-500 -mt-0.5 mb-2 normal-case tracking-normal font-normal">{sub}</p>}
-      <div className="grid grid-cols-3 gap-1.5">
-        {opts.map(o => (
-          <button
-            key={o.v}
-            type="button"
-            onClick={() => onChange(o.v)}
-            className={`px-2 py-2 rounded-lg text-[12px] font-semibold border transition-all ${
-              value === o.v
-                ? 'bg-violet-500/20 border-violet-500/50 text-white'
-                : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            {o.t}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        options={opts.map(o => ({ value: o.v, label: o.t }))}
+        value={value}
+        onChange={onChange}
+        ariaLabel={label}
+        className="w-full [&>button]:flex-1"
+      />
     </div>
   );
 }
@@ -2099,13 +2058,9 @@ function HBVSerologyInterpreter() {
         <SeroSelect label="IgM anti-HBc — Core IgM" sub="Distinguishes acute (+) from chronic (−) when HBsAg+" value={igM} onChange={setIgM} />
         <SeroSelect label="HBV DNA (PCR)" sub="Refines resolved / isolated-core patterns" value={dna} onChange={setDna} />
         <div className="flex items-end">
-          <button
-            type="button"
-            onClick={reset}
-            className="px-4 py-2 rounded-xl text-[13px] font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-          >
+          <Button variant="quiet" onClick={reset}>
             Reset
-          </button>
+          </Button>
         </div>
       </div>
 
