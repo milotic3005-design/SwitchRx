@@ -54,6 +54,8 @@ const SEARCH_EXEMPT = [
 function fieldTags(text: string): string[] {
   const tags: string[] = [];
   for (const m of text.matchAll(/<(?:input|select|textarea)(?![\w-])/g)) {
+    const lineStart = text.lastIndexOf('\n', m.index) + 1;
+    if (text.slice(lineStart, m.index).includes('//')) continue; // named in a comment, not a tag
     let depth = 0;
     let quote: string | null = null;
     let i = m.index + m[0].length;
@@ -72,6 +74,14 @@ function fieldTags(text: string): string[] {
 }
 
 const ownBackground = (tag: string) => /(?<![\w-])bg-/.test(tag);
+/** Whether a field tag takes the shared field style. A field styled through any other constant fails. */
+const sharedField = (tag: string) => /\b(?:fieldClass|largeFieldClass)\b/.test(tag);
+/** A disabled field must mute itself with opacity: the theme remaps text colours, so a disabled: colour loses. */
+const disabledTag = (tag: string) => /\sdisabled(?=[\s=/>])/.test(tag);
+/** Hand-built switches: an either/or choice in scope uses Segmented, which lives in components/ui. */
+const ownSwitches = (text: string) => text.match(/aria-pressed|role="group"/g)?.length ?? 0;
+/** The calculator picker is a menu of chips, not an either/or choice. It marks the open calculator with aria-pressed. */
+const SWITCHES_ALLOWED: Record<string, number> = { 'components/ClinicalCalculators.tsx': 1 };
 const exempt = (tag: string) =>
   /type="(?:checkbox|radio|range)"/.test(tag) || SEARCH_EXEMPT.some(placeholder => tag.includes(placeholder));
 
@@ -89,6 +99,30 @@ describe('Match: tools use the shared pieces', () => {
     expect(styledHere).toEqual([]);
   });
 
+  it.each(IN_SCOPE)('%s styles every field with the shared field class', file => {
+    const notShared = fieldTags(read(file)).filter(tag => !exempt(tag) && !sharedField(tag));
+    expect(notShared).toEqual([]);
+  });
+
+  it.each(IN_SCOPE)('%s builds no either/or switch of its own', file => {
+    expect(ownSwitches(read(file))).toBeLessThanOrEqual(SWITCHES_ALLOWED[file] ?? 0);
+  });
+
+  it.each(IN_SCOPE)('%s mutes each disabled field with opacity', file => {
+    const unmuted = fieldTags(read(file)).filter(tag => disabledTag(tag) && !/opacity-/.test(tag));
+    expect(unmuted).toEqual([]);
+  });
+
+  it('flags a field styled through another constant, a hand-built switch and an unmuted disabled field', () => {
+    const [table, shared] = fieldTags('<input className={tableInputCls} /><input className={`${fieldClass} pr-24`} />');
+    expect(sharedField(table)).toBe(false);
+    expect(sharedField(shared)).toBe(true);
+    expect(ownSwitches('<div role="group"><button aria-pressed={on}>A</button></div>')).toBe(2);
+    expect(disabledTag('<input value={x} disabled className={fieldClass} />')).toBe(true);
+    expect(disabledTag('<input disabled={!ok} className="x" />')).toBe(true);
+    expect(disabledTag('<input value={disabledText} />')).toBe(false);
+  });
+
   it.each(PAGES)('%s renders PageHeader and no h1 of its own', file => {
     const text = read(file);
     expect(/import\s*\{[^}]*\bPageHeader\b[^}]*\}\s*from\s*['"]@\/components\/ui\/PageHeader['"]/.test(text)).toBe(true);
@@ -98,6 +132,7 @@ describe('Match: tools use the shared pieces', () => {
   it('finds every field tag, even one whose handler contains an arrow', () => {
     const tags = fieldTags('<input onChange={e => set(e.target.value)} className="bg-black/30" /><select value={v}>');
     expect(tags).toHaveLength(2);
+    expect(fieldTags('// Build groupings for the <select> dropdown\n')).toEqual([]);
     expect(ownBackground(tags[0])).toBe(true);
     expect(ownBackground(tags[1])).toBe(false);
   });
@@ -160,6 +195,12 @@ describe('Match: the shared pieces', () => {
     expect(html).toContain('aria-label="Weight unit"');
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
     expect(html).toMatch(/aria-pressed="true"[^>]*>lb</);
+  });
+
+  it('Segmented gives idle options a hover tint the theme remaps, not a text colour it overrides', () => {
+    const idle = segmented('kg').match(/<button[^>]*aria-pressed="false"[^>]*>/)?.[0] ?? '';
+    expect(idle).toContain('hover:bg-white/5');
+    expect(idle).not.toContain('hover:text-white');
   });
 
   it('Segmented presses nothing before a choice, and disables every option when disabled', () => {

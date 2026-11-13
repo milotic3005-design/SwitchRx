@@ -1046,7 +1046,7 @@ function IronDeficitCalculator() {
         </div>
         <div>
           <label className={labelClass}>Target Hgb</label>
-          <input type="number" value={TARGET_HGB} disabled className={`${fieldClass} disabled:text-slate-500 disabled:cursor-not-allowed`} />
+          <input type="number" value={TARGET_HGB} disabled className={`${fieldClass} opacity-60 cursor-not-allowed`} />
         </div>
       </div>
       <MainAnswer label="Total Iron Deficit" value={result} unit="mg" />

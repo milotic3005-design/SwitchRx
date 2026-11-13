@@ -39,7 +39,7 @@ export function Segmented<T extends string>({
             disabled={disabled}
             onClick={() => onChange(option.value)}
             className={`${pad} rounded-md text-[13px] font-semibold transition-colors disabled:cursor-not-allowed ${
-              active ? 'bg-violet-500/20 text-violet-300' : 'text-slate-400 hover:text-white'
+              active ? 'bg-violet-500/20 text-violet-300' : 'text-slate-400 hover:bg-white/5'
             }`}
           >
             {option.label}
