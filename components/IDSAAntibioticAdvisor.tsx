@@ -815,9 +815,9 @@ export function IDSAAntibioticAdvisor() {
                                 prose-strong:text-white
                                 prose-hr:my-6 prose-hr:border-white/10
                                 prose-blockquote:border-l-emerald-500/40 prose-blockquote:bg-emerald-500/5 prose-blockquote:py-1 prose-blockquote:not-italic
-                                [&_table]:my-5 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-emerald-500/20 [&_table]:rounded-xl [&_table]:overflow-hidden [&_table]:text-[12.5px]
+                                [&_table]:my-5 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-emerald-500/20 [&_table]:rounded-xl [&_table]:overflow-hidden [&_table]:text-[13px]
                                 [&_thead]:bg-emerald-500/10
-                                [&_th]:text-emerald-200 [&_th]:font-bold [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-[11px] [&_th]:border-b [&_th]:border-emerald-500/20
+                                [&_th]:text-emerald-200 [&_th]:font-bold [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-[13px] [&_th]:border-b [&_th]:border-emerald-500/20
                                 [&_tbody_tr:nth-child(even)]:bg-white/[0.02]
                                 [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-top [&_td]:border-t [&_td]:border-white/5 [&_td]:text-slate-300 [&_td]:leading-relaxed
                                 [&_td:first-child]:font-semibold [&_td:first-child]:text-white [&_td:first-child]:whitespace-nowrap">
@@ -908,9 +908,9 @@ export function IDSAAntibioticAdvisor() {
                                       prose-p:my-2 prose-p:leading-7 prose-p:text-slate-300
                                       prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-li:leading-relaxed prose-li:text-slate-300
                                       prose-strong:text-white
-                                      [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-emerald-500/20 [&_table]:rounded-lg [&_table]:overflow-hidden [&_table]:text-[12px]
+                                      [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-emerald-500/20 [&_table]:rounded-lg [&_table]:overflow-hidden [&_table]:text-[13px]
                                       [&_thead]:bg-emerald-500/10
-                                      [&_th]:text-emerald-200 [&_th]:font-bold [&_th]:px-2.5 [&_th]:py-2 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-[10.5px] [&_th]:border-b [&_th]:border-emerald-500/20
+                                      [&_th]:text-emerald-200 [&_th]:font-bold [&_th]:px-2.5 [&_th]:py-2 [&_th]:text-left [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-[13px] [&_th]:border-b [&_th]:border-emerald-500/20
                                       [&_tbody_tr:nth-child(even)]:bg-white/[0.02]
                                       [&_td]:px-2.5 [&_td]:py-2 [&_td]:align-top [&_td]:border-t [&_td]:border-white/5 [&_td]:text-slate-300
                                       [&_td:first-child]:font-semibold [&_td:first-child]:text-white">

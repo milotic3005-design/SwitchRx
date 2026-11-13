@@ -36,13 +36,18 @@ describe('readability floor', () => {
   it('covers every text-size class below 13px in the floor block', () => {
     const classes = new Set<string>();
     for (const { text } of sources) {
-      for (const m of text.matchAll(/(?<![\w-])((?:[\w-]+:)*text-(?:xs|\[(\d+(?:\.\d+)?)px\]))(?![\w-])/g)) {
+      // Any variant prefix counts, bracketed ones included (`[&_table]:text-[12px]`, `md:text-xs`).
+      for (const m of text.matchAll(/(?<![\w-])((?:[^\s"'`:]+:)*)text-(?:xs|\[(\d+(?:\.\d+)?)px\])(?![\w-])/g)) {
         // text-xs is 12px in Tailwind.
         const size = m[2] === undefined ? 12 : parseFloat(m[2]);
-        if (size < FLOOR) classes.add(m[1]);
+        if (size < FLOOR) classes.add(m[0]);
       }
     }
     expect(classes.size).toBeGreaterThan(0);
+    // A variant (`hover:`, `md:`, `[&_th]:`) generates its own selector that the floor block does not match,
+    // so a small size behind a variant would render small. Such a class has to be raised at its source.
+    const behindVariant = [...classes].filter(cls => cls.lastIndexOf(':') > 0);
+    expect(behindVariant).toEqual([]);
     for (const cls of classes) expect(floorBlock, cls).toContain(selector(cls));
   });
 

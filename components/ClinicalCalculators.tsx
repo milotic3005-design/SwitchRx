@@ -517,7 +517,7 @@ function VancomycinAUCCalculator() {
                   Recommended Maintenance Regimen
                 </div>
                 <div className="answer-value text-white">
-                  {empiric.roundedDose} mg <span className="answer-unit">IV q{empiric.interval}h</span>
+                  {empiric.roundedDose} mg <span className="answer-unit">IV</span> q{empiric.interval}h
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   ≈ {empiric.actualDailyDose} mg/day · Loading dose{' '}
@@ -541,7 +541,7 @@ function VancomycinAUCCalculator() {
                   empiric.inRange ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-amber-500/10 border-amber-500/25'
                 }`}>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Proj. AUC₂₄</div>
-                  <div className={`text-[15px] font-semibold ${empiric.inRange ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <div className={`answer-key ${empiric.inRange ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {empiric.projAUC.toFixed(0)}
                   </div>
                   <div className="text-[10px] text-slate-500">mg·h/L</div>
@@ -655,7 +655,7 @@ function VancomycinAUCCalculator() {
                     Suggested Adjustment (same interval)
                   </div>
                   <div className="answer-value text-white">
-                    {levels.newDose} mg <span className="answer-unit">IV q{levels.tau}h</span>
+                    {levels.newDose} mg <span className="answer-unit">IV</span> q{levels.tau}h
                   </div>
                   <div className="text-xs text-slate-400 mt-1">Targets AUC₂₄ ≈ 500 mg·h/L using the patient's measured clearance.</div>
                 </div>
@@ -814,7 +814,7 @@ function VancomycinAUCCalculator() {
                     Suggested Adjustment (same interval)
                   </div>
                   <div className="answer-value text-white">
-                    {bayesian.newDose} mg <span className="answer-unit">IV q{bTau}h</span>
+                    {bayesian.newDose} mg <span className="answer-unit">IV</span> q{bTau}h
                   </div>
                   <div className="text-xs text-slate-400 mt-1">Targets AUC₂₄ ≈ 500 mg·h/L from the MAP-fit clearance.</div>
                 </div>
@@ -1257,7 +1257,7 @@ function CADDCalculator() {
                 <tr className="border-b border-white/10">
                   <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Metric</th>
                   {DAYS.map(d => (
-                    <th key={d} className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-center border-l border-white/5">
+                    <th key={d} className="px-3 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-center border-l border-white/5">
                       {d}d
                     </th>
                   ))}
@@ -1268,7 +1268,7 @@ function CADDCalculator() {
                 <tr>
                   <td className="px-5 py-3 text-slate-500 text-xs">Drug Vol (mL)</td>
                   {DAYS.map(d => (
-                    <td key={d} className="px-4 py-3 text-center border-l border-white/5 text-slate-400 text-xs">
+                    <td key={d} className="px-3 py-3 text-center border-l border-white/5 text-slate-400 text-xs">
                       {conc > 0 ? ((dose * freqPerDay * d) / conc).toFixed(1) : '—'}
                     </td>
                   ))}
@@ -1277,7 +1277,7 @@ function CADDCalculator() {
                 <tr>
                   <td className="px-5 py-3 text-slate-500 text-xs">KVO Vol (mL)</td>
                   {DAYS.map(d => (
-                    <td key={d} className="px-4 py-3 text-center border-l border-white/5 text-slate-400 text-xs">
+                    <td key={d} className="px-3 py-3 text-center border-l border-white/5 text-slate-400 text-xs">
                       {(kvo * 24 * d).toFixed(1)}
                     </td>
                   ))}
@@ -1286,7 +1286,7 @@ function CADDCalculator() {
                 <tr>
                   <td className="px-5 py-3 text-slate-500 text-xs">Line Vol (mL)</td>
                   {DAYS.map(d => (
-                    <td key={d} className="px-4 py-3 text-center border-l border-white/5 text-slate-400 text-xs">
+                    <td key={d} className="px-3 py-3 text-center border-l border-white/5 text-slate-400 text-xs">
                       {lineVol}
                     </td>
                   ))}
@@ -1298,7 +1298,7 @@ function CADDCalculator() {
                     <span className="text-[10px] text-emerald-400 uppercase tracking-wide">Rounded to 10 mL</span>
                   </td>
                   {DAYS.map(d => (
-                    <td key={d} className="px-4 py-3 text-center border-l border-white/5 text-white answer-key">
+                    <td key={d} className="px-3 py-3 text-center border-l border-white/5 text-white answer-key">
                       {getPracticalBagVol(d)}
                     </td>
                   ))}
@@ -1316,10 +1316,13 @@ function CADDCalculator() {
                     const display = massUnit === 'mg' && amt >= 1000
                       ? `${(amt / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} g`
                       : `${Math.round(amt).toLocaleString()} ${massUnit}`;
+                    const long = display.length > 10;
                     return (
-                      <td key={d} className="px-4 py-3 text-center border-l border-white/5 align-top">
-                        <span className="text-emerald-400 answer-key block whitespace-nowrap">{display}</span>
-                        <span className="text-[10px] text-slate-500 block whitespace-nowrap">{Math.round(amt).toLocaleString()} {massUnit}</span>
+                      <td key={d} className="px-3 py-3 text-center border-l border-white/5 align-top">
+                        {/* Unit-based doses run to "125,200,000 units": at 18px five of those cannot fit the pane, so a
+                            long value drops to 15px bold and may wrap; short values stay on one line at 18px. */}
+                        <span className={`text-emerald-400 block ${long ? 'text-[15px] font-bold tabular-nums' : 'answer-key whitespace-nowrap'}`}>{display}</span>
+                        <span className={`text-[10px] text-slate-500 block ${long ? '' : 'whitespace-nowrap'}`}>{Math.round(amt).toLocaleString()} {massUnit}</span>
                       </td>
                     );
                   })}
