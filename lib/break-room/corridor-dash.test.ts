@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LEVEL, PHYS, TILE, newGame, parseLevel, step, type Game, type GameEvent, type Input } from './corridor-dash';
+import { LEVEL, PHYS, TILE, isSolid, newGame, parseLevel, step, type Game, type GameEvent, type Input } from './corridor-dash';
 
 const NONE: Input = { left: false, right: false, jump: false };
 const RIGHT: Input = { ...NONE, right: true };
@@ -255,7 +255,31 @@ describe('the shipped level', () => {
     const reachable = [...seen].map(k => k.split(',').map(Number));
     for (const { row, col } of level.stars)
       expect(reachable.some(([r, c]) => Math.abs(c - col) <= 1 && r - row >= 0 && r - row <= rise), `star ${row},${col}`).toBe(true);
+    // Sharps never sit under a shelf: a jump from the floor would hit its head and drop onto them.
+    for (const { row, col } of level.sharps)
+      for (let k = 1; k <= 4; k++) expect(solid(row - k, col), `sharps at ${row},${col} under a shelf`).toBe(false);
     expect(level.stars.length).toBeGreaterThanOrEqual(15);
     expect(level.germs.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('can be finished by a simple player who holds right and jumps at gaps, steps, sharps and germs', () => {
+    const level = parseLevel(LEVEL);
+    const game = newGame(level);
+    let holding = false;
+    for (let frame = 0; frame < 120 * 60 && game.status === 'playing'; frame++) {
+      const p = game.player;
+      const feet = Math.floor((p.y + p.h - 1) / TILE);
+      const ahead = Math.floor((p.x + p.w + 20) / TILE);
+      const germNear = game.germs.some(g => g.alive && g.x > p.x && g.x - (p.x + p.w) < 60 && Math.abs(g.y + g.h - (p.y + p.h)) < 20);
+      const want = p.onGround && (
+        !isSolid(level, ahead, feet + 1) || isSolid(level, ahead, feet) || level.map[feet]?.[ahead] === '^' || germNear
+      );
+      // Press for a fresh jump, keep holding while rising, let go otherwise.
+      const jump: boolean = want ? !holding : holding && p.vy < 0;
+      holding = jump;
+      step(game, { left: false, right: true, jump }, FRAME);
+    }
+    expect(game.status).toBe('won');
+    expect(game.time).toBeLessThan(60);
   });
 });

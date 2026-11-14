@@ -2,11 +2,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Wind, Zap, Sparkles, ArrowLeft, Play, RotateCcw, Trophy, Target,
-  Heart, Spade,
+  Heart, Spade, Footprints,
 } from 'lucide-react';
 import { TOOL_ICONS } from '@/components/launcher/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
+import { CorridorDash } from '@/components/break-room/CorridorDash';
 
 /**
  * The Break Room — a small arcade of quick, self-contained destress games for
@@ -18,13 +19,16 @@ import { Button } from '@/components/ui/Button';
  *   • Box Breathing  — guided 4-4-4-4 breathing (calming, clinically used)
  *   • Reflex Test    — tap-when-green reaction timer
  *   • Pill Pop       — 30-second tap-to-pop stress reliever (canvas)
+ *   • Corridor Dash  — a one-minute side-scrolling run to the exit door
+ *                      (components/break-room/CorridorDash.tsx; rules in
+ *                      lib/break-room/corridor-dash.ts)
  *   • Solitaire      — Klondike, click-to-move. The long game of the set: no
  *                      timer pressure, undo, and an auto-finish payoff.
  * Everything is local, themed to the Celestial Codex aesthetic, and light/dark
  * aware via the app's CSS variables. High scores persist in localStorage.
  */
 
-type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'pop' | 'solitaire';
+type GameId = 'menu' | 'pulse' | 'breathing' | 'reflex' | 'pop' | 'dash' | 'solitaire';
 
 const GAMES: Array<{
   id: GameId; title: string; blurb: string; tag: string; Icon: any; accent: string;
@@ -33,6 +37,7 @@ const GAMES: Array<{
   { id: 'breathing', title: 'Box Breathing', blurb: 'Guided 4-4-4-4 breaths to slow the heart rate and reset focus.', tag: '60 sec', Icon: Wind, accent: 'var(--cc-teal)' },
   { id: 'reflex', title: 'Reflex Test', blurb: 'Tap the instant it turns green. Chase your fastest reaction time.', tag: '20 sec', Icon: Zap, accent: 'var(--cc-gold)' },
 { id: 'pop', title: 'Pill Pop', blurb: 'Pop the rising capsules for 30 seconds. Pure, satisfying catharsis.', tag: '30 sec', Icon: Sparkles, accent: 'var(--cc-gold)' },
+  { id: 'dash', title: 'Corridor Dash', blurb: 'Run the ward corridor to the exit. Stomp germs, jump the sharps, grab every star.', tag: '60 sec', Icon: Footprints, accent: 'var(--cc-teal)' },
   { id: 'solitaire', title: 'Solitaire', blurb: 'Klondike, tap to move. No clock pressure — undo freely and let it auto-finish.', tag: 'Unhurried', Icon: Spade, accent: 'var(--cc-violet-light)' },
 ];
 
@@ -84,6 +89,7 @@ export function BreakRoom() {
           {game === 'breathing' && <BoxBreathing />}
           {game === 'reflex' && <ReflexTest />}
 {game === 'pop' && <PillPop />}
+          {game === 'dash' && <CorridorDash />}
           {game === 'solitaire' && <Solitaire />}
         </div>
       )}
