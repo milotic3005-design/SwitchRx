@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Heart, Play, RotateCcw, Star, Trophy } from 'lucide-react';
+import { Heart, Lock, Play, RotateCcw, Star, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
 import {
-  LEVEL, TILE, newGame, parseLevel, step,
-  type Game, type GameEvent, type Input,
+  DEFAULT_DIFFICULTY, DIFFICULTIES, LEVEL, TILE, difficultyById, doorOpen, newGame, parseLevel, step,
+  type Difficulty, type Game, type GameEvent, type Input,
 } from '@/lib/break-room/corridor-dash';
 
 // Corridor Dash: the Break Room's quick side-scrolling run. The rules live in lib/break-room/corridor-dash.ts;
@@ -14,10 +15,14 @@ import {
 const LEVEL_DATA = parseLevel(LEVEL);
 const VIEW_H = LEVEL_DATA.rows * TILE;
 const TOTAL_STARS = LEVEL_DATA.stars.length;
-const BEST_KEY = 'br-dash-best';
+const SHIFT_KEY = 'br-dash-shift';
+/** Each shift keeps its own record: a Night time is not comparable with a Day one. */
+const bestKey = (id: Difficulty['id']) => `br-dash-best-${id}`;
+/** Records set before shifts existed were all on Day Shift's settings. */
+const LEGACY_BEST_KEY = 'br-dash-best';
 
 type Phase = 'idle' | 'playing' | 'won' | 'lost';
-type Hud = { hearts: number; stars: number; tenths: number };
+type Hud = { hearts: number; stars: number; tenths: number; locked: boolean };
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number };
 
 const KEYS: Record<string, keyof Input> = {
@@ -29,14 +34,19 @@ const NO_INPUT: Input = { left: false, right: false, jump: false };
 
 const fmt = (seconds: number) => `${seconds.toFixed(1)}s`;
 
-function readBest(): number | null {
+function readBest(id: Difficulty['id']): number | null {
   if (typeof window === 'undefined') return null;
   try {
-    const v = localStorage.getItem(BEST_KEY);
+    const v = localStorage.getItem(bestKey(id)) ?? (id === 'day' ? localStorage.getItem(LEGACY_BEST_KEY) : null);
     return v ? parseInt(v, 10) / 1000 : null;
   } catch {
     return null;
   }
+}
+
+function readShift(): Difficulty {
+  if (typeof window === 'undefined') return DEFAULT_DIFFICULTY;
+  try { return difficultyById(localStorage.getItem(SHIFT_KEY)); } catch { return DEFAULT_DIFFICULTY; }
 }
 
 // ── Colours ────────────────────────────────────────────────────────────────
@@ -168,25 +178,48 @@ function drawScene(ctx: CanvasRenderingContext2D, g: Game, pal: Palette, w: numb
     }
   });
 
-  // The exit door, with its sign.
+  // The exit door, with its sign. While the star gate is unmet it is drawn shut:
+  // dimmed, with a padlock and the count still owed, so the player is never left
+  // wondering why walking into it did nothing.
   {
     const d = level.door;
     const x = d.col * TILE + 2, top = (d.row - 1) * TILE + 4, h = 2 * TILE - 4;
-    ctx.fillStyle = alpha(pal.teal, 0.28);
-    ctx.strokeStyle = pal.tealLight;
+    const shut = g.starsTaken < g.difficulty.starsToOpen;
+    const frame = shut ? pal.muted : pal.tealLight;
+    ctx.fillStyle = shut ? alpha(pal.muted, 0.18) : alpha(pal.teal, 0.28);
+    ctx.strokeStyle = frame;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.roundRect(x, top, TILE - 4, h, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = pal.goldWarm;
-    ctx.beginPath();
-    ctx.arc(x + TILE - 11, top + h / 2 + 4, 2, 0, Math.PI * 2);
-    ctx.fill();
+    if (shut) {
+      // Padlock: shackle over a body, centred on the door.
+      const lx = x + (TILE - 4) / 2, ly = top + h / 2;
+      ctx.strokeStyle = pal.gold;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(lx, ly - 4, 4, Math.PI, 0);
+      ctx.stroke();
+      ctx.fillStyle = pal.gold;
+      ctx.beginPath();
+      ctx.roundRect(lx - 6, ly - 4, 12, 10, 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = pal.goldWarm;
+      ctx.beginPath();
+      ctx.arc(x + TILE - 11, top + h / 2 + 4, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.font = 'bold 13px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillStyle = pal.tealLight;
+    ctx.fillStyle = shut ? pal.muted : pal.tealLight;
     ctx.fillText('EXIT', x + (TILE - 4) / 2, top - 8);
+    if (shut) {
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.fillStyle = pal.gold;
+      ctx.fillText(`${g.starsTaken}/${g.difficulty.starsToOpen} ★`, x + (TILE - 4) / 2, top - 22);
+    }
   }
 
   // Stars, bobbing and turning.
@@ -204,12 +237,17 @@ function drawScene(ctx: CanvasRenderingContext2D, g: Game, pal: Palette, w: numb
     const cx = germ.x + germ.w / 2, base = germ.y + germ.h;
     const flat = sq === undefined ? 1 : Math.max(0.2, 1 - sq * 3);
     const r = 11;
-    const green = pal.light ? '#5e7f1c' : '#a3c95a';
+    // A germ that has noticed the player turns red and bristles, so the charge is
+    // something you can see coming rather than something that just happens to you.
+    const charging = germ.alive && germ.alert > 0;
+    const green = charging
+      ? (pal.light ? '#b3384a' : '#f87171')
+      : (pal.light ? '#5e7f1c' : '#a3c95a');
     ctx.save();
     ctx.translate(cx, base);
     ctx.scale(1 + (1 - flat) * 0.6, flat);
     ctx.globalAlpha = sq === undefined ? 1 : Math.max(0, 1 - sq * 2.5);
-    const wobble = Math.sin(time * 8 + i) * 1.2;
+    const wobble = Math.sin(time * (charging ? 22 : 8) + i) * (charging ? 2.2 : 1.2);
     ctx.fillStyle = green;
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 + time * 0.8;
@@ -220,7 +258,7 @@ function drawScene(ctx: CanvasRenderingContext2D, g: Game, pal: Palette, w: numb
     ctx.beginPath();
     ctx.ellipse(0, -r, r + wobble * 0.3, r - wobble * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
-    const look = germ.vx < 0 ? -2.5 : 2.5;
+    const look = (germ.vx < 0 ? -2.5 : 2.5) * (charging ? 1.6 : 1);
     ctx.fillStyle = pal.light ? '#fffdf5' : '#0b0d18';
     ctx.beginPath(); ctx.arc(-4 + look, -r - 2, 2.6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(4 + look, -r - 2, 2.6, 0, Math.PI * 2); ctx.fill();
@@ -294,35 +332,67 @@ function burst(list: Particle[], x: number, y: number, n: number, color: string,
 
 // ── The game ───────────────────────────────────────────────────────────────
 
+/** Shift picker, with the chosen shift's one-line description under it. */
+function ShiftPicker({ value, onChange }: { value: Difficulty; onChange: (id: Difficulty['id']) => void }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <Segmented
+        ariaLabel="Difficulty"
+        value={value.id}
+        onChange={onChange}
+        options={DIFFICULTIES.map(d => ({ value: d.id, label: d.label }))}
+      />
+      <p className="text-[12px] text-slate-400 max-w-sm">{value.blurb}</p>
+    </div>
+  );
+}
+
 export function CorridorDash() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const gameRef = useRef<Game>(newGame(LEVEL_DATA));
+  const [shift, setShift] = useState<Difficulty>(readShift);
+  const gameRef = useRef<Game>(newGame(LEVEL_DATA, shift));
   const inputRef = useRef<Input>(NO_INPUT);
   const phaseRef = useRef<Phase>('idle');
   const [phase, setPhase] = useState<Phase>('idle');
-  const [hud, setHud] = useState<Hud>({ hearts: 3, stars: 0, tenths: 0 });
-  const [best, setBest] = useState<number | null>(readBest);
+  const [hud, setHud] = useState<Hud>({ hearts: shift.hearts, stars: 0, tenths: 0, locked: shift.starsToOpen > 0 });
+  const [best, setBest] = useState<number | null>(() => readBest(shift.id));
   const [newBest, setNewBest] = useState(false);
 
+  // No argument: it always starts the shift currently chosen, so it can be handed
+  // straight to onClick without the click event standing in for a Difficulty.
   const start = useCallback(() => {
-    gameRef.current = newGame(LEVEL_DATA);
+    gameRef.current = newGame(LEVEL_DATA, shift);
     inputRef.current = NO_INPUT;
     phaseRef.current = 'playing';
     setPhase('playing');
-    setHud({ hearts: 3, stars: 0, tenths: 0 });
+    setHud({ hearts: shift.hearts, stars: 0, tenths: 0, locked: shift.starsToOpen > 0 });
     setNewBest(false);
+  }, [shift]);
+
+  /** Switching shift between runs swaps the record shown and resets the board behind the overlay. */
+  const chooseShift = useCallback((id: Difficulty['id']) => {
+    const d = difficultyById(id);
+    setShift(d);
+    setBest(readBest(d.id));
+    setNewBest(false);
+    try { localStorage.setItem(SHIFT_KEY, d.id); } catch {}
+    gameRef.current = newGame(LEVEL_DATA, d);
+    phaseRef.current = 'idle';
+    setPhase('idle');
+    setHud({ hearts: d.hearts, stars: 0, tenths: 0, locked: d.starsToOpen > 0 });
   }, []);
 
   const finish = useCallback((result: 'won' | 'lost') => {
     const g = gameRef.current;
     phaseRef.current = result;
     setPhase(result);
-    setHud({ hearts: g.hearts, stars: g.starsTaken, tenths: Math.floor(g.time * 10) });
+    setHud({ hearts: g.hearts, stars: g.starsTaken, tenths: Math.floor(g.time * 10), locked: !doorOpen(g) });
     if (result !== 'won') return;
-    const previous = readBest();
+    const id = g.difficulty.id;
+    const previous = readBest(id);
     if (previous === null || g.time < previous) {
-      try { localStorage.setItem(BEST_KEY, String(Math.round(g.time * 1000))); } catch {}
+      try { localStorage.setItem(bestKey(id), String(Math.round(g.time * 1000))); } catch {}
       setBest(g.time);
       setNewBest(true);
     }
@@ -390,6 +460,7 @@ export function CorridorDash() {
       if (e === 'star') burst(fx.particles, feetX, p.y, 12, palette.gold, 140);
       if (e === 'checkpoint') burst(fx.particles, feetX, p.y, 14, palette.tealLight, 120);
       if (e === 'hurt') burst(fx.particles, feetX, p.y + p.h / 2, 10, '#f87171', 150);
+      if (e === 'locked') burst(fx.particles, feetX, p.y + p.h / 2, 10, palette.gold, 90, 2);
       if (e === 'stomp') {
         g.germs.forEach((germ, i) => { if (!germ.alive && !fx.squash.has(i)) fx.squash.set(i, 0); });
         burst(fx.particles, feetX, feetY, 10, palette.light ? '#5e7f1c' : '#a3c95a', 130);
@@ -406,7 +477,7 @@ export function CorridorDash() {
         const key = `${g.hearts}|${g.starsTaken}|${Math.floor(g.time * 10)}`;
         if (key !== hudKey) {
           hudKey = key;
-          setHud({ hearts: g.hearts, stars: g.starsTaken, tenths: Math.floor(g.time * 10) });
+          setHud({ hearts: g.hearts, stars: g.starsTaken, tenths: Math.floor(g.time * 10), locked: !doorOpen(g) });
         }
         if (g.status !== 'playing') finish(g.status);
       }
@@ -432,8 +503,8 @@ export function CorridorDash() {
     <div className="flex flex-col items-center" ref={wrapRef}>
       <h3 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--cc-gold-warm)' }}>Corridor Dash</h3>
       <div className="flex items-center gap-4 text-[13px] text-slate-400 mb-4">
-        <span className="flex items-center gap-0.5" aria-label={`${hud.hearts} hearts left`}>
-          {[0, 1, 2].map(i => (
+        <span className="flex items-center gap-0.5" aria-label={`${hud.hearts} of ${shift.hearts} hearts left`}>
+          {Array.from({ length: shift.hearts }, (_, i) => (
             <Heart
               key={i}
               size={14}
@@ -446,10 +517,31 @@ export function CorridorDash() {
           <Star size={13} aria-hidden="true" style={{ color: 'var(--cc-gold)' }} />
           <span className="tabular-nums text-slate-300">{hud.stars}/{TOTAL_STARS}</span>
         </span>
+        {shift.starsToOpen > 0 && (
+          <span
+            className="flex items-center gap-1"
+            title={`The exit needs ${shift.starsToOpen} stars`}
+            aria-label={
+              hud.locked
+                ? `Exit locked: ${hud.stars} of ${shift.starsToOpen} stars`
+                : 'Exit open'
+            }
+          >
+            <Lock size={12} aria-hidden="true" style={{ color: hud.locked ? 'var(--cc-gold)' : 'var(--cc-teal-light)' }} />
+            <span
+              className="tabular-nums"
+              style={{ color: hud.locked ? 'var(--cc-body)' : 'var(--cc-teal-light)' }}
+            >
+              {hud.locked ? `${hud.stars}/${shift.starsToOpen}` : 'open'}
+            </span>
+          </span>
+        )}
         <span>Time: <span className="tabular-nums text-slate-300">{fmt(time)}</span></span>
         <span className="flex items-center gap-1">
           <Trophy size={13} aria-hidden="true" style={{ color: 'var(--cc-gold)' }} />
-          <span className="tabular-nums text-slate-300">{best === null ? '—' : fmt(best)}</span>
+          <span className="tabular-nums text-slate-300" title={`Best on ${shift.label}`}>
+            {best === null ? '—' : fmt(best)}
+          </span>
         </span>
       </div>
 
@@ -466,9 +558,10 @@ export function CorridorDash() {
               <>
                 <p className="text-[15px] text-slate-200 font-medium">Run the corridor to the exit</p>
                 <p className="text-[13px] text-slate-300 max-w-md">
-                  Stomp the germs, jump the sharps and the gaps, and grab the stars. Three hearts; touch a sanitizer
-                  station to restart there after a fall.
+                  Stomp the germs, jump the sharps and the gaps, and grab the stars. Touch a sanitizer station to
+                  restart there after a fall.
                 </p>
+                <ShiftPicker value={shift} onChange={chooseShift} />
                 <p className="text-[13px] text-slate-400">← → or A D to move · Space, ↑ or W to jump</p>
                 <Button variant="primary" onClick={start} className="mt-1">
                   <Play size={15} /> Start
@@ -484,6 +577,7 @@ export function CorridorDash() {
                   Stars: <span className="font-semibold" style={{ color: 'var(--cc-gold)' }}>{hud.stars}/{TOTAL_STARS}</span>
                   {best !== null && !newBest && <> · Best: <span className="font-semibold" style={{ color: 'var(--cc-gold)' }}>{fmt(best)}</span></>}
                 </p>
+                <ShiftPicker value={shift} onChange={chooseShift} />
                 <Button variant="primary" onClick={start} className="mt-1">
                   <RotateCcw size={14} /> Again
                 </Button>
@@ -494,7 +588,9 @@ export function CorridorDash() {
                 <p className="text-[15px] font-semibold" style={{ color: 'var(--cc-gold-warm)' }}>Out of hearts</p>
                 <p className="text-[13px] text-slate-300">
                   You got <span className="font-semibold" style={{ color: 'var(--cc-gold)' }}>{hud.stars}/{TOTAL_STARS}</span> stars in {fmt(time)}.
+                  {hud.locked && <> The exit still wanted {shift.starsToOpen - hud.stars} more.</>}
                 </p>
+                <ShiftPicker value={shift} onChange={chooseShift} />
                 <Button variant="primary" onClick={start} className="mt-1">
                   <RotateCcw size={14} /> Again
                 </Button>

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { LEVEL, PHYS, TILE, isSolid, newGame, parseLevel, step, type Game, type GameEvent, type Input } from './corridor-dash';
+import {
+  DEFAULT_DIFFICULTY, DIFFICULTIES, LEVEL, PHYS, TILE, difficultyById, doorOpen, isSolid, newGame, parseLevel,
+  starsNeeded, step, type Difficulty, type Game, type GameEvent, type Input,
+} from './corridor-dash';
+
+/** Day Shift with a few fields overridden, for tests that need one specific lever moved. */
+const shift = (patch: Partial<Difficulty>): Difficulty => ({ ...DEFAULT_DIFFICULTY, ...patch });
 
 const NONE: Input = { left: false, right: false, jump: false };
 const RIGHT: Input = { ...NONE, right: true };
@@ -205,7 +211,7 @@ describe('stars, hazards and the end of a run', () => {
   });
 
   it('losing the last heart ends the run and stops the clock', () => {
-    const game = newGame(room(g => (g[5][6] = '^')), 1);
+    const game = newGame(room(g => (g[5][6] = '^')), shift({ hearts: 1 }));
     const events = run(game, RIGHT, 40);
     expect(events).toContain('lost');
     expect(game.status).toBe('lost');
@@ -281,5 +287,133 @@ describe('the shipped level', () => {
     }
     expect(game.status).toBe('won');
     expect(game.time).toBeLessThan(60);
+  });
+});
+
+describe('difficulty', () => {
+  it('Day Shift leaves the germs pacing: they never notice the player', () => {
+    // A germ two tiles to the right of the player, on the same floor.
+    const level = room(g => (g[5][6] = 'g'));
+    const game = newGame(level, DEFAULT_DIFFICULTY);
+    const germ = game.germs[0];
+    const before = germ.vx;
+    run(game, NONE, 30);
+    expect(germ.alert).toBe(0);
+    expect(germ.vx).toBe(before);
+    expect(Math.abs(germ.vx)).toBe(DEFAULT_DIFFICULTY.germSpeed);
+  });
+
+  it('on a charging shift a germ in range turns toward the player and speeds up', () => {
+    const level = room(g => (g[5][8] = 'g'));
+    const d = shift({ chaseSpeed: 150, noticeX: 200, alertMemory: 1 });
+    const game = newGame(level, d);
+    const germ = game.germs[0];
+    expect(germ.vx).toBeLessThan(0);              // starts pacing left, away from the player at col 2
+    run(game, NONE, 10);
+    expect(germ.alert).toBeGreaterThan(0);
+    expect(germ.vx).toBe(-d.chaseSpeed);          // the player is to its left, so it charges left
+    expect(Math.abs(germ.vx)).toBeGreaterThan(DEFAULT_DIFFICULTY.germSpeed);
+  });
+
+  it('a germ out of range, or on another storey, is not alerted', () => {
+    // Out of range: 10 tiles away with a 100px notice.
+    const far = newGame(room(g => (g[5][14] = 'g')), shift({ chaseSpeed: 150, noticeX: 100, alertMemory: 1 }));
+    run(far, NONE, 10);
+    expect(far.germs[0].alert).toBe(0);
+
+    // In range across, but standing on a shelf well above the player.
+    const above = newGame(room(g => { g[2][6] = '='; g[1][6] = 'g'; }), shift({ chaseSpeed: 150, noticeX: 300, alertMemory: 1 }));
+    run(above, NONE, 10);
+    expect(above.germs[0].alert).toBe(0);
+  });
+
+  it('keeps charging briefly after losing sight, so a jump overhead does not shake it off', () => {
+    const d = shift({ chaseSpeed: 150, noticeX: 60, alertMemory: 0.5 });
+    const game = newGame(room(g => (g[5][4] = 'g')), d);
+    const germ = game.germs[0];
+    run(game, NONE, 10);
+    expect(germ.alert).toBeGreaterThan(0);
+    // Teleport it far away: it is out of range now, but the memory keeps it charging a moment longer.
+    germ.x = 30 * TILE;
+    run(game, NONE, 6);
+    expect(germ.alert).toBeGreaterThan(0);
+    run(game, NONE, 40);
+    expect(germ.alert).toBe(0);
+  });
+
+  it('a charging germ holds a ledge instead of turning away from the player', () => {
+    // Floor missing from column 10 on; the germ charges right, toward a player placed past the gap.
+    const level = room(g => { pit(10, 14)(g); g[5][8] = 'g'; });
+    const d = shift({ chaseSpeed: 150, noticeX: 400, alertMemory: 1 });
+    const game = newGame(level, d);
+    game.player.x = 20 * TILE;                    // to the germ's right, across the gap
+    const germ = game.germs[0];
+    run(game, NONE, 60);
+    expect(germ.alert).toBeGreaterThan(0);
+    expect(germ.vx).toBe(0);                      // held at the edge, not reversed
+    expect(germ.x + germ.w).toBeLessThanOrEqual(10 * TILE + 0.001);
+    // And it never walks off into the pit.
+    expect(germ.y).toBe(5 * TILE + (TILE - 22));
+  });
+
+  it('takes hearts and the grace period from the shift', () => {
+    const gentle = newGame(room(), shift({ hearts: 5, grace: 2 }));
+    expect(gentle.hearts).toBe(5);
+    const harsh = newGame(room(g => (g[5][6] = '^')), shift({ hearts: 2, grace: 0.25 }));
+    run(harsh, RIGHT, 40);
+    expect(harsh.hearts).toBe(1);
+    expect(harsh.player.grace).toBeLessThanOrEqual(0.25);
+  });
+});
+
+describe('the star gate on the door', () => {
+  const gated = (stars: number, need: number) => {
+    // Three stars on the way, the door at the far end.
+    const game = newGame(room(g => { g[5][5] = '*'; g[5][6] = '*'; g[5][7] = '*'; }), shift({ starsToOpen: need }));
+    game.starsTaken = stars;
+    return game;
+  };
+
+  it('reports how many stars are still needed', () => {
+    expect(starsNeeded(gated(0, 3))).toBe(3);
+    expect(starsNeeded(gated(2, 3))).toBe(1);
+    expect(starsNeeded(gated(3, 3))).toBe(0);
+    expect(starsNeeded(gated(9, 3))).toBe(0);
+  });
+
+  it('a shut door does not open, does not end the run, and says so once', () => {
+    const game = newGame(room(), shift({ starsToOpen: 2 }));
+    const events = run(game, RIGHT, 600);
+    expect(doorOpen(game)).toBe(false);
+    expect(game.status).toBe('playing');          // standing at a shut door is not a loss
+    expect(events.filter(e => e === 'locked')).toHaveLength(1);
+    expect(events).not.toContain('won');
+  });
+
+  it('opens once the gate is met, and an ungated door opens straight away', () => {
+    const gatedGame = newGame(room(), shift({ starsToOpen: 2 }));
+    gatedGame.starsTaken = 2;
+    expect(run(gatedGame, RIGHT, 600)).toContain('won');
+    expect(gatedGame.status).toBe('won');
+
+    const open = newGame(room(), shift({ starsToOpen: 0 }));
+    expect(run(open, RIGHT, 600)).toContain('won');
+  });
+
+  it('every shipped shift asks for no more stars than the level holds', () => {
+    const level = parseLevel(LEVEL);
+    for (const d of DIFFICULTIES)
+      expect(d.starsToOpen, `${d.label} gate`).toBeLessThanOrEqual(level.stars.length);
+    // Day Shift is the game as it was: no gate, no charge.
+    expect(DEFAULT_DIFFICULTY.starsToOpen).toBe(0);
+    expect(DEFAULT_DIFFICULTY.chaseSpeed).toBe(0);
+    expect(DEFAULT_DIFFICULTY.noticeX).toBe(0);
+  });
+
+  it('falls back to Day Shift for an unknown or missing saved choice', () => {
+    expect(difficultyById('night').id).toBe('night');
+    expect(difficultyById('graveyard')).toBe(DEFAULT_DIFFICULTY);
+    expect(difficultyById(null)).toBe(DEFAULT_DIFFICULTY);
+    expect(difficultyById(undefined)).toBe(DEFAULT_DIFFICULTY);
   });
 });
