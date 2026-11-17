@@ -79,12 +79,9 @@ export function BreakRoom() {
         </div>
       ) : (
         <div className="glass-panel p-5 sm:p-6">
-          <button
-            onClick={back}
-            className="inline-flex items-center gap-1.5 text-[13px] text-slate-400 hover:text-slate-200 transition-colors mb-4"
-          >
-            <ArrowLeft size={15} /> All games
-          </button>
+          <Button variant="quiet" onClick={back} className="mb-4">
+            <ArrowLeft size={15} aria-hidden="true" /> All games
+          </Button>
           {game === 'pulse' && <PulseGame />}
           {game === 'breathing' && <BoxBreathing />}
           {game === 'reflex' && <ReflexTest />}

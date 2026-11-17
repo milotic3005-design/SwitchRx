@@ -155,7 +155,9 @@ export default function Home() {
 
   const mixingTab = useMemo(() => <MixingGuide openDrug={pendingMixing} />, [pendingMixing]);
 
-  const breakRoomTab = useMemo(() => <BreakRoom />, []);
+  // Choosing Break Room in the menu while already there goes back to its game list (a fresh BreakRoom).
+  const [breakRoomVisit, setBreakRoomVisit] = useState(0);
+  const breakRoomTab = useMemo(() => <BreakRoom key={breakRoomVisit} />, [breakRoomVisit]);
 
   return (
     <div className="min-h-screen flex flex-col text-slate-200">
@@ -188,7 +190,10 @@ export default function Home() {
               <button
                 key={tool.tab}
                 type="button"
-                onClick={() => setActiveTab(tool.tab)}
+                onClick={() => {
+                  if (tool.tab === 'breakroom' && activeTab === 'breakroom') setBreakRoomVisit(n => n + 1);
+                  setActiveTab(tool.tab);
+                }}
                 aria-label={tool.label}
                 aria-current={activeTab === tool.tab ? 'page' : undefined}
                 className={`text-[13px] font-medium transition-all px-3 xl:px-4 py-2 rounded-full flex items-center gap-1.5 whitespace-nowrap ${activeTab === tool.tab ? 'bg-white/10 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
